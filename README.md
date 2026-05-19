@@ -28,6 +28,9 @@ plumbing"; more features will follow.
 
 ## What's added
 
+Per-function reference with shape, semantics, and edge cases is in
+[`docs/API.md`](docs/API.md). This section is a flat catalogue.
+
 ### Lua calls
 
 | Namespace | Calls |
