@@ -1,0 +1,25 @@
+## Interface: 30300
+## Title: !!!WrathClassicAPI
+## Notes: Library to emulate aspects of the modern WoW API on 3.3.5a / Lua 5.1.
+## Version: 1.0
+## Author: Brues
+
+GlobalStrings.lua
+Util\Constants.lua
+Util\Mixin.lua
+Util\TableUtil.lua
+Util\MathUtil.lua
+Util\CallbackRegistry.lua
+Util\GlobalCallbackRegistry.lua
+Util\Color.lua
+Util\ColorUtil.lua
+Util\ItemLocation.lua
+Util\EventUtil.lua
+Util\ItemUtil.lua
+Util\AddOnCompat.lua
+Util\FunctionUtil.lua
+Util\Pools.lua
+Util\FrameWatcher.lua
+Util\TimedCallback.lua
+Util\EquipmentManager.lua
+Util\PlayerUtil.lua
