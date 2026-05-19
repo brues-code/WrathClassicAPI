@@ -76,6 +76,7 @@ using lua_remove_t = void(__cdecl *)(void *L, int idx);
 using lua_gettop_t = int(__cdecl *)(void *L);
 using lua_settop_t = void(__cdecl *)(void *L, int idx);
 using lua_type_t = int(__cdecl *)(void *L, int idx);
+using lua_touserdata_t = void *(__cdecl *)(void *L, int idx);
 // luaL_error is variadic — the typedef stops at the format string;
 // callers supply additional args at the call site (cdecl pushes them).
 using luaL_error_t = int(__cdecl *)(void *L, const char *fmt, ...);
@@ -121,11 +122,20 @@ extern const lua_remove_t Remove;
 extern const lua_gettop_t GetTop;
 extern const lua_settop_t SetTop;
 extern const lua_type_t Type;
+extern const lua_touserdata_t ToUserdata;
 extern const luaL_error_t Error;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
 // Wrap it so callers can write `Game::Lua::ToString(L, n)`.
 inline const char *ToString(void *L, int idx) { return ToLString(L, idx, nullptr); }
+
+// Convenience: lua_rawgeti emulation via PushNumber + RawGet. Pushes
+// `T[i]` where T is at absolute stack index `idx`. Caller is
+// responsible for popping the result when done.
+inline void RawGetI(void *L, int idx, int i) {
+    PushNumber(L, static_cast<double>(i));
+    RawGet(L, idx);
+}
 
 // Returns the global `lua_State *` (read on demand from the engine's global).
 // Callable outside a Lua callback, e.g. during LoadScriptFunctions setup.

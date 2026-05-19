@@ -369,6 +369,7 @@ enum Offsets {
     LUA_SET_FIELD     = 0x0084E900, // void lua_setfield(L, idx, name) — atomic pushstring+insert+settable
     LUA_RAW_SET       = 0x0084E970, // void lua_rawset(L, idx)
     LUAL_ERROR        = 0x0084F280, // int  luaL_error(L, fmt, ...) (cdecl, varargs)
+    LUA_TO_USERDATA   = 0x0084E1C0, // void *lua_touserdata(L, idx) — returns NULL for non-userdata
 
     // Player spell-knowledge bitmap pointer — single-deref global
     // holding the base of a dword bitmap with one bit per spellID.
@@ -411,6 +412,44 @@ enum Offsets {
     // from `Spell.dbc` with no player-specific state (cooldown,
     // charges, etc.) filled in.
     FUN_SET_SPELL_BY_ID_GATE = 0x0053B930,
+
+    // GameTooltip frame-method walker — `void __cdecl(lua_State *L)`.
+    // Called at Lua-table-init time for the GameTooltip frame type
+    // with the method table on top of the stack. Body is just
+    //   FUN_0049E540(L);                       // parent-class methods
+    //   FUN_008167E0(L, 0x00AD2AE0, 0x45);     // tooltip methods
+    // We hook it to append extra (name, func) entries via a second
+    // call to `FUN_REGISTER_FRAME_METHODS` after the original
+    // returns. Multiple calls accumulate into the same table — the
+    // registrar is just a `for (i=0; i<n; i++) { push key/value;
+    // lua_settable; }` loop with no init step.
+    FUN_TOOLTIP_METHODS_WALKER = 0x0061B4A0,
+
+    // Generic frame-method registrar — `void __cdecl(lua_State *L,
+    // const MethodEntry *table, int count)`. Each MethodEntry is an
+    // 8-byte (name_ptr, func_ptr) pair. Walks the table and does
+    // `T[name] = func` for each, where T is the table currently on
+    // the Lua stack (already set up by the caller — typically
+    // `FUN_00816790` creates the table, calls a per-type walker
+    // like `FUN_TOOLTIP_METHODS_WALKER` which calls this with the
+    // type's static method table, then assigns the populated table
+    // into the Lua registry).
+    FUN_REGISTER_FRAME_METHODS = 0x008167E0,
+
+    // CGTooltip content-state offsets — the engine stores the
+    // current spell / item / unit directly on the tooltip frame
+    // whenever a `Set*` method is called. The `Get*` script
+    // functions read these same offsets:
+    //   spellID at +0x364   (verified at FUN_0061F0F0's `piVar1[0xd9]`)
+    //   itemID  at +0x360   (verified at FUN_0061EF10's `piVar1[0xd8]`)
+    //   unit GUID at +0x328..+0x32C (verified at FUN_0061DAD0's
+    //                                  `piVar2[0xca]`/`piVar2[0xcb]`)
+    // `Has*` is just "field != 0" for spell/item, and "either GUID
+    // half != 0" for unit. Reset to zero when the tooltip clears.
+    OFF_TOOLTIP_ITEM_ID = 0x360,
+    OFF_TOOLTIP_SPELL_ID = 0x364,
+    OFF_TOOLTIP_UNIT_GUID_LO = 0x328,
+    OFF_TOOLTIP_UNIT_GUID_HI = 0x32C,
 
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different

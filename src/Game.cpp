@@ -42,6 +42,7 @@ namespace Lua {
     F(GetTop,      lua_gettop,      LUA_GET_TOP)      \
     F(SetTop,      lua_settop,      LUA_SET_TOP)      \
     F(Type,        lua_type,        LUA_TYPE)         \
+    F(ToUserdata,  lua_touserdata,  LUA_TO_USERDATA)  \
     F(Error,       luaL_error,      LUAL_ERROR)
 
 #define WRATHCLASSICAPI_BIND_LUA(Name, Typedef, Offset) \
