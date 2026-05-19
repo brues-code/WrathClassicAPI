@@ -394,6 +394,24 @@ enum Offsets {
     // so the address holds the value itself.
     VAR_MAX_SPELL_ID = 0x00AD49DC,
 
+    // Gate function for `GameTooltip:SetSpellByID` — `bool __cdecl
+    // (uint spellID, int isPet)`. Called from exactly one site:
+    // `Script_GameTooltip_SetSpellByID` (FUN_00625B90) before
+    // building the tooltip. The original implementation walks the
+    // player+pet spellbook arrays via `FUN_0053B4E0` and an action-
+    // bar fallback via `FUN_005D3560`; returns false for any spell
+    // not in those displayable structures, which includes profession
+    // recipes (their bit is set only in `VAR_PLAYER_SPELL_BITMAP`).
+    //
+    // Hooked unconditionally to `return spellID != 0` so tooltips
+    // work for ANY valid spellID — matches modern WoW (5.4+) where
+    // Blizzard removed the gate. The blast radius is minimal: the
+    // function has a single xref. Tooltip builder (FUN_006238A0)
+    // handles unknown spells gracefully — produces a static tooltip
+    // from `Spell.dbc` with no player-specific state (cooldown,
+    // charges, etc.) filled in.
+    FUN_SET_SPELL_BY_ID_GATE = 0x0053B930,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to
