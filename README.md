@@ -34,7 +34,7 @@ plumbing"; more features will follow.
 |-----------|-------|
 | Events    | `C_EventUtils.IsEventValid` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
-| Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
+| Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetItemID`, `C_Item.GetItemInfoInstant`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | UI Color  | `C_UIColor.GetColors` |
 | Unit      | `UnitClassID` |
 

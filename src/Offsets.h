@@ -121,6 +121,76 @@ enum Offsets {
     // the response arrives.
     FUN_SCRIPT_GET_ITEM_INFO = 0x00516C60,
 
+    // Item-stats cache record field offsets. Verified inside
+    // `Script_GetItemInfo` (FUN_00516C60): the record pointer
+    // `puVar4` is the result of `FUN_0067CA30` (DBCache::GetRecord),
+    // and the function reads:
+    //   puVar4[1]  = +0x04  class
+    //   puVar4[2]  = +0x08  subclass
+    //   puVar4[4]  = +0x10  ItemDisplayInfo ID (icon)
+    //   puVar4[5]  = +0x14  quality
+    //   puVar4[9]  = +0x24  vendor sell price
+    //   puVar4[10] = +0x28  inventoryType (InvType enum, index
+    //                       into VAR_INVTYPE_STRING_TABLE)
+    //   puVar4[13] = +0x34  itemLevel
+    //   puVar4[14] = +0x38  minLevel
+    //   puVar4[23] = +0x5C  stackCount
+    OFF_ITEMSTATS_CLASS = 0x04,
+    OFF_ITEMSTATS_SUBCLASS = 0x08,
+    OFF_ITEMSTATS_DISPLAY_INFO_ID = 0x10,
+    OFF_ITEMSTATS_INVENTORY_TYPE = 0x28,
+
+    // ItemClass.dbc — sparse `[min, max]`-bounded array. The engine
+    // stores records via a min-offset translation:
+    //   if (id < min || id > max) bail
+    //   else record = records[id - min]
+    //   name string at record + 0x0C
+    // Verified inside `Script_GetItemInfo` at the
+    // `pbVar5 = *(byte **)(iVar1 + 0xc)` slot. The name slot is a
+    // single `const char *` (engine pre-resolves the locale at DBC
+    // load time on this build).
+    VAR_ITEMCLASS_MAX = 0x00AD3DA0,
+    VAR_ITEMCLASS_MIN = 0x00AD3DA4,
+    VAR_ITEMCLASS_RECORDS_BASE = 0x00AD3DB4,
+    OFF_ITEMCLASS_NAME = 0x0C,
+
+    // ItemSubClass.dbc — flat records array, scanned linearly because
+    // the table is keyed on `(classID, subClassID)` (no direct index).
+    // From `Script_GetItemInfo`'s second loop body:
+    //   stride = 0x34 (13 dwords; loop increments `+= 0xd`)
+    //   record[+0x00] = classID
+    //   record[+0x04] = subClassID
+    //   record[+0x28] = verboseName (preferred if non-empty)
+    //   record[+0x2C] = shortName (fallback when verbose is empty)
+    // Both name fields are single `const char *` like ItemClass —
+    // engine pre-resolves locale.
+    VAR_ITEMSUBCLASS_COUNT = 0x00AD3F4C,
+    VAR_ITEMSUBCLASS_RECORDS = 0x00AD3F60,
+    OFF_ITEMSUBCLASS_STRIDE = 0x34,
+    OFF_ITEMSUBCLASS_CLASS_ID = 0x00,
+    OFF_ITEMSUBCLASS_SUBCLASS_ID = 0x04,
+    OFF_ITEMSUBCLASS_NAME = 0x28,
+    OFF_ITEMSUBCLASS_VERBOSE_NAME = 0x2C,
+
+    // Inventory-type string table — array of `const char *` indexed
+    // directly by the `OFF_ITEMSTATS_INVENTORY_TYPE` enum value.
+    // Entries are strings like "INVTYPE_HEAD", "INVTYPE_WEAPONMAINHAND",
+    // "INVTYPE_2HWEAPON". Verified at `Script_GetItemInfo`'s
+    // `(&PTR_DAT_00ac7fd8)[puVar4[10]]` — bare table indexing, no
+    // bounds check by the engine. Max valid index is 28 (INVTYPE_RANGEDRIGHT);
+    // we guard against junk values defensively.
+    VAR_INVTYPE_STRING_TABLE = 0x00AC7FD8,
+    INVTYPE_TABLE_MAX_INDEX = 28,
+
+    // `FUN_0070A910(displayInfoID) -> const char *` — engine helper
+    // that resolves an `ItemDisplayInfo.dbc` row to its icon basename
+    // (e.g. "INV_Sword_04"). Returns "INV_Misc_QuestionMark" as the
+    // fallback for missing rows / empty icon slots. The caller is
+    // responsible for prepending the standard "Interface\\Icons\\"
+    // path prefix (the engine's `Script_GetItemInfo` does this via
+    // a snprintf at the call site).
+    FUN_ICON_BASENAME_BY_DISPLAY_ID = 0x0070A910,
+
     // `Game::ResolveUnitToken("player"|"target"|"partyN"|...)` →
     // CGUnit_C *. Plain `__cdecl(const char *token)` — verified at
     // `Script_GetInventoryItemID` (FUN_005EA3E0) which pushes the
