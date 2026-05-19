@@ -102,6 +102,40 @@ enum Offsets {
     // the response arrives.
     FUN_SCRIPT_GET_ITEM_INFO = 0x00516C60,
 
+    // `Game::ResolveUnitToken("player"|"target"|"partyN"|...)` →
+    // CGUnit_C *. Plain `__cdecl(const char *token)` — verified at
+    // `Script_GetInventoryItemID` (FUN_005EA3E0) which pushes the
+    // token on the stack: `PUSH EDX; CALL 0x0060c1f0`. Returns the
+    // canonical unit pointer the inventory routines expect
+    // (different from the global at 0x00B41414, which is something
+    // else despite holding the local-player GUID).
+    FUN_RESOLVE_UNIT_TOKEN = 0x0060C1F0,
+
+    // Per-player inventory manager. Offset INTO the CGPlayer
+    // returned by ResolveUnitToken("player"), pointing to the
+    // CInventoryMgr the engine uses for slot lookups. Found by
+    // matching the `(void*)((int)player + 0x18F0)` arg the engine
+    // passes to `GetItemBySlot` in `Script_GetInventoryItemID`.
+    OFF_PLAYER_INVENTORY_MANAGER = 0x18F0,
+
+    // `CInventoryMgr::GetItemBySlot(this, int slot0Based)` →
+    // CGItem*. `__thiscall(ECX = invMgr, slot)`. Takes a *linearized
+    // 0-based* slot. Engine paths all decrement Lua's 1-based slot
+    // arg before calling.
+    FUN_ITEMMGR_GET_ITEM_BY_SLOT = 0x00754390,
+
+    // CGItem instance-block layout. CGItem at +0x08 holds a pointer
+    // to an "instance block" (the per-item data; itemID lives there).
+    // ItemID at +0x0C inside that block. Matches 1.12's same offsets
+    // (CGItem layout is older than the 1.12-vs-3.3.5 cut, so this
+    // structure didn't shift).
+    OFF_ITEM_INSTANCE_BLOCK = 0x08,
+    OFF_INSTANCE_BLOCK_ITEM_ID = 0x0C,
+
+    // Equipment-slot id range (Lua 1-based). 19 paperdoll slots.
+    EQUIPMENT_SLOT_FIRST = 1,
+    EQUIPMENT_SLOT_LAST = 19,
+
     // Registers a single global Lua function. CDECL (3.3.5 moved from
     // 1.12's __fastcall). Body: lua_pushcclosure(L, func, 0);
     // lua_pushstring(L, name); lua_insert(L, -2);

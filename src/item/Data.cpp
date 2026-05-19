@@ -16,6 +16,7 @@
 #include "event/Custom.h"
 #include "item/Arg.h"
 #include "item/Data.h"
+#include "item/Location.h"
 
 #include <cstdint>
 
@@ -116,6 +117,31 @@ int __cdecl Script_IsItemDataCachedByID(void *L) {
     return 1;
 }
 
+// Resolves an itemLocation arg at stack idx to the itemID by walking
+// `Item::Location::Resolve` → CGItem → instance block (+0x08) → itemID
+// (+0x0C). Returns 0 if the slot is empty or the table is malformed.
+int ResolveLocationToItemID(void *L, int idx) {
+    const uint8_t *item = Item::Location::Resolve(L, idx);
+    if (item == nullptr)
+        return 0;
+    auto *instance = *reinterpret_cast<const uint8_t *const *>(
+        item + Offsets::OFF_ITEM_INSTANCE_BLOCK);
+    if (instance == nullptr)
+        return 0;
+    return static_cast<int>(*reinterpret_cast<const uint32_t *>(
+        instance + Offsets::OFF_INSTANCE_BLOCK_ITEM_ID));
+}
+
+int __cdecl Script_IsItemDataCached(void *L) {
+    if (!Item::Location::IsLocationArg(L, 1))
+        return Game::Lua::Error(L, "Usage: C_Item.IsItemDataCached(itemLocation)");
+    const int itemID = ResolveLocationToItemID(L, 1);
+    const bool cached =
+        (itemID > 0) && (CacheFetch(static_cast<uint32_t>(itemID), nullptr) != nullptr);
+    Game::Lua::PushBool(L, cached);
+    return 1;
+}
+
 // Explicit-request path: kicks off the cache fill via the explicit
 // callback (which fires ITEM_DATA_LOAD_RESULT). If the item is already
 // cached, the engine won't invoke our callback — synthesize the event
@@ -139,15 +165,30 @@ int __cdecl Script_RequestLoadItemDataByID(void *L) {
     return 1;
 }
 
+int __cdecl Script_RequestLoadItemData(void *L) {
+    if (!Item::Location::IsLocationArg(L, 1))
+        return Game::Lua::Error(L, "Usage: C_Item.RequestLoadItemData(itemLocation)");
+    const int itemID = ResolveLocationToItemID(L, 1);
+    if (itemID <= 0) {
+        Game::Lua::PushBoolean(L, 0);
+        return 1;
+    }
+    RequestAndMaybeNotify(static_cast<uint32_t>(itemID));
+    Game::Lua::PushBoolean(L, 1);
+    return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::Lua::RegisterTableFunction("C_Item", "IsItemDataCachedByID",
                                      &Script_IsItemDataCachedByID);
     Game::Lua::RegisterTableFunction("C_Item", "RequestLoadItemDataByID",
                                      &Script_RequestLoadItemDataByID);
-    // The `itemLocation` variants (`IsItemDataCached`,
-    // `RequestLoadItemData`) are deferred to Phase 4 — they depend on
-    // `Item::Location` which needs ~10 more offsets re-derived for
-    // 3.3.5's CGItem layout.
+    Game::Lua::RegisterTableFunction("C_Item", "IsItemDataCached",
+                                     &Script_IsItemDataCached);
+    Game::Lua::RegisterTableFunction("C_Item", "RequestLoadItemData",
+                                     &Script_RequestLoadItemData);
+    // String GUID variants (`"0xHHHHHHHHLLLLLLLL"`) deferred — needs
+    // the engine's CGItemMgr GUID resolver re-derived for 3.3.5.
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};
