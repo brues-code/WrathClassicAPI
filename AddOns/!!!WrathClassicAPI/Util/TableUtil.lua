@@ -2,13 +2,7 @@
 -- and real varargs (`...` + `select`), so this drops the table.getn/arg
 -- workarounds the 1.12 sibling needs.
 
-local tRemove, tInsert = table.remove, table.insert
-
--- 1.12 had no global wipe(); 3.3.5 does. Use it if present, else fall back
--- to a manual loop so this file remains self-contained.
-local tWipe = wipe or function(t)
-    for k in pairs(t) do t[k] = nil end
-end
+local tRemove, tInsert, tWipe = table.remove, table.insert, wipe
 
 TableUtil = TableUtil or {}
 
