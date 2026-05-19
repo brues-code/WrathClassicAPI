@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Table Inspector
+## Notes: Navigable inspector window for arbitrary Lua tables (port of the ClassicAPI 1.12 backport to 3.3.5a / Lua 5.1)
+## Author: Blizzard Entertainment, backported
+## Version: 1.0
+TableInspector.lua
+TableInspector.xml
