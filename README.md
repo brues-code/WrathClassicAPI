@@ -34,7 +34,7 @@ plumbing"; more features will follow.
 |-----------|-------|
 | Events    | `C_EventUtils.IsEventValid` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
-| Item      | `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
+| Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | UI Color  | `C_UIColor.GetColors` |
 
 ### Globals
@@ -118,6 +118,7 @@ src/
   item/
     Arg.{h,cpp}    Lua arg → itemID parsing (number, item:N, hyperlink)
     Data.{h,cpp}   GetItemInfo hook, C_Item.* registrations, event firing
+    Exists.cpp     C_Item.DoesItemExist[ByID]
     Location.{h,cpp}  itemLocation table → CGItem resolution
   ui/
     ColorData.h    Embedded GlobalColor.dbc snapshot (~190 named colors)
