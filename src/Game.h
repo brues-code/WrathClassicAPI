@@ -17,8 +17,6 @@
 
 namespace Game {
 
-using GameUIInit_t = void(__cdecl *)();
-
 namespace Lua {
 
 // 3.3.5 keeps Lua's public `lua_CFunction` typedef — `int (L)` —

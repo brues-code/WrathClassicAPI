@@ -35,23 +35,6 @@ enum Offsets {
     VAR_VALID_FUNCPTR_LO = 0x00D415B8,
     VAR_VALID_FUNCPTR_HI = 0x00D415BC,
 
-    // GameUI master bootstrap. Calls in order: `FUN_00819BB0` (Lua
-    // state init) → `FUN_005120E0` (register all engine Lua C
-    // functions) → `FUN_0081B5F0` (FrameScript_FillEvents — populate
-    // the engine's event table) → assorted other init.
-    //
-    // Hooked POST so our `ModuleAutoRegister` chain runs after BOTH
-    // engine globals AND events are fully registered — Event::Custom
-    // appends custom names via FrameScript_FillEvents from inside
-    // module registration, which requires the engine's events to
-    // already be in the output array.
-    //
-    // Importantly only runs on **first boot**. /reload uses a
-    // different path (FUN_00528F00 → FUN_00512280) — see
-    // [[feedback-two-load-script-paths]] in memory. Hooking that
-    // path is a follow-up.
-    FUN_GAME_UI_INIT = 0x0052A980,
-
     // FrameScript event-table populator. Cdecl `(const char **list,
     // int count)`. Resizes the engine's output Event* array
     // `DAT_00D3F7D8` to `count` and fills it from `list`, allocating
@@ -63,7 +46,43 @@ enum Offsets {
     //
     // Stores name pointers by reference — does NOT copy. Names must
     // outlive the engine (string literals are fine).
+    //
+    // Used (called, not hooked) by `Event::Custom::RegisterReservedEvents`
+    // to append our custom event names to the engine's table after
+    // the engine has populated it.
+    //
+    // NOT used as the bootstrap hook target: the engine calls
+    // FillEvents from BOTH `CGlueMgr` (login-screen Lua state, ~41
+    // events) and in-game `GameUIInit` (in-game Lua state, ~722
+    // events). Registering on the glue call puts our `Script_*`
+    // closures into a state that's destroyed at world entry. See
+    // `FUN_UIBINDINGS_INIT` below for the in-game-only hook target.
     FUN_FRAMESCRIPT_FILL_EVENTS = 0x0081B5F0,
+
+    // UIBindings::Initialize. Called once, unconditionally, from
+    // in-game `GameUIInit` (FUN_0052A980) at offset 0x0052AB32 —
+    // and from nowhere else. The full GameUIInit sequence is
+    // `FUN_00819BB0` (Lua state init) → `FUN_005120E0` (register all
+    // engine Lua C functions) → `FUN_0081B5F0` (FrameScript_FillEvents
+    // for the in-game state) → `FUN_0051D9B0` (CVars_Initialize) →
+    // THIS → ... → `FUN_00814340` (load FrameXML.toc which loads
+    // addons).
+    //
+    // Hooked POST as the `ModuleAutoRegister` bootstrap target.
+    // It's the cleanest single-call signal that the in-game init
+    // is mid-flight: both module prerequisites are satisfied
+    // (engine globals registered AND in-game event table populated)
+    // and FrameXML.toc / addons haven't loaded yet — so our globals
+    // are visible to addon main chunks. Also avoids the
+    // glue-vs-in-game state ambiguity of hooking FillEvents (which
+    // fires for both) and avoids competing with awesome_wotlk's
+    // detours on hot Lua-init paths.
+    //
+    // Only fires on **first boot**. /reload uses a different path
+    // (FUN_00528F00 → FUN_00512280) — see
+    // [[feedback-two-load-script-paths]] in memory. Hooking that
+    // path is a follow-up.
+    FUN_UIBINDINGS_INIT = 0x005620F0,
 
     // The event-name → Event* output array maintained by
     // FrameScript_FillEvents. `vFireEvent` indexes by integer event

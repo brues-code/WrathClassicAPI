@@ -18,7 +18,12 @@
 
 #include <windows.h>
 
-static Game::GameUIInit_t GameUIInit_o = nullptr;
+// `UIBindings::Initialize()` — see the load-order notes on
+// `Offsets::FUN_UIBINDINGS_INIT`. Hooked POST as the bootstrap
+// signal: in-game-only, fires once after the in-game event table
+// is populated and before FrameXML.toc / addons load.
+using UIBindingsInit_t = void(__cdecl *)();
+static UIBindingsInit_t UIBindingsInit_o = nullptr;
 
 // Open the engine's "valid Lua-C function pointer" range wide enough
 // to accept any user-mode pointer. The check function at
@@ -37,16 +42,13 @@ static void DisableInvalidFunctionPtrCheck() {
     *reinterpret_cast<DWORD *>(Offsets::VAR_VALID_FUNCPTR_HI) = 0x7FFFFFFF;
 }
 
-static void __cdecl GameUIInit_h() {
-    GameUIInit_o();
-    // GameUI bootstrap has now run to completion — the in-game lua_State
-    // is initialized, all ~2000 engine Lua C functions are registered,
-    // and `FrameScript_FillEvents` has populated the engine's event
-    // table. Both prerequisites for our modules are in place:
-    //   * Lua function registration — `Game::Lua::RegisterTableFunction`
-    //     can attach to the populated globals.
-    //   * Custom event injection — `Event::Custom::Register` reads the
-    //     engine's event-list pointer and appends to it.
+static void __cdecl UIBindingsInit_h() {
+    UIBindingsInit_o();
+    // Engine has finished the in-game `GameUIInit` work up through
+    // FillEvents + CVars + UIBindings init. Lua state is in-game,
+    // event table is populated, FrameXML.toc has not yet loaded.
+    // Run the module chain so our globals are visible to addon main
+    // chunks (which run as part of FrameXML.toc loading, transitively).
     Game::RunModuleRegistrations();
 }
 
@@ -61,12 +63,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
         // .text" gate before any of our Script_* closures are invoked.
         DisableInvalidFunctionPtrCheck();
 
-        HOOK_FUNCTION(Offsets::FUN_GAME_UI_INIT, GameUIInit_h, GameUIInit_o);
+        HOOK_FUNCTION(Offsets::FUN_UIBINDINGS_INIT, UIBindingsInit_h, UIBindingsInit_o);
 
         // Feature hooks declared via `Game::HookAutoRegister` at file
         // scope in their respective modules. Installed AFTER the core
-        // GameUI hook so feature hooks can rely on MinHook being live
-        // but the install order between features themselves is
+        // bootstrap hook so feature hooks can rely on MinHook being
+        // live but the install order between features themselves is
         // unspecified (static-init order across TUs).
         if (!Game::RunHookRegistrations())
             return FALSE;
