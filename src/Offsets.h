@@ -370,6 +370,30 @@ enum Offsets {
     LUA_RAW_SET       = 0x0084E970, // void lua_rawset(L, idx)
     LUAL_ERROR        = 0x0084F280, // int  luaL_error(L, fmt, ...) (cdecl, varargs)
 
+    // Player spell-knowledge bitmap pointer — single-deref global
+    // holding the base of a dword bitmap with one bit per spellID.
+    // Bit `spellID` is set iff the player has learned that spell from
+    // ANY source: trained class abilities, racials, talent passives,
+    // and profession recipes (the latter critically NOT covered by
+    // the spellbook arrays at `DAT_00BE6D88` — that's why the engine's
+    // own `IsSpellKnown` returns false for profession recipes).
+    //
+    // The bit is set unconditionally by `FUN_00542030` (the spell-
+    // learner used by SMSG_LEARNED_SPELL / SMSG_INITIAL_SPELLS / etc.)
+    // *before* any branch on spell category. The bounds-checked
+    // reader at `FUN_0053C5B0` uses the same `bitmap[spellID >> 5]
+    // & (1 << (spellID & 31))` pattern ClassicAPI's 1.12 port uses.
+    //
+    // Same shape modern WoW's `IsPlayerSpell` reads.
+    VAR_PLAYER_SPELL_BITMAP = 0x00BE8DC4,
+
+    // Max spellID bound — direct integer value (no deref). Used to
+    // gate bitmap reads so we never index past the allocated dword
+    // range. Verified at the reader `FUN_0053C5B0`:
+    // `CMP EDX, dword ptr [0x00AD49DC]; JBE ok` — direct dword read,
+    // so the address holds the value itself.
+    VAR_MAX_SPELL_ID = 0x00AD49DC,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to
