@@ -125,20 +125,27 @@ enum Offsets {
     // `Script_GetItemInfo` (FUN_00516C60): the record pointer
     // `puVar4` is the result of `FUN_0067CA30` (DBCache::GetRecord),
     // and the function reads:
-    //   puVar4[1]  = +0x04  class
-    //   puVar4[2]  = +0x08  subclass
-    //   puVar4[4]  = +0x10  ItemDisplayInfo ID (icon)
-    //   puVar4[5]  = +0x14  quality
-    //   puVar4[9]  = +0x24  vendor sell price
-    //   puVar4[10] = +0x28  inventoryType (InvType enum, index
-    //                       into VAR_INVTYPE_STRING_TABLE)
-    //   puVar4[13] = +0x34  itemLevel
-    //   puVar4[14] = +0x38  minLevel
-    //   puVar4[23] = +0x5C  stackCount
+    //   puVar4[1]   = +0x04   class
+    //   puVar4[2]   = +0x08   subclass
+    //   puVar4[4]   = +0x10   ItemDisplayInfo ID (icon)
+    //   puVar4[5]   = +0x14   quality
+    //   puVar4[9]   = +0x24   vendor sell price
+    //   puVar4[10]  = +0x28   inventoryType (InvType enum, index
+    //                         into VAR_INVTYPE_STRING_TABLE)
+    //   puVar4[13]  = +0x34   itemLevel
+    //   puVar4[14]  = +0x38   minLevel
+    //   puVar4[23]  = +0x5C   stackCount
+    //   puVar4[125] = +0x1F4  base name (single `const char *`,
+    //                         verified at FUN_00706D70's
+    //                         `puVar2[0x7d]` read).
     OFF_ITEMSTATS_CLASS = 0x04,
     OFF_ITEMSTATS_SUBCLASS = 0x08,
     OFF_ITEMSTATS_DISPLAY_INFO_ID = 0x10,
+    OFF_ITEMSTATS_QUALITY = 0x14,
     OFF_ITEMSTATS_INVENTORY_TYPE = 0x28,
+    OFF_ITEMSTATS_ITEM_LEVEL = 0x34,
+    OFF_ITEMSTATS_STACK_COUNT = 0x5C,
+    OFF_ITEMSTATS_NAME = 0x1F4,
 
     // ItemClass.dbc — sparse `[min, max]`-bounded array. The engine
     // stores records via a min-offset translation:
@@ -190,6 +197,20 @@ enum Offsets {
     // path prefix (the engine's `Script_GetItemInfo` does this via
     // a snprintf at the call site).
     FUN_ICON_BASENAME_BY_DISPLAY_ID = 0x0070A910,
+
+    // `FUN_0061E290(itemID) -> const char *` — engine helper that
+    // builds a full colored item link
+    //   "|cff…|Hitem:ID:0:0:0:0:0:0:0:level|h[Name]|h|r"
+    // and returns a pointer into a static 1 KiB global buffer at
+    // 0x00C5CF50. Buffer is overwritten on every call; we strdup-
+    // equivalent by letting `lua_pushstring` make its own copy
+    // before the next call.
+    //
+    // Internally reads the local player's level from the descriptor
+    // (player+0xD0 → +0xC0) so the link's level field matches
+    // whatever stock GetItemInfo would have produced. No work needed
+    // on our side beyond pushing the result.
+    FUN_ITEM_LINK_FORMATTER = 0x0061E290,
 
     // `Game::ResolveUnitToken("player"|"target"|"partyN"|...)` →
     // CGUnit_C *. Plain `__cdecl(const char *token)` — verified at
