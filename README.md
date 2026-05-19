@@ -35,6 +35,7 @@ plumbing"; more features will follow.
 | Events    | `C_EventUtils.IsEventValid` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
 | Item      | `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
+| UI Color  | `C_UIColor.GetColors` |
 
 ### Globals
 
@@ -118,6 +119,9 @@ src/
     Arg.{h,cpp}    Lua arg → itemID parsing (number, item:N, hyperlink)
     Data.{h,cpp}   GetItemInfo hook, C_Item.* registrations, event firing
     Location.{h,cpp}  itemLocation table → CGItem resolution
+  ui/
+    ColorData.h    Embedded GlobalColor.dbc snapshot (~190 named colors)
+    Color.cpp      C_UIColor.GetColors implementation
 ```
 
 ## Adding a new Lua function
