@@ -51,8 +51,46 @@ int __cdecl Script_C_Item_GetItemID(void *L) {
     return 1;
 }
 
+using Guid2HexString_t = void (__cdecl *)(uint32_t lo, uint32_t hi, char *buf);
+
+// `C_Item.GetItemGUID(itemLocation)` — stable per-instance identifier
+// as `"0xHHHHHHHHHHHHHHHH"` (engine GUID hex format), or nil for an
+// empty slot / invalid arg. Pairs with `Item::Location::Resolve`'s
+// string-GUID branch so addons can capture a reference here and feed
+// it back to any `C_Item.*` accessor that takes an `itemLocation`.
+int __cdecl Script_C_Item_GetItemGUID(void *L) {
+    if (!Item::Location::IsLocationArg(L, 1))
+        return Game::Lua::Error(L, "Usage: C_Item.GetItemGUID(itemLocation)");
+
+    const uint8_t *item = Item::Location::Resolve(L, 1);
+    if (item == nullptr) {
+        Game::Lua::PushNil(L);
+        return 1;
+    }
+    auto *instance = *reinterpret_cast<const uint8_t *const *>(
+        item + Offsets::OFF_ITEM_INSTANCE_BLOCK);
+    if (instance == nullptr) {
+        Game::Lua::PushNil(L);
+        return 1;
+    }
+    const uint64_t guid = *reinterpret_cast<const uint64_t *>(
+        instance + Offsets::OFF_INSTANCE_BLOCK_GUID);
+    if (guid == 0) {
+        Game::Lua::PushNil(L);
+        return 1;
+    }
+
+    // Engine formatter writes "0x" + 16 uppercase hex + NUL = 19 bytes.
+    char buf[20] = {0};
+    auto fn = reinterpret_cast<Guid2HexString_t>(Offsets::FUN_GUID_TO_HEXSTRING);
+    fn(static_cast<uint32_t>(guid), static_cast<uint32_t>(guid >> 32), buf);
+    Game::Lua::PushString(L, buf);
+    return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::Lua::RegisterTableFunction("C_Item", "GetItemID", &Script_C_Item_GetItemID);
+    Game::Lua::RegisterTableFunction("C_Item", "GetItemGUID", &Script_C_Item_GetItemGUID);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

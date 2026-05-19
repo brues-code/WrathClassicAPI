@@ -5,83 +5,37 @@ listed in the order I'd tackle them — the GUID-string variant is the
 biggest known gap in the currently-shipped surface; the rest is
 "nice to have."
 
-## 1. `itemLocation` GUID-string variant
+## 1. `C_Item.GetItemLocation(itemGUID)`
 
-**The gap.** `C_Item.IsItemDataCached` and `C_Item.RequestLoadItemData`
-currently accept the two table shapes —
-`{equipmentSlotIndex=N}` and `{bagID=B, slotIndex=S}` — but **not** the
-GUID-string form modern callers can pass:
+**What's done.** Both halves of the GUID pipeline ship:
 
-```lua
-C_Item.IsItemDataCached("0x4000000007EEB6FC")   -- doesn't work yet
-```
+  * `Item::Location::Resolve` / `IsLocationArg` accept
+    `"0xHHHHHHHHLLLLLLLL"` (with or without the `0x` prefix) — every
+    `C_Item.*` accessor that takes an `itemLocation` now also takes
+    a GUID string. Routes through `ObjectMgr::HexString2Guid` →
+    `ObjectMgr::Get` with the ITEM typemask.
+  * `C_Item.GetItemGUID(itemLocation)` reads the 8-byte GUID at
+    `CGItem → instance_block → +0x00` and formats it via
+    `ObjectMgr::Guid2HexString`. Pairs with the consumer side so
+    addons can round-trip: capture a GUID with `GetItemGUID`, feed
+    it back to any `C_Item.*` accessor later.
 
-This form is what `C_Item.GetItemGUID(itemLocation)` returns, and a
-chunk of modern addons round-trip through it ("store a stable
-reference to this item, query its cache state later"). We accept
-table shapes only — string args fall through to the `IsLocationArg`
-type check and the engine raises the typed error.
+**What's still missing.**
 
-**The "complexity" was overstated.** Originally deferred as "needs
-the engine's CGItemMgr GUID resolver re-derived." Then I noticed
-awesome_wotlk's [GameClient.h][aw-gc] already exposes all three
-pieces we'd need:
+`C_Item.GetItemLocation(itemGUID) -> ItemLocation` — modern WoW
+returns an `ItemLocation` mixin object backed by the GUID; our
+addon-side `ItemLocationMixin` only supports bag/slot and
+equipment-slot field shapes. To return a usable location we'd have
+to scan the player's inventory for the matching GUID and emit a
+`{bagID, slotIndex}` or `{equipmentSlotIndex}` table.
 
-  * `ObjectMgr::HexString2Guid(str)` at `0x0074D120` — parses
-    `"0xHHHHHHHHLLLLLLLL"` to `uint64_t` (cdecl, returns 64-bit).
-  * `ObjectMgr::Get(guid, ObjectFlags)` at `0x004D4DB0` — looks up an
-    object by GUID. We already call this from inside the engine's
-    `PackBagSlot` chain (it's `FUN_004D4DB0`); with
-    `flags = 4` (`ObjectFlags_Item`) it returns a CGItem* or nullptr.
-  * No new CGItem offsets needed — `OFF_ITEM_INSTANCE_BLOCK = 0x08`
-    and `OFF_INSTANCE_BLOCK_ITEM_ID = 0x0C` we already have apply
-    once we have the CGItem.
-
-[aw-gc]: https://github.com/FrostAtom/awesome_wotlk/blob/master/src/AwesomeWotlkLib/GameClient.h
-
-**Sketch.** Add offsets, then teach `Item::Location::Resolve` to
-accept strings:
-
-```cpp
-// new offsets
-FUN_OBJECT_RESOLVE_BY_GUID = 0x004D4DB0,   // (guid_lo, guid_hi, flags) → Object*
-FUN_HEXSTRING_TO_GUID      = 0x0074D120,   // (const char *) → uint64_t
-OBJ_FLAGS_ITEM             = 4,
-
-// in Item::Location::Resolve
-if (Game::Lua::Type(L, locIdx) == Game::Lua::TYPE_STRING) {
-    const char *s = Game::Lua::ToString(L, locIdx);
-    if (s == nullptr) return nullptr;
-    using HexToGuid_t = uint64_t (__cdecl *)(const char *);
-    using ResolveByGuid_t = void *(__cdecl *)(uint32_t lo, uint32_t hi, int flags);
-    const uint64_t guid = reinterpret_cast<HexToGuid_t>(
-        Offsets::FUN_HEXSTRING_TO_GUID)(s);
-    if (guid == 0) return nullptr;
-    return static_cast<const uint8_t *>(reinterpret_cast<ResolveByGuid_t>(
-        Offsets::FUN_OBJECT_RESOLVE_BY_GUID)(
-            static_cast<uint32_t>(guid),
-            static_cast<uint32_t>(guid >> 32),
-            Offsets::OBJ_FLAGS_ITEM));
-}
-```
-
-Then drop the "string GUID forms not supported in this build" comment
-in `IsLocationArg` and accept `TYPE_STRING` too.
-
-**Open questions to verify in Ghidra before shipping**, since I
-haven't actually disassembled these:
-
-  * `HexString2Guid`'s return convention — is it really 64-bit-in-EDX:EAX,
-    or does it write to an out-parameter? Awesome_wotlk's declaration
-    is `guid_t HexString2Guid(const char*)` (returns `uint64_t`), so
-    the EDX:EAX return is the likely shape, but confirm by reading the
-    function's `RET` and the asm at one of its call sites.
-  * `ObjectMgr::Get`'s calling convention — awesome_wotlk declares it
-    `__cdecl(guid_t, ObjectFlags)`. Verify at the `PackBagSlot` call
-    site (`FUN_005D7380`) which already invokes it — that's how I'd
-    pin the exact ABI before trusting it.
-
-If both shapes match awesome_wotlk's declarations, this is ~30 lines.
+Skipping until an addon actually needs it — for now the addon-side
+`ItemMixin:GetItemLocation` returns nil on the
+`CreateFromItemGUID` path, which downstream methods handle via the
+empty-item branch. The string-GUID accessors are the more
+load-bearing piece anyway: addons that want "is this still the
+same item?" can compare GUIDs directly without going through a
+location.
 
 ## 2. `/reload` re-registration path
 

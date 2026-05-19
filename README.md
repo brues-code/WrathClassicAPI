@@ -34,7 +34,7 @@ plumbing"; more features will follow.
 |-----------|-------|
 | Events    | `C_EventUtils.IsEventValid` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
-| Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemID`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
+| Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemGUID`, `C_Item.GetItemID`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | UI Color  | `C_UIColor.GetColors` |
 | Unit      | `UnitClassID` |
 
@@ -62,18 +62,20 @@ on what initiated the request. Same split as modern WoW.
 
 ### itemLocation argument shape
 
-The two `_ByID`-suffixed `C_Item` calls take an integer item ID. The
+The `_ByID`-suffixed `C_Item` calls take an integer item ID. The
 unsuffixed variants take a Lua table — same as the modern
-[ItemLocation mixin][item-location]:
+[ItemLocation mixin][item-location] — or a GUID string:
 
 ```lua
-{ equipmentSlotIndex = N }     -- character-pane slot, 1..19
-{ bagID = 0, slotIndex = N }   -- backpack, 1..16
+{ equipmentSlotIndex = N }      -- character-pane slot, 1..19
+{ bagID = 0, slotIndex = N }    -- backpack, 1..16
 { bagID = 1..4, slotIndex = N } -- equipped bag
+"0xHHHHHHHHLLLLLLLL"            -- engine GUID string (with or without "0x")
 ```
 
-The string-GUID form (`"0xHHHHHHHHLLLLLLLL"`) is **not** supported in
-this build; it needs the engine's CGItemMgr GUID resolver re-derived.
+The string form is parsed via the engine's `HexString2Guid` + resolved
+via `ObjectMgr::Get` with the ITEM type-mask. Negative `bagID` values
+(keyring, bank) and non-item GUIDs both return nil-equivalent.
 
 [item-location]: https://warcraft.wiki.gg/wiki/ItemLocationMixin
 

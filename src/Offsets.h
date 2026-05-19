@@ -221,6 +221,46 @@ enum Offsets {
     // else despite holding the local-player GUID).
     FUN_RESOLVE_UNIT_TOKEN = 0x0060C1F0,
 
+    // `ObjectMgr::HexString2Guid(const char *s) -> uint64_t` —
+    // parses `"0xHHHHHHHHLLLLLLLL"` (or bare 16-hex-char form) to a
+    // 64-bit GUID. Returns via EDX:EAX (standard cdecl 64-bit
+    // return). Returns 0 for empty / malformed input — the loop
+    // breaks on the first non-hex char.
+    //
+    // Decompile verified: skips the optional `0x` prefix, loops up
+    // to 16 hex chars accumulating into a 64-bit value, returns
+    // CONCAT44(high, low). Same shape as awesome_wotlk's
+    // `guid_t HexString2Guid(const char *)` declaration.
+    FUN_HEXSTRING_TO_GUID = 0x0074D120,
+
+    // `ObjectMgr::Get(uint32_t guid_lo, uint32_t guid_hi, int flags) -> Object *` —
+    // looks up an object by GUID in the local ObjectMgr (read from
+    // the thread-local storage slot, so always usable from the
+    // main thread). The `flags` arg is a TYPEMASK bitfield; the
+    // returned object is returned only if `obj.entry.type & flags`
+    // is non-zero, else nullptr.
+    //
+    // Used internally by the engine for unit-token resolution
+    // (`Script_UnitClass` passes flags = 8 = TYPEMASK_UNIT). The
+    // TYPEMASK encoding is the standard `1 << TYPEID` from
+    // 3.3.5-era trinitycore — see comment on `OBJ_FLAGS_ITEM`.
+    FUN_OBJECT_RESOLVE_BY_GUID = 0x004D4DB0,
+
+    // TYPEMASK bits for `FUN_OBJECT_RESOLVE_BY_GUID`'s flags arg.
+    // Standard 3.3.5 encoding (`1 << TYPEID`):
+    //   TYPEMASK_OBJECT        = 0x01
+    //   TYPEMASK_ITEM          = 0x02
+    //   TYPEMASK_CONTAINER     = 0x04
+    //   TYPEMASK_UNIT          = 0x08
+    //   TYPEMASK_PLAYER        = 0x10
+    //   TYPEMASK_GAMEOBJECT    = 0x20
+    //   ...
+    // `OBJ_FLAGS_ITEM` is `TYPEMASK_ITEM | TYPEMASK_CONTAINER` so
+    // both ordinary items and bags resolve through the same path —
+    // bags are TYPEID_CONTAINER but every `C_Item.*` accessor that
+    // takes an `itemLocation` should still work on them.
+    OBJ_FLAGS_ITEM = 0x02 | 0x04,
+
     // CGUnit descriptor (updatefields buffer) pointer offset.
     // Verified inside the engine's own `Script_UnitClassBase`
     // (FUN_00610040): reads class byte as
@@ -258,12 +298,25 @@ enum Offsets {
     FUN_ITEMMGR_GET_ITEM_BY_SLOT = 0x00754390,
 
     // CGItem instance-block layout. CGItem at +0x08 holds a pointer
-    // to an "instance block" (the per-item data; itemID lives there).
-    // ItemID at +0x0C inside that block. Matches 1.12's same offsets
-    // (CGItem layout is older than the 1.12-vs-3.3.5 cut, so this
-    // structure didn't shift).
+    // to an "instance block" (the per-item data — `ObjectEntry` in
+    // awesome_wotlk's terminology). Layout:
+    //   +0x00  guid (uint64_t)
+    //   +0x08  type (uint32_t)
+    //   +0x0C  entry (uint32_t) — for items, this is the itemID
+    //   +0x10  scaleX (float)
+    //   +0x14  padding
+    // Same offsets in 1.12 (CGItem layout predates the 1.12-vs-3.3.5
+    // cut, so this structure didn't shift).
     OFF_ITEM_INSTANCE_BLOCK = 0x08,
+    OFF_INSTANCE_BLOCK_GUID = 0x00,
     OFF_INSTANCE_BLOCK_ITEM_ID = 0x0C,
+
+    // `ObjectMgr::Guid2HexString(uint32_t lo, uint32_t hi, char *buf)` —
+    // inverse of `HexString2Guid`. Writes `"0xHHHHHHHHHHHHHHHH"`
+    // (uppercase hex, 19 bytes including the null terminator) into
+    // the caller-supplied buffer. Same shape as awesome_wotlk's
+    // `void Guid2HexString(guid_t guid, char* buf)` declaration.
+    FUN_GUID_TO_HEXSTRING = 0x0074D0D0,
 
     // Equipment-slot id range (Lua 1-based). 19 paperdoll slots.
     EQUIPMENT_SLOT_FIRST = 1,
