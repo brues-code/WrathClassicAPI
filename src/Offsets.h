@@ -130,6 +130,29 @@ enum Offsets {
     // else despite holding the local-player GUID).
     FUN_RESOLVE_UNIT_TOKEN = 0x0060C1F0,
 
+    // CGUnit descriptor (updatefields buffer) pointer offset.
+    // Verified inside the engine's own `Script_UnitClassBase`
+    // (FUN_00610040): reads class byte as
+    // `*(byte *)(*(int *)(unit + 0xD0) + 0x45)` — two derefs.
+    OFF_UNIT_DESCRIPTOR = 0xD0,
+
+    // Class byte position inside the descriptor block. This is the
+    // class field of `UNIT_FIELD_BYTES_0` (byte 1 of that uint32):
+    // descriptor index 0x11 (17), so 17 * 4 + 1 = 0x45. Layout:
+    //   byte 0 = race, byte 1 = class, byte 2 = gender, byte 3 = power.
+    OFF_UNIT_DESCRIPTOR_CLASS_BYTE = 0x45,
+
+    // Local player class byte global. Populated by the engine during
+    // login session setup — well before the unit descriptor at
+    // `unit + OFF_UNIT_DESCRIPTOR` is ready. Both `Script_UnitClass`
+    // (FUN_0060FEC0) and `Script_UnitClassBase` (FUN_00610040) take
+    // a fast path for the `"player"` token that reads this byte
+    // directly via `FUN_006B1080` (one-line accessor: returns
+    // `*(byte *)VAR_LOCAL_PLAYER_CLASS_BYTE`). Use this path for
+    // `"player"` to avoid the at-login race where the descriptor
+    // hasn't been populated yet.
+    VAR_LOCAL_PLAYER_CLASS_BYTE = 0x00C79E89,
+
     // Per-player inventory manager. Offset INTO the CGPlayer
     // returned by ResolveUnitToken("player"), pointing to the
     // CInventoryMgr the engine uses for slot lookups. Found by

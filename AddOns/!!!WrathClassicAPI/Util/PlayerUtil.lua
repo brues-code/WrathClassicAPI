@@ -3,10 +3,7 @@
 -- is expected to register it, but we degrade gracefully so this file still
 -- loads without the DLL.
 local className, classFile = UnitClass('player')
-local classID
-if UnitClassBase then
-	classFile, classID = UnitClassBase('player')
-end
+local classID = UnitClassID('player')
 
 PlayerUtil = PlayerUtil or {}
 

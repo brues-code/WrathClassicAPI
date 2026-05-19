@@ -36,6 +36,7 @@ plumbing"; more features will follow.
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
 | Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | UI Color  | `C_UIColor.GetColors` |
+| Unit      | `UnitClassID` |
 
 ### Globals
 
@@ -123,6 +124,8 @@ src/
   ui/
     ColorData.h    Embedded GlobalColor.dbc snapshot (~190 named colors)
     Color.cpp      C_UIColor.GetColors implementation
+  unit/
+    ClassID.cpp    UnitClassID(unit) — descriptor-byte read + token resolve
 ```
 
 ## Adding a new Lua function
