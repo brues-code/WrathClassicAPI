@@ -217,7 +217,7 @@ function ItemMixin:GetItemLink() -- requires item data to be loaded
     end
 
     if self.itemID then
-        local _, link = GetItemInfo(self.itemID)
+        local _, link = C_Item.GetItemInfo(self.itemID)
         return link
     end
 
