@@ -33,7 +33,14 @@ plumbing"; more features will follow.
 | Namespace | Calls |
 |-----------|-------|
 | Events    | `C_EventUtils.IsEventValid` |
+| Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
 | Item      | `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
+
+### Globals
+
+| Group | Constants |
+|-------|-----------|
+| Expansion | `LE_EXPANSION_LEVEL_CURRENT`, `LE_EXPANSION_CLASSIC` … `LE_EXPANSION_MIDNIGHT` |
 
 ### Events
 
@@ -105,6 +112,8 @@ src/
   event/
     Custom.{h,cpp} AutoReserve / Fire — appends names to the engine's event table
     Util.cpp       C_EventUtils.IsEventValid implementation
+  expansion/
+    Info.cpp       GetClassicExpansionLevel + ClassicExpansionAt{Least,Most} + LE_EXPANSION_*
   item/
     Arg.{h,cpp}    Lua arg → itemID parsing (number, item:N, hyperlink)
     Data.{h,cpp}   GetItemInfo hook, C_Item.* registrations, event firing
