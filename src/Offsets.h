@@ -142,10 +142,31 @@ enum Offsets {
     OFF_ITEMSTATS_SUBCLASS = 0x08,
     OFF_ITEMSTATS_DISPLAY_INFO_ID = 0x10,
     OFF_ITEMSTATS_QUALITY = 0x14,
+    // `ItemProto.Flags` — the static per-item-type flag word (NOT
+    // per-instance). Verified in the tooltip builder at FUN_006277F0
+    // around 0x00627EAB: `TEST [stats_record + 0x18], 0x8000000`
+    // gates the "Binds to Account" tooltip line. The full word
+    // mirrors TrinityCore's `ITEM_FLAG_*` enum — we only need the
+    // ACCOUNT_BOUND bit so far.
+    OFF_ITEMSTATS_FLAGS = 0x18,
+    ITEM_PROTO_FLAG_ACCOUNT_BOUND = 0x08000000,
     OFF_ITEMSTATS_INVENTORY_TYPE = 0x28,
     OFF_ITEMSTATS_ITEM_LEVEL = 0x34,
     OFF_ITEMSTATS_STACK_COUNT = 0x5C,
     OFF_ITEMSTATS_NAME = 0x1F4,
+
+    // `CGItem::IsSoulbound` — `__thiscall(CGItem) -> bool`. Returns
+    // true iff the per-instance soulbound flag is set OR any
+    // attached enchantment carries the "bind-on-apply" flag.
+    // Verified at the tooltip-builder's bind-label gate
+    // (FUN_006277F0, 0x00627E80): the engine calls this then
+    // skips the bind label entirely on a false return.
+    //
+    // Important: this returns false for heirlooms — they're not
+    // *soulbound*, they're *account-bound*. Modern `IsBound`
+    // returns true for both, so we OR this with a separate
+    // `ITEM_FLAG_ACCOUNT_BOUND` proto-flag probe.
+    FUN_ITEM_IS_SOULBOUND = 0x00708520,
 
     // ItemClass.dbc — sparse `[min, max]`-bounded array. The engine
     // stores records via a min-offset translation:

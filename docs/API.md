@@ -51,6 +51,7 @@ Conventions:
   - [`C_Item.GetItemLink(itemLocation)`](#c_itemgetitemlinkitemlocation)
   - [`C_Item.IsItemDataCached[ByID]` / `RequestLoadItemData[ByID]`](#c_itemisitemdatacacheditemlocation--isitemdatacachedbyiditem)
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
+  - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetTitleForQuestID(questID)`](#c_questloggettitleforquestidquestid)
   - [`C_QuestLog.RequestLoadQuestByID(questID)`](#c_questlogrequestloadquestbyidquestid)
@@ -444,6 +445,32 @@ trade / mail / loot interactions). **Currently a stub** that always
 returns `false` — the ITEM_FIELD_FLAGS bit hasn't been mapped on
 this build. Safe to use; just won't return `true` when the lock is
 actually set.
+
+### `C_Item.IsBound(itemLocation)`
+
+Returns `true` if the item is currently bound to the player.
+Matches modern semantics: covers both soulbound items (regular
+BoP after pickup, BoE after equip, quest items, etc.) **and**
+account-bound heirlooms.
+
+```lua
+C_Item.IsBound({equipmentSlotIndex = 16})  -- main hand: true once equipped
+C_Item.IsBound({bagID = 0, slotIndex = 1}) -- backpack slot 1
+```
+
+Implementation: delegates to the engine's `CGItem::IsSoulbound`
+helper (the same predicate the tooltip builder uses to gate the
+bind-label line) which handles the per-instance soulbound bit
+plus the uncommon "enchantment bound the item" path. If that
+returns `false`, we additionally check the item-stats record for
+the `ITEM_FLAG_ACCOUNT_BOUND` proto flag (bit 27) so heirlooms
+register as bound too — modern `C_Item.IsBound` returns `true`
+for them since they can't leave the account.
+
+Returns `false` for empty slots, malformed `itemLocation`, and
+items whose stats record isn't cached yet (pair with
+`C_Item.RequestLoadItemData(itemLocation)` if you're querying a
+recently-seen item that might not be loaded).
 
 ---
 
