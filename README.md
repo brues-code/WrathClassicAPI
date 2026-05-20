@@ -44,6 +44,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`
 | UI Color  | `C_UIColor.GetColors` |
 | Unit      | `UnitClassID` |
+| Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
 
 ### Globals
 

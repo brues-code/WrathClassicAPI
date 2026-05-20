@@ -61,6 +61,14 @@ Conventions:
   - [`C_UIColor.GetColors()`](#c_uicolorgetcolors)
 - [Unit](#unit)
   - [`UnitClassID(unit)`](#unitclassidunit)
+- [Unit Auras](#unit-auras)
+  - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
+  - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
+  - [`C_UnitAuras.GetUnitAuraBySpellID(unit, spellID[, filter])`](#c_unitaurasgetunitaurabyspellidunit-spellid-filter)
+  - [`C_UnitAuras.GetPlayerAuraBySpellID(spellID)`](#c_unitaurasgetplayeraurabyspellidspellid)
+  - [`C_UnitAuras.GetUnitAuras(unit[, filter])`](#c_unitaurasgetunitaurasunit-filter)
+  - [`C_UnitAuras.GetAuraDispelTypeColor(type)`](#c_unitaurasgetauradispeltypecolortype)
+  - [`AuraData` table shape](#auradata-table-shape)
 - [Globals](#globals)
   - [`LE_EXPANSION_*`](#le_expansion_)
 - [Behavioral extensions](#behavioral-extensions)
@@ -571,6 +579,160 @@ Accepts any standard unit token (`"player"`, `"target"`, `"partyN"`,
 a login-session global rather than the unit descriptor, so it works
 even at the first-login window before the player descriptor is
 populated.
+
+---
+
+## Unit Auras
+
+The `C_UnitAuras.*` namespace returns rich aura tables — modern's
+`AuraData` shape with most fields populated for real (not just
+defaulted). 3.3.5's wire protocol carries per-aura `duration`,
+`expirationTime`, `stacks`, and `casterGUID` for every unit (not
+just the local player like 1.12), so `sourceUnit`,
+`isFromPlayerOrPlayerPet`, and the timing fields are real data
+for target / party / raid / mouseover too.
+
+Filter parsing mirrors modern: `"HELPFUL"` (the default if omitted)
+vs `"HARMFUL"`. The other modern filter tokens
+(`PLAYER` / `RAID` / `CANCELABLE` / `INCLUDE_NAME_PLATE_ONLY`) are
+accepted but no-ops — they'd need source-side caster classification
+we don't surface or modern-only systems (nameplate-only auras)
+that don't exist in 3.3.5.
+
+### `C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`
+
+Returns the `index`-th aura on `unit` matching `filter` as an
+[`AuraData`](#auradata-table-shape) table, or `nil` if no such aura.
+
+```lua
+-- 1st helpful aura on the player
+local d = C_UnitAuras.GetAuraDataByIndex("player", 1)
+print(d.name, d.spellId, d.duration, d.expirationTime - GetTime())
+
+-- 1st harmful aura on the target
+local d = C_UnitAuras.GetAuraDataByIndex("target", 1, "HARMFUL")
+```
+
+Walks the unit's aura array in the engine's stored order (NOT
+alphabetical / priority-sorted), same way the engine's stock
+`UnitAura(unit, n, "HELPFUL"|"HARMFUL")` does — so the (n)th aura
+returned here matches the (n)th of the corresponding 3.3.5
+`UnitBuff` / `UnitDebuff` call.
+
+Returns `nil` for unresolvable unit tokens, indices `< 1`, or
+indices past the populated-aura count.
+
+### `C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`
+
+Filter-locked variants. Equivalent to
+`GetAuraDataByIndex(unit, index, "HELPFUL")` and
+`GetAuraDataByIndex(unit, index, "HARMFUL")` respectively. Saves
+the third arg when you know which polarity you want.
+
+### `C_UnitAuras.GetUnitAuraBySpellID(unit, spellID[, filter])`
+
+Returns the first aura on `unit` with the given `spellID` as an
+[`AuraData`](#auradata-table-shape) table, or `nil` if absent.
+
+```lua
+-- Is Renew up on the player?
+local d = C_UnitAuras.GetUnitAuraBySpellID("player", 139)
+if d then
+    print("Renew remaining:", d.expirationTime - GetTime())
+end
+```
+
+`filter` restricts the search to one polarity. Omit `filter`
+(default behavior) to match either helpful or harmful — useful for
+spells whose polarity isn't fixed (e.g. polymorph appears as
+either depending on caster vs. target perspective).
+
+Spell-ID lookup is exact, not by rank: `139` matches Renew rank 1
+only, not the other ranks. Use the spell's max-rank ID (or a rank
+table) for "any rank of Renew".
+
+### `C_UnitAuras.GetPlayerAuraBySpellID(spellID)`
+
+Equivalent to `GetUnitAuraBySpellID("player", spellID)`. Saves the
+unit-token arg in the very common "is this buff up on me" case.
+
+### `C_UnitAuras.GetUnitAuras(unit[, filter])`
+
+Bulk fetch. Returns an array (1-indexed) of every populated
+[`AuraData`](#auradata-table-shape) on `unit`. With `filter`,
+restricts to one polarity (`"HELPFUL"` or `"HARMFUL"`); without,
+returns helpful + harmful interleaved in the engine's storage
+order.
+
+```lua
+for _, aura in ipairs(C_UnitAuras.GetUnitAuras("player")) do
+    print(aura.name, aura.isHelpful and "BUFF" or "DEBUFF")
+end
+```
+
+Always returns a table — never `nil`. The table is empty when the
+unit doesn't exist or has no matching auras.
+
+### `C_UnitAuras.GetAuraDispelTypeColor(type)`
+
+Returns the dispel-type ColorMixin for an aura's `dispelName`
+(`"Magic"`, `"Curse"`, `"Disease"`, `"Poison"`, `"Bleed"`,
+`"Enrage"`), or the `NONE` color for unknown / nil types.
+
+```lua
+local d = C_UnitAuras.GetUnitAuraBySpellID("target", 27218)
+if d and d.dispelName then
+    local c = C_UnitAuras.GetAuraDispelTypeColor(d.dispelName)
+    print(string.format("%.2f %.2f %.2f", c.r, c.g, c.b))
+end
+```
+
+Lookup logic mirrors modern: returns `_G["DEBUFF_TYPE_<TYPE>_COLOR"]`
+if some addon has already wrapped the entry as a ColorMixin global,
+otherwise falls back to a plain `{r, g, b, a}` table decoded from
+the embedded `GlobalColor.dbc` snapshot
+([`UI::ColorData`](../src/ui/ColorData.h)). The `Enrage` row is a
+ClassicAPI extension carried in the same data file — Blizzard
+dropped it from `GlobalColor.dbc` in BC Classic, so we re-add it
+so consumers don't get the `NONE` fallback for enrage debuffs.
+
+### `AuraData` table shape
+
+Fields populated with real data:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string | Locale-resolved spell name from `Spell.dbc`. |
+| `icon` | string | Full texture path (e.g. `Interface\Icons\Spell_Holy_Renew`). |
+| `applications` | number | Stack count. `1` = single-stack aura (not `0`). |
+| `spellId` | number | Spell ID. |
+| `dispelName` | string\|nil | `"Magic"`, `"Curse"`, `"Disease"`, `"Poison"`, `"Bleed"`, `"Enrage"`, or `nil` for none. |
+| `isHelpful` | boolean | True for buffs. |
+| `isHarmful` | boolean | True for debuffs (`= not isHelpful`). |
+| `duration` | number | Total duration in seconds, `0` for infinite. |
+| `expirationTime` | number | Absolute `GetTime()` epoch when the aura ends, `0` for infinite. |
+| `sourceUnit` | string\|nil | Unit token of the caster (`"player"`, `"target"`, `"partyN"`, `"pet"`, etc.), or `nil` if no caster GUID. |
+| `isFromPlayerOrPlayerPet` | boolean | True iff `sourceUnit == "player"` or `"pet"`. |
+| `timeMod` | number | Always `1` (3.3.5 doesn't expose per-aura time-mod). |
+
+Vanilla-truthful defaults (modern provides these fields; 3.3.5
+lacks the underlying systems):
+
+| Field | Value |
+|-------|-------|
+| `charges`, `maxCharges` | `0` (3.3.5 has no spell-charge system) |
+| `isStealable` | `false` |
+| `isBossAura` | `false` |
+| `isNameplateOnly` | `false` |
+| `nameplateShowAll` | `false` |
+| `nameplateShowPersonal` | `false` |
+| `canApplyAura` | `false` |
+| `shouldConsolidate` | `false` |
+| `isRaid` | `false` |
+
+Modern's `auraInstanceID` and `points` are omitted entirely
+(missing-key reads yield `nil`, matching modern's behavior when
+those fields don't apply).
 
 ---
 

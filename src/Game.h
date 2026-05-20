@@ -118,6 +118,10 @@ inline void SetFieldString(void *L, const char *name, const char *value) {
     PushString(L, value);
     SetField(L, -2, name);
 }
+inline void SetFieldBool(void *L, const char *name, bool value) {
+    PushBoolean(L, value ? 1 : 0);
+    SetField(L, -2, name);
+}
 extern const lua_insert_t Insert;
 extern const lua_remove_t Remove;
 extern const lua_gettop_t GetTop;

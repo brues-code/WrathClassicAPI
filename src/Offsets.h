@@ -548,6 +548,124 @@ enum Offsets {
     // and return nil.
     VAR_NEXT_DAILY_RESET_EPOCH = 0x00C23AEC,
 
+    // Aura array on CGUnit. Unlike 1.12, 3.3.5 stores per-unit auras
+    // directly on the CGUnit object (NOT in the updatefields descriptor),
+    // with per-aura duration/expiration/caster broadcast for *all* units
+    // — no player-buff-table side channel needed.
+    //
+    // Layout discovered in `Script_UnitAura`'s call chain
+    // (FUN_006147c0 → FUN_0072c9b0 + FUN_00556e10). The array has two
+    // storage modes depending on the sentinel at `+0xdd0`:
+    //
+    //   if unit[+0xdd0] != 0xFFFFFFFF:
+    //       count = unit[+0xdd0]
+    //       base  = unit + 0xc50           // inline storage
+    //   else:
+    //       count = unit[+0xc54]
+    //       base  = *(unit + 0xc58)        // external buffer pointer
+    //
+    // Stride 0x18 (24 bytes). Each entry:
+    //   +0x00  caster GUID low  (u32)
+    //   +0x04  caster GUID high (u32)
+    //   +0x08  spellID          (u32)  — 0 = empty slot
+    //   +0x0C  flag byte        (u8)   — bit 7 = "is helpful" (set = HELPFUL)
+    //   +0x0E  stack count      (u8)   — engine pushes verbatim (1 = 1 stack)
+    //   +0x10  duration ms      (u32)  — *0.001 for seconds, 0 = infinite
+    //   +0x14  expiration ms    (u32)  — engine ms, *0.001 = GetTime() epoch
+    //
+    // Stack/duration/expiration field offsets verified at FUN_006147c0
+    // `puVar7+0xe`, `puVar7[4]`, `puVar7[5]`. The aura entry pointer
+    // (puVar7) is the same one whose head is read by FUN_0060b420 to
+    // resolve caster-GUID → unit token, so caster GUID lives at +0x00.
+    OFF_CGUNIT_AURA_INLINE_COUNT       = 0xDD0,
+    OFF_CGUNIT_AURA_INLINE_BASE        = 0xC50,
+    OFF_CGUNIT_AURA_OVERFLOW_COUNT     = 0xC54,
+    OFF_CGUNIT_AURA_OVERFLOW_BASE_PTR  = 0xC58,
+    AURA_ENTRY_STRIDE                  = 0x18,
+
+    OFF_AURA_CASTER_GUID_LO            = 0x00,
+    OFF_AURA_CASTER_GUID_HI            = 0x04,
+    OFF_AURA_SPELL_ID                  = 0x08,
+    OFF_AURA_FLAGS                     = 0x0C,
+    OFF_AURA_STACKS                    = 0x0E,
+    OFF_AURA_DURATION_MS               = 0x10,
+    OFF_AURA_EXPIRATION_MS             = 0x14,
+
+    // Flag byte at OFF_AURA_FLAGS. Bit 7 is the engine's
+    // `AFLAG_NEGATIVE` — set means HARMFUL, clear means HELPFUL.
+    // (Matches 3.3.5 TrinityCore's `AuraFlags` enum:
+    //  AFLAG_EFF_INDEX_0=0x01, _1=0x02, _2=0x04, _CASTER=0x08,
+    //  _POSITIVE=0x10, _DURATION=0x20, _AMOUNT=0x40, _NEGATIVE=0x80.)
+    // The engine's UnitAura test is `~(byte >> 7) & 1` — a "not
+    // harmful" probe, not a "helpful" probe — so callers reading
+    // this directly must invert.
+    AURA_FLAG_HARMFUL                  = 0x80,
+
+    // Bits 0..2 of the flag byte indicate which spell-effect indexes
+    // this aura applies to (one bit per effect). An entry is considered
+    // "live" by the engine's slot-table rebuild only when at least one
+    // of these is set — a stale slot waiting for cleanup has bits 0..2
+    // all clear. Engine check: `*(byte *)(entry + 0xC) & 7 != 0`.
+    AURA_FLAG_EFF_INDEX_MASK           = 0x07,
+
+    // Caster GUID → unit-token resolver. `__cdecl(uint *guidPair)` →
+    // "player" | "target" | "partyN" | "raidN" | "pet" | "partypetN" |
+    // "raidpetN" | "arenaN" | "vehicle" | "focus" | "mouseover" |
+    // "npc" | NULL. Writes party/raid/arena formats into a shared
+    // static buffer at 0x00C25B7C — caller must consume (e.g. push to
+    // Lua, which copies into Lua heap) before the next call.
+    FUN_AURA_GUID_TO_TOKEN             = 0x0060B420,
+
+    // Spell.dbc record-copy helper. `__thiscall(this, id, *out)` →
+    // copies the 680-byte (0x2A8) record into *out, returns 1 on hit
+    // / 0 on miss. `this` = `VAR_SPELL_DBC_DESC`; descriptor layout
+    // (relative to `this`):
+    //   +0x0C = max id (alias of existing VAR_MAX_SPELL_ID = 0xAD49DC)
+    //   +0x10 = min id
+    //   +0x20 = pointer to `int *records[]` array
+    // The engine routes through a locale-aware copy path
+    // (FUN_004CFBB0) when DAT_00C5DEA0 is set — either branch leaves
+    // the OUTPUT BUFFER fields at the same offsets, so callers
+    // unconditionally read out at OFF_SPELL_*.
+    FUN_DBC_COPY_RECORD                = 0x004CFD20,
+    VAR_SPELL_DBC_DESC                 = 0x00AD49D0,
+    SPELL_DBC_RECORD_SIZE              = 0x2A8,
+
+    // Pointer-returning DBC lookup. `__thiscall(this, id)` →
+    // `records[id - min]` or 0 if out of range. The "anchor" `this`
+    // points to the records-array field directly (NOT the descriptor
+    // base) — relative offsets are:
+    //   *(this - 0xC) = max id
+    //   *(this - 0x8) = min id
+    //   *(this + 0x8) = records-array base
+    FUN_DBC_GET_RECORD_PTR             = 0x0065C290,
+    VAR_SPELLDISPEL_DBC_ANCHOR         = 0x00AD4814,
+    VAR_SPELLICON_DBC_ANCHOR           = 0x00AD48A4,
+
+    // Spell.dbc record field offsets within the buffer that
+    // FUN_DBC_COPY_RECORD populates. Verified at FUN_006147c0 — see
+    // the Ghidra-decoded local frame layout in that function:
+    //   local_2c0  (record + 0x008) = dispel type ID
+    //   local_b4   (record + 0x214) = SpellIcon.dbc ID
+    //   local_a8   (record + 0x220) = locale-resolved spell name
+    //   local_a4   (record + 0x224) = locale-resolved rank text
+    OFF_SPELL_DISPEL_TYPE_ID           = 0x008,
+    OFF_SPELL_ICON_DBC_ID              = 0x214,
+    OFF_SPELL_NAME                     = 0x220,
+    OFF_SPELL_RANK                     = 0x224,
+
+    // SpellDispelType.dbc record fields. `+0x0C` is the engine's
+    // "has name" sentinel — when zero, the engine treats the row as
+    // having no displayable name.
+    OFF_SPELLDISPEL_HAS_NAME           = 0x0C,
+    OFF_SPELLDISPEL_NAME               = 0x10,
+
+    // SpellIcon.dbc record field — single string pointer. In 3.3.5
+    // this is the FULL texture path (e.g. "Interface\\Icons\\Spell_Holy_Renew"),
+    // not just the basename — the engine's UnitAura pushes it
+    // verbatim and modern callers consume it as-is.
+    OFF_SPELLICON_PATH                 = 0x04,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to
