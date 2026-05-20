@@ -1024,6 +1024,7 @@ Fields populated with real data:
 | `expirationTime` | number | Absolute `GetTime()` epoch when the aura ends, `0` for infinite. |
 | `sourceUnit` | string\|nil | Unit token of the caster (`"player"`, `"target"`, `"partyN"`, `"pet"`, etc.), or `nil` if no caster GUID. |
 | `isFromPlayerOrPlayerPet` | boolean | True iff `sourceUnit == "player"` or `"pet"`. |
+| `isStealable` | boolean | True iff the local player can Spellsteal this aura off `unit` right now — same predicate the engine's `Script_UnitAura` uses for its 9th return. Always `false` for non-mages, self-auras, non-magic dispel types, and friendly targets. |
 | `timeMod` | number | Always `1` (3.3.5 doesn't expose per-aura time-mod). |
 
 Vanilla-truthful defaults (modern provides these fields; 3.3.5
@@ -1032,7 +1033,6 @@ lacks the underlying systems):
 | Field | Value |
 |-------|-------|
 | `charges`, `maxCharges` | `0` (3.3.5 has no spell-charge system) |
-| `isStealable` | `false` |
 | `isBossAura` | `false` |
 | `isNameplateOnly` | `false` |
 | `nameplateShowAll` | `false` |

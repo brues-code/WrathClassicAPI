@@ -43,6 +43,9 @@ struct SpellRecordBuffer {
 using DBCCopyRecord_t = int(__thiscall *)(void *desc, int id, void *outBuffer);
 using DBCGetRecordPtr_t = uintptr_t(__thiscall *)(void *anchor, int id);
 using GuidToToken_t = const char *(__cdecl *)(const uint32_t *guidPair);
+using IsAuraStealable_t = bool(__cdecl *)(const uint8_t *targetUnit,
+                                          const uint8_t *auraEntry,
+                                          const uint8_t *spellRecord);
 
 // Resolve caster-GUID-pair → unit token via the engine helper. The
 // engine writes party/raid/arena formatted tokens into a shared
@@ -258,6 +261,18 @@ void Push(void *L, const uint8_t *unit, int slot) {
     const bool fromPlayerOrPet = source != nullptr &&
         (std::strcmp(source, "player") == 0 || std::strcmp(source, "pet") == 0);
 
+    // Stealable predicate. Gated on (a) Spell.dbc record present —
+    // engine helper indexes into it — and (b) the aura being on a
+    // unit other than self. The engine helper short-circuits to
+    // false when DAT_00BE5D68 (the player's stealable-dispel mask)
+    // is zero, so non-mages always read false here.
+    bool stealable = false;
+    if (entry != nullptr && haveSpell && helpful) {
+        auto fn = reinterpret_cast<IsAuraStealable_t>(
+            static_cast<uintptr_t>(Offsets::FUN_AURA_IS_STEALABLE));
+        stealable = fn(unit, entry, record.bytes);
+    }
+
     Game::Lua::NewTable(L);
 
     Game::Lua::SetFieldString(L, "name", name);
@@ -279,7 +294,7 @@ void Push(void *L, const uint8_t *unit, int slot) {
     // them won't crash even when no real data is available.
     Game::Lua::SetFieldNumber(L, "charges", 0);
     Game::Lua::SetFieldNumber(L, "maxCharges", 0);
-    Game::Lua::SetFieldBool(L, "isStealable", false);
+    Game::Lua::SetFieldBool(L, "isStealable", stealable);
     Game::Lua::SetFieldBool(L, "isBossAura", false);
     Game::Lua::SetFieldBool(L, "isNameplateOnly", false);
     Game::Lua::SetFieldBool(L, "nameplateShowAll", false);

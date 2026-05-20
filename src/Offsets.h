@@ -648,6 +648,19 @@ enum Offsets {
     // all clear. Engine check: `*(byte *)(entry + 0xC) & 7 != 0`.
     AURA_FLAG_EFF_INDEX_MASK           = 0x07,
 
+    // `IsAuraStealable` — `__cdecl(targetUnit, auraEntry, spellRecord)`
+    // -> bool. The engine's own predicate for whether a helpful aura
+    // on `targetUnit` can be stolen by the local player (Spellsteal &
+    // friends). Called inline from `Script_UnitAura` at
+    // FUN_006147c0 — same logic, same dispel-mask global at
+    // `VAR_PLAYER_STEALABLE_DISPEL_MASK`. Returns false for self
+    // auras, non-magic dispel types, hostile/friendly mismatches,
+    // and when the local player has no steal ability (mask == 0).
+    //
+    // 3.3.5 has Spellsteal (mage 30) so this is a real condition,
+    // not always-false like in 1.12 (where it was added later).
+    FUN_AURA_IS_STEALABLE              = 0x0053D680,
+
     // Caster GUID → unit-token resolver. `__cdecl(uint *guidPair)` →
     // "player" | "target" | "partyN" | "raidN" | "pet" | "partypetN" |
     // "raidpetN" | "arenaN" | "vehicle" | "focus" | "mouseover" |

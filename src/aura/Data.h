@@ -68,12 +68,12 @@ int FindSlotBySpellID(const uint8_t *unit, uint32_t spellID,
 // Real-data fields:
 //   name, icon, applications, spellId, dispelName,
 //   isHelpful, isHarmful, duration, expirationTime, sourceUnit,
-//   isFromPlayerOrPlayerPet, timeMod
+//   isFromPlayerOrPlayerPet, isStealable, timeMod
 //
 // Vanilla-truthful defaults (modern provides them; 3.3.5 lacks
 // the underlying systems):
 //   charges=0, maxCharges=0, points=nil, auraInstanceID=nil,
-//   isStealable=false, isBossAura=false, isNameplateOnly=false,
+//   isBossAura=false, isNameplateOnly=false,
 //   nameplateShowAll=false, nameplateShowPersonal=false,
 //   canApplyAura=false, shouldConsolidate=false, isRaid=false
 void Push(void *L, const uint8_t *unit, int slot);
