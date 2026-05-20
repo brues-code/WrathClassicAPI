@@ -505,6 +505,49 @@ enum Offsets {
     // 8 in 1.12). The 5th return is at stack index `-(n-4)`.
     FUN_SCRIPT_GET_TALENT_INFO = 0x005C7800,
 
+    // Engine game-time struct. Populated from `SMSG_LOGIN_VERIFY_WORLD`
+    // / `SMSG_LOGIN_SETTIMESPEED` and stepped forward every minute by
+    // the engine's time keeper. The wire protocol carries minute
+    // granularity only — no seconds field — so any addon-facing
+    // "current time" needs `GetTickCount`-based interpolation between
+    // minute boundaries.
+    //
+    // Layout (same shape as 1.12, verified at `Script_GetGameTime`
+    // (FUN_00608230) which reads minute/hour, and the calendar getter
+    // FUN_005B8160 which reads weekday/day/month/year with the
+    // `+1` / `+2000` normalizations baked in):
+    //   +0x00  minute       (0..59)
+    //   +0x04  hour         (0..23)
+    //   +0x08  weekday      (0..6, 0=Sunday)
+    //   +0x0C  day-of-month (0-based; engine `+1`s before exposing to Lua)
+    //   +0x10  month        (0-based; engine `+1`s)
+    //   +0x14  year         (stored as `year - 2000`, e.g. 8 = 2008)
+    //
+    // Pre-login the struct is BSS-zero; we use `year == 0` as the
+    // "uninitialized" sentinel.
+    VAR_GAMETIME_STRUCT = 0x00D37F98,
+    OFF_GAMETIME_MINUTE = 0x00,
+    OFF_GAMETIME_HOUR = 0x04,
+    OFF_GAMETIME_DAY = 0x0C,
+    OFF_GAMETIME_MONTH = 0x10,
+    OFF_GAMETIME_YEAR = 0x14,
+
+    // Next daily-reset epoch (`time_t`-shaped Unix timestamp) — the
+    // engine's own daily-reset clock, populated by the server-broadcast
+    // calendar packet. Verified at `Script_GetQuestResetTime`
+    // (FUN_005E6DE0), whose entire body is:
+    //   `time_t now = _time32(NULL);
+    //    if (DAT_00C23AF8 && DAT_00C23AF8 <= now) FUN_005E6940(1);
+    //    push (DAT_00C23AEC - now);`
+    // So `DAT_00C23AEC - time(NULL)` is "seconds until daily reset" —
+    // respects whatever schedule the server actually uses (3am
+    // Pacific on retail; arbitrary on private servers).
+    //
+    // Zero before the server broadcasts the reset schedule
+    // (pre-login or early in the session); we treat that as "unknown"
+    // and return nil.
+    VAR_NEXT_DAILY_RESET_EPOCH = 0x00C23AEC,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to

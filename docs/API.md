@@ -45,6 +45,14 @@ Conventions:
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
+- [Time](#time)
+  - [`GetServerTime()`](#getservertime)
+  - [`C_DateAndTime.GetCurrentCalendarTime()`](#c_dateandtimegetcurrentcalendartime)
+  - [`C_DateAndTime.GetCalendarTimeFromEpoch(epoch)`](#c_dateandtimegetcalendartimefromepochepoch)
+  - [`C_DateAndTime.AdjustTimeByDays(t, days)` / `AdjustTimeByMinutes(t, minutes)`](#c_dateandtimeadjusttimebydayst-days--adjusttimebyminutest-minutes)
+  - [`C_DateAndTime.CompareCalendarTime(lhs, rhs)`](#c_dateandtimecomparecalendartimelhs-rhs)
+  - [`C_DateAndTime.GetSecondsUntilDailyReset()`](#c_dateandtimegetsecondsuntildailyreset)
+  - [`C_DateAndTime.GetServerTimeLocal()`](#c_dateandtimegetservertimelocal)
 - [Tooltip](#tooltip)
   - [`GameTooltip:HasSpell()`](#gametooltiphasspell)
   - [`GameTooltip:HasItem()`](#gametooltiphasitem)
@@ -359,6 +367,121 @@ and identical across dual-spec groups.
 Useful as a stable identifier for talent builds in `SavedVariables`
 or for build-sharing protocols — survives talent-tree reshuffles
 across patches, unlike `(class, tab, tier, column)` encoding.
+
+---
+
+## Time
+
+3.3.5's stock `GetTime()` returns frame-relative seconds-since-login
+— useless for anything that needs wall-clock alignment (cooldown
+sync, log timestamps, daily-reset countdowns). The Time suite
+backports the modern Unix-epoch shape plus the modern
+`C_DateAndTime.*` date-math API.
+
+### `GetServerTime()`
+
+Returns the current server clock as a Unix epoch (seconds since
+1970-01-01 UTC). Returns `nil` before login.
+
+```lua
+GetServerTime()                       -- e.g. 1716123456
+date("%H:%M:%S", GetServerTime())     -- "14:37:36"
+```
+
+Reads year/month/day/hour/minute from the engine's game-time struct
+(populated by `SMSG_LOGIN_VERIFY_WORLD` / `SMSG_LOGIN_SETTIMESPEED`)
+and converts via `_mkgmtime`. The wire protocol carries minute
+granularity only — we interpolate seconds via `GetTickCount` deltas
+between minute boundaries. **Cold-start caveat**: the first reported
+minute lands at :00 (off by up to 59s); subsequent calls are accurate
+within a few hundred ms once we've observed a minute rollover.
+
+### `C_DateAndTime.GetCurrentCalendarTime()`
+
+Returns a fresh `CalendarTime` table for the current server time:
+
+```lua
+C_DateAndTime.GetCurrentCalendarTime()
+-- { year = 2026, month = 5, monthDay = 23, weekday = 6, hour = 14, minute = 37 }
+```
+
+CalendarTime field conventions (matching Blizzard's modern
+`TimeDocumentation.lua`):
+
+| Field      | Range  | Notes                              |
+|------------|--------|------------------------------------|
+| `year`     | full   | e.g. 2026                          |
+| `month`    | 1..12  | Lua-indexed (Jan = 1)              |
+| `monthDay` | 1..31  | Lua-indexed                        |
+| `weekday`  | 1..7   | Lua-indexed (Sunday = 1)           |
+| `hour`     | 0..23  |                                    |
+| `minute`   | 0..59  |                                    |
+
+Returns `nil` before login.
+
+### `C_DateAndTime.GetCalendarTimeFromEpoch(epoch)`
+
+Inverse — decomposes a Unix epoch into a CalendarTime table.
+
+```lua
+C_DateAndTime.GetCalendarTimeFromEpoch(1716123456)
+-- { year=2024, month=5, monthDay=19, weekday=1, hour=14, minute=17 }
+```
+
+### `C_DateAndTime.AdjustTimeByDays(t, days)` / `AdjustTimeByMinutes(t, minutes)`
+
+Returns a new CalendarTime table that's `days` (or `minutes`)
+offset from `t`. Negative deltas walk backwards. The math goes
+through epoch conversion, so month/year rollover is handled
+correctly.
+
+```lua
+local tomorrow = C_DateAndTime.AdjustTimeByDays(now, 1)
+local fiveMinAgo = C_DateAndTime.AdjustTimeByMinutes(now, -5)
+```
+
+### `C_DateAndTime.CompareCalendarTime(lhs, rhs)`
+
+Returns `-1` / `0` / `1` for `lhs < rhs` / `==` / `>`. Compares via
+epoch so normalization is consistent — `{month=13, monthDay=1}`
+compares correctly as "January next year".
+
+### `C_DateAndTime.GetSecondsUntilDailyReset()`
+
+Returns seconds until the next daily reset, using the engine's own
+reset clock (the same value `GetQuestResetTime` returns). That clock
+is populated by a server-broadcast calendar packet, so it respects
+the actual reset schedule the server uses — 3am server-local on
+retail Wrath, arbitrary on private servers.
+
+```lua
+local s = C_DateAndTime.GetSecondsUntilDailyReset()
+print(string.format("Daily reset in %dh %dm", s/3600, (s%3600)/60))
+```
+
+Returns `nil` if the server hasn't broadcast a reset epoch yet
+(pre-login or very early in the session).
+
+`C_DateAndTime.GetSecondsUntilWeeklyReset` is **not** implemented —
+3.3.5 has no analogous server-broadcast weekly clock. Compute your
+own from the daily reset if you need it.
+
+### `C_DateAndTime.GetServerTimeLocal()`
+
+Returns the server's wall clock packed as a Unix epoch in the
+client's local-timezone interpretation. Useful for
+`date(format, GetServerTimeLocal())` to print server-clock strings
+without timezone offsets sneaking in.
+
+```lua
+date("%H:%M:%S", GetServerTimeLocal())
+-- prints server-side hour/minute regardless of client TZ
+```
+
+The trick: take the server's UTC-style components from
+`GetServerTime()`, re-interpret them via `mktime` (which treats
+input as local time). The resulting epoch, when fed to `date()` (a
+local-time formatter), reproduces the server's wall clock.
 
 ---
 
