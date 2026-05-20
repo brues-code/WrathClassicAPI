@@ -1,68 +1,8 @@
 # WrathClassicAPI — TODO
 
-Open items, with enough context to pick up next session. Items are
-listed in the order I'd tackle them — the GUID-string variant is the
-biggest known gap in the currently-shipped surface; the rest is
-"nice to have."
+Open items, with enough context to pick up next session.
 
-## 1. `C_Item.GetItemLocation(itemGUID)`
-
-**What's done.** Both halves of the GUID pipeline ship:
-
-  * `Item::Location::Resolve` / `IsLocationArg` accept
-    `"0xHHHHHHHHLLLLLLLL"` (with or without the `0x` prefix) — every
-    `C_Item.*` accessor that takes an `itemLocation` now also takes
-    a GUID string. Routes through `ObjectMgr::HexString2Guid` →
-    `ObjectMgr::Get` with the ITEM typemask.
-  * `C_Item.GetItemGUID(itemLocation)` reads the 8-byte GUID at
-    `CGItem → instance_block → +0x00` and formats it via
-    `ObjectMgr::Guid2HexString`. Pairs with the consumer side so
-    addons can round-trip: capture a GUID with `GetItemGUID`, feed
-    it back to any `C_Item.*` accessor later.
-
-**What's still missing.**
-
-`C_Item.GetItemLocation(itemGUID) -> ItemLocation` — modern WoW
-returns an `ItemLocation` mixin object backed by the GUID; our
-addon-side `ItemLocationMixin` only supports bag/slot and
-equipment-slot field shapes. To return a usable location we'd have
-to scan the player's inventory for the matching GUID and emit a
-`{bagID, slotIndex}` or `{equipmentSlotIndex}` table.
-
-Skipping until an addon actually needs it — for now the addon-side
-`ItemMixin:GetItemLocation` returns nil on the
-`CreateFromItemGUID` path, which downstream methods handle via the
-empty-item branch. The string-GUID accessors are the more
-load-bearing piece anyway: addons that want "is this still the
-same item?" can compare GUIDs directly without going through a
-location.
-
-## 2. `/reload` re-registration path
-
-`Game::RunModuleRegistrations` fires only from the
-**first-boot** GameUI hook (`FUN_0052A980`). 3.3.5 has a separate
-`/reload` path through `FUN_00528F00 → FUN_00512280` that we
-don't hook. After a reload, every `C_*` namespace we registered
-becomes nil; the user has to log out and back in to get them back.
-
-In practice this is minor — addon authors `/reload` constantly during
-development, so the disappearing API is annoying — but we have the
-piece in place to make it work: a second `MinHook` detour on
-`FUN_00512280` that runs `Game::RunModuleRegistrations` post-call. The
-caveat is that `FUN_00512280` clears all engine globals before
-re-registering them (it's the reload pathway), so the timing of OUR
-re-registration relative to the engine's clear+rebuild matters — see
-[`memory/feedback_two_load_script_paths.md`][reload-mem] for the
-specifics.
-
-The first-attempted version of this (hooking `FUN_00512280`) crashed
-during the engine's mid-rebuild state — that was actually our wrong
-offset for `LUA_NEW_TABLE` masquerading as a `/reload` bug. With the
-offsets right now, it should just work. Worth a careful re-attempt.
-
-[reload-mem]: ~/.claude/projects/c--Git-WrathClassicAPI/memory/feedback_two_load_script_paths.md
-
-## 3. Negative-bagID slots (keyring, bank)
+## 1. Negative-bagID slots (keyring, bank)
 
 `Item::Location::ResolveBagSlot` handles `bagID 0` (backpack) and
 `bagID 1..4` (equipped bags). The engine's `PackBagSlot` also supports
@@ -78,7 +18,7 @@ negative bagIDs — those slots are usually addressed by their
 character-pane equipment-slot index (bank is its own bag UI). Add
 when an addon actually asks for it.
 
-## 4. The big one — more APIs from ClassicAPI
+## 2. The big one — more APIs from ClassicAPI
 
 ClassicAPI exposes ~150 Lua functions across [a dozen
 namespaces][classicapi-readme]. WrathClassicAPI exposes 5. Most of
@@ -99,13 +39,13 @@ re-derive the calling convention from a call-site disassembly (see
 The high-value targets (subjective): `C_Spell.GetSpellInfo`,
 `C_Item.GetItemInfo`, `C_AddOns.*`, `C_CVar.*`. Each is ~50 lines.
 
-### 4a. Reference — `!!!ClassicAPI` (Frostmourne) C_\* surface
+### 2a. Reference — `!!!ClassicAPI` (Frostmourne) C_\* surface
 
 [`C:\WoW\FrostmourneClient\Interface\AddOns\!!!ClassicAPI`](C:/WoW/FrostmourneClient/Interface/AddOns/!!!ClassicAPI/Load.xml)
 is a pure-Lua compat addon for Frostmourne (Wrath 3.3.5) that
 backports / forwards the C_\* namespaces below. It's the cleanest
 inventory of "what 3.3.5 addons actually expect from a modern API
-surface," so it's the natural shortlist for section 4 — port what
+surface," so it's the natural shortlist for section 2 — port what
 WrathClassicAPI can do *better* than a pure-Lua wrapper (i.e.
 anything needing engine state, GUIDs, or fields not exposed to
 addon Lua), and let the addon keep handling the rest.
@@ -152,9 +92,9 @@ of the surface is fine as Lua wrappers).
     `GetNumActiveQuests`, `GetNumAvailableQuests`. Forwards only.
   * **C_Item** ✅ (partial) — already native:
     `IsItemDataCachedByID`, `RequestLoadItemDataByID`,
-    `IsItemDataCached`, `RequestLoadItemData` (table forms; see
-    [TODO §1](TODO.md) for the GUID-string gap). Addon also
-    exposes: `DoesItemExistByID`, `GetItemNameByID`,
+    `IsItemDataCached`, `RequestLoadItemData`, `GetItemGUID`,
+    `GetItemLocation` (round-trips with `GetItemGUID`). Addon
+    also exposes: `DoesItemExistByID`, `GetItemNameByID`,
     `GetItemInfoInstant`, `GetItemSubClassInfo`,
     `GetItemInventorySlotInfo`, `GetItemInventoryTypeByID`,
     `GetItemQualityByID`, `GetItemInfo`, `GetItemIconByID`,
@@ -163,9 +103,9 @@ of the surface is fine as Lua wrappers).
     `GetItemLink`, `GetItemQuality`, `GetItemInventoryType`,
     `GetCurrentItemLevel`, `IsBound`, `DoesItemExist`). 🆕
     `IsBound` does a tooltip scan in Lua — the bound bit is a CGItem
-    flag we can read directly. `GetItemGUID` and the
-    `Lock/UnlockItemByGUID` family are noop stubs in the addon —
-    natural pair to the [§1 GUID-string variant](TODO.md) work.
+    flag we can read directly. The `Lock/UnlockItemByGUID` family
+    are noop stubs in the addon and would pair naturally with the
+    rest of the GUID-string surface.
   * **C_Map** — `IsWorldMap`, `GetBestMapForUnit` (stub). 3.3.5
     has no UI-map concept; this namespace is mostly a polyfill.
   * **C_NamePlate** — file is empty (defers to

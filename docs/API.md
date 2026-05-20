@@ -30,6 +30,7 @@ Conventions:
   - [`ClassicExpansionAtMost(level)`](#classicexpansionatmostlevel)
 - [Item](#item)
   - [`C_Item.GetItemID(itemLocation)` / `GetItemGUID`](#c_itemgetitemiditemlocation)
+  - [`C_Item.GetItemLocation(itemGUID)`](#c_itemgetitemlocationitemguid)
   - [`C_Item.GetItemInfoInstant(item)`](#c_itemgetiteminfoinstantitem)
   - [`C_Item.DoesItemExist[ByID]`](#c_itemdoesitemexistitemlocation--doesitemexistbyiditem)
   - [`C_Item.GetItemQuality[ByID]`](#c_itemgetitemqualityitemlocation--getitemqualitybyiditem)
@@ -209,6 +210,39 @@ local guid = C_Item.GetItemGUID({equipmentSlotIndex = 16})
 -- e.g. "0x4000000083ECA16C"
 C_Item.GetItemQuality(guid)  -- works
 ```
+
+### `C_Item.GetItemLocation(itemGUID)`
+
+Inverse of `GetItemGUID`. Takes a GUID string
+(`"0xHHHHHHHHLLLLLLLL"`, with or without the `0x` prefix) and
+returns the `itemLocation` table for where that item currently
+lives in the player's inventory, or `nil` if it isn't held by the
+player.
+
+```lua
+local guid = C_Item.GetItemGUID({bagID = 0, slotIndex = 1})
+local loc = C_Item.GetItemLocation(guid)
+-- loc = { bagID = 0, slotIndex = 1 }
+C_Item.GetItemName(loc)  -- works on the returned table directly
+```
+
+Returns:
+
+- `{ equipmentSlotIndex = N }` for items in character-pane slots 1..19
+- `{ bagID = B, slotIndex = S }` for items in backpack (`B=0`) or
+  equipped bags (`B=1..4`)
+- `nil` for unknown / malformed GUIDs, items the player doesn't own
+  (trade items, auction listings, etc.), or non-item GUIDs (units,
+  players)
+
+Implementation walks the player's equipment + backpack + bags
+comparing CGItem pointers — modern WoW returns an `ItemLocation`
+mixin object backed by the GUID itself, but our addon-side
+[`ItemLocationMixin`](https://warcraft.wiki.gg/wiki/ItemLocationMixin)
+only supports table-shape locations, so we resolve the GUID to a
+concrete `(bagID, slotIndex)` or `equipmentSlotIndex` at call
+time. Keyring / bank / mail / void-storage slots aren't covered
+(those use different inventory managers in 3.3.5).
 
 ### `C_Item.GetItemInfoInstant(item)`
 
