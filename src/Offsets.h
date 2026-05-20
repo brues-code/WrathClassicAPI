@@ -370,6 +370,7 @@ enum Offsets {
     LUA_RAW_SET       = 0x0084E970, // void lua_rawset(L, idx)
     LUAL_ERROR        = 0x0084F280, // int  luaL_error(L, fmt, ...) (cdecl, varargs)
     LUA_TO_USERDATA   = 0x0084E1C0, // void *lua_touserdata(L, idx) — returns NULL for non-userdata
+    LUA_TO_BOOLEAN    = 0x0084E0B0, // int   lua_toboolean(L, idx) — returns 0 for nil/false/missing, 1 otherwise
 
     // Player spell-knowledge bitmap pointer — single-deref global
     // holding the base of a dword bitmap with one bit per spellID.
@@ -450,6 +451,59 @@ enum Offsets {
     OFF_TOOLTIP_SPELL_ID = 0x364,
     OFF_TOOLTIP_UNIT_GUID_LO = 0x328,
     OFF_TOOLTIP_UNIT_GUID_HI = 0x32C,
+
+    // Talent system — TabInfo lookup. The engine stores three
+    // separate `TabInfo *` arrays for (player / pet / inspect) and
+    // picks between them in `FUN_005C5C60` based on isInspect/isPet
+    // flags:
+    //   (isInspect=0, isPet=0) → player tabs   (count C2101C / arr C21020)
+    //   (isInspect=0, isPet=1) → pet tabs      (count C21028 / arr C2102C)
+    //   (isInspect=1, isPet=0) → inspect tabs  (count C21130 / arr C21134)
+    //   any other combo        → returns 0
+    // We call the engine helper directly rather than re-implementing
+    // the three-way switch — fewer addresses to maintain.
+    //
+    // Signature: `TabInfo *__cdecl(uint32_t tabIndex0Based, int isInspect, int isPet)`.
+    // Returns the TabInfo pointer or NULL for out-of-range / mismatched
+    // flag combo.
+    //
+    // TabInfo struct layout (this build):
+    //   +0x04  numTalents (uint32)
+    //   +0x08  talent entries pointer (TalentEntry*, stride 0x5C)
+    //
+    // TalentEntry struct layout (stride 0x5C = 92 bytes):
+    //   +0x00  talentID (TalentDBC primary key)
+    //   +0x08  tier (0-based; +1 for the Lua return)
+    //   +0x0C  column (0-based; +1 for the Lua return)
+    //   +0x10  SpellRank[9]   — 9 spellIDs, one per rank slot.
+    //                          Slot 0 = rank 1, slot N = rank N+1.
+    //                          Zero past max-rank for the talent.
+    //
+    // All struct offsets verified at `Script_GetTalentInfo`
+    // (FUN_005C7800) — see the `puVar8[N]` index pattern:
+    //   puVar8[0]    = talentID
+    //   puVar8[2..3] = tier, column
+    //   puVar8[4..12]= SpellRank[9]
+    FUN_TALENT_TAB_INFO_LOOKUP = 0x005C5C60,
+    OFF_TABINFO_NUM_TALENTS = 0x04,
+    OFF_TABINFO_TALENT_ARRAY = 0x08,
+    OFF_TALENT_DBC_ID = 0x00,
+    OFF_TALENT_SPELL_RANK = 0x10,
+    TALENT_ENTRY_STRIDE = 0x5C,
+    TALENT_MAX_RANKS = 9,
+
+    // Engine's `Script_GetTalentInfo` Lua C function. We call it from
+    // `GetTalentSpellID` to derive the player's currentRank without
+    // having to maintain our own per-talent rank state — its 5th
+    // return is `currentRank`, populated from `puVar2[7]` after the
+    // function's internal `FUN_005C77B0` lookup. The engine errors
+    // (lua_error) on out-of-range tab/talent indices or pre-login
+    // state, so callers must pre-validate before invoking.
+    //
+    // Signature: `int __cdecl Script_GetTalentInfo(lua_State *L)`.
+    // Returns the number of Lua values pushed (10 in 3.3.5 — vs
+    // 8 in 1.12). The 5th return is at stack index `-(n-4)`.
+    FUN_SCRIPT_GET_TALENT_INFO = 0x005C7800,
 
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different

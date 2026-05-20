@@ -42,6 +42,9 @@ Conventions:
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
+- [Talent](#talent)
+  - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
+  - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
 - [Tooltip](#tooltip)
   - [`GameTooltip:HasSpell()`](#gametooltiphasspell)
   - [`GameTooltip:HasItem()`](#gametooltiphasitem)
@@ -299,6 +302,63 @@ engine's native `IsSpellKnown`** — that one walks the displayable
 spellbook arrays, which famously don't include profession recipes
 in 3.3.5 (per Wowhead: "as of 3.0.8, does not work for profession
 spells"). `IsPlayerSpell` closes that gap.
+
+---
+
+## Talent
+
+3.3.5's `GetTalentInfo(tab, idx)` returns `(name, icon, tier, column,
+currentRank, maxRank, ...)` — useful for the talent UI, but doesn't
+expose the talent's primary key or its spellID, both of which addons
+routinely need (for stable identifiers in saved builds, or to chain
+into the spell APIs). These two calls fill that gap.
+
+### `GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`
+
+Returns the spellID for the given talent at the requested rank, or
+`nil` if anything is out of range / the talent isn't allocated.
+
+The first 5 args mirror the engine's `GetTalentInfo` positional order
+exactly. `rank` (position 6) is the WrathClassicAPI extension.
+
+```lua
+GetTalentSpellID(1, 5)                          -- player, current rank
+GetTalentSpellID(1, 5, false, false, nil, 3)    -- rank 3 specifically
+GetTalentSpellID(1, 5, true)                    -- inspect target (after NotifyInspect)
+GetTalentSpellID(1, 5, false, true)             -- pet
+GetTalentSpellID(1, 5, false, false, 2)         -- player, secondary spec group
+GetTalentSpellID(1, 5, false, false, nil, 99)   -- nil (rank > 9)
+```
+
+| Arg | Default | Effect |
+|---|---|---|
+| `isInspect` | `false` | Query the current inspect target's tabs instead of the player's. |
+| `isPet`     | `false` | Query the player pet's tabs (mutually exclusive with `isInspect`). |
+| `groupIndex`| (active group) | Which dual-spec group to read `currentRank` from. Ignored when `rank` is given explicitly. |
+| `rank`      | `currentRank` | Explicit rank slot. If `currentRank` is 0 (talent unallocated), the implicit path falls back to rank 1 so a tooltip preview still has a real spellID. |
+
+Returns `nil` when the explicit `rank` exceeds the talent's maxRank
+(the SpellRank slot is zero past that point).
+
+### `GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`
+
+Returns the Talent.dbc primary key for the talent at (tab, idx) in
+the source selected by `isInspect` / `isPet`, or `nil` for
+out-of-range input.
+
+```lua
+GetTalentIDByIndex(1, 5)         -- e.g. 1612 (the Talent.dbc row ID, player)
+GetTalentIDByIndex(1, 5, true)   -- inspect target's row ID at (1, 5)
+GetTalentIDByIndex(1, 5, false, true)  -- pet
+```
+
+`groupIndex` is accepted for API symmetry with `GetTalentInfo`'s
+shape but doesn't affect the result — talent IDs are class-determined
+and identical across dual-spec groups.
+
+Useful as a stable identifier for talent builds in `SavedVariables`
+or for build-sharing protocols — survives talent-tree reshuffles
+across patches, unlike `(class, tab, tier, column)` encoding.
 
 ---
 

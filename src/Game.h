@@ -77,6 +77,7 @@ using lua_gettop_t = int(__cdecl *)(void *L);
 using lua_settop_t = void(__cdecl *)(void *L, int idx);
 using lua_type_t = int(__cdecl *)(void *L, int idx);
 using lua_touserdata_t = void *(__cdecl *)(void *L, int idx);
+using lua_toboolean_t = int(__cdecl *)(void *L, int idx);
 // luaL_error is variadic — the typedef stops at the format string;
 // callers supply additional args at the call site (cdecl pushes them).
 using luaL_error_t = int(__cdecl *)(void *L, const char *fmt, ...);
@@ -123,6 +124,7 @@ extern const lua_gettop_t GetTop;
 extern const lua_settop_t SetTop;
 extern const lua_type_t Type;
 extern const lua_touserdata_t ToUserdata;
+extern const lua_toboolean_t ToBoolean;
 extern const luaL_error_t Error;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
