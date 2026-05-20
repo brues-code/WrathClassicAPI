@@ -57,6 +57,10 @@ Conventions:
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
 - [Talent](#talent)
+- [Timer](#timer)
+  - [`C_Timer.After(seconds, callback)`](#c_timerafterseconds-callback)
+  - [`C_Timer.NewTimer(seconds, callback)`](#c_timernewtimerseconds-callback)
+  - [`C_Timer.NewTicker(seconds, callback[, iterations])`](#c_timernewtickerseconds-callback-iterations)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
 - [Time](#time)
@@ -698,6 +702,78 @@ The trick: take the server's UTC-style components from
 `GetServerTime()`, re-interpret them via `mktime` (which treats
 input as local time). The resulting epoch, when fed to `date()` (a
 local-time formatter), reproduces the server's wall clock.
+
+---
+
+## Timer
+
+Modern callback scheduling. Internally a min-heap keyed by fire
+time, drained from a hook on `FrameScript_FireOnUpdate` — same
+tick cadence as Lua-side `OnUpdate` handlers, so a 1.0s timer
+fires on the first frame at-or-after `GetTime() + 1.0`.
+
+3.3.5 ships nothing equivalent natively (no `C_Timer`, no
+`NewTicker`, no `NewTimer` strings anywhere in the binary), so the
+whole namespace is new.
+
+### `C_Timer.After(seconds, callback)`
+
+Fires `callback` once after `seconds` have elapsed. Returns
+nothing. Use this when you don't need to cancel.
+
+```lua
+C_Timer.After(2.5, function() print("2.5s later") end)
+C_Timer.After(0,   function() print("next frame") end)
+```
+
+### `C_Timer.NewTimer(seconds, callback)`
+
+One-shot like `After`, but returns a timer object you can cancel
+before it fires:
+
+```lua
+local t = C_Timer.NewTimer(5, function() print("don't see me") end)
+C_Timer.After(1, function() t:Cancel() end)
+-- nothing prints
+```
+
+Returned table:
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `:Cancel()` | nothing | Marks the timer cancelled. Idempotent. |
+| `:IsCancelled()` | boolean | `true` after `:Cancel()`, `false` otherwise. Stays `false` after the timer fires normally (cancellation is the explicit user action, not "did it complete"). |
+
+### `C_Timer.NewTicker(seconds, callback[, iterations])`
+
+Repeating timer. Fires every `seconds`, optionally limited to
+`iterations` total fires. Omitted / non-positive `iterations`
+means infinite — runs until `:Cancel()` is called.
+
+```lua
+local n = 0
+local ticker = C_Timer.NewTicker(1, function()
+    n = n + 1
+    print("tick", n)
+end, 5)
+-- prints "tick 1" through "tick 5", one per second, then stops.
+
+local heartbeat = C_Timer.NewTicker(60, function() Heartbeat() end)
+-- runs every minute forever; call heartbeat:Cancel() to stop.
+```
+
+Same `:Cancel()` / `:IsCancelled()` methods as `NewTimer`.
+
+Per Blizzard's design note on the original implementation:
+> The one case where you're better off not using the new C_Timer
+> system is when you have a ticker with a very short period —
+> something that's going to fire every couple frames \[...\]
+> you're going to be best served by using an OnUpdate function.
+
+The heap-per-tick check is cheap (one comparison against the
+top), so sub-frame tickers still work — but if you're scheduling
+literally every frame, a direct `OnUpdate` script is fewer
+indirections.
 
 ---
 

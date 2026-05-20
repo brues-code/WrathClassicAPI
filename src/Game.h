@@ -81,6 +81,8 @@ using lua_toboolean_t = int(__cdecl *)(void *L, int idx);
 // luaL_error is variadic — the typedef stops at the format string;
 // callers supply additional args at the call site (cdecl pushes them).
 using luaL_error_t = int(__cdecl *)(void *L, const char *fmt, ...);
+using lua_pcall_t = int(__cdecl *)(void *L, int nargs, int nresults, int errfunc);
+using lua_rawseti_t = void(__cdecl *)(void *L, int idx, int n);
 
 extern const lua_isnumber_t IsNumber;
 extern const lua_isstring_t IsString;
@@ -130,6 +132,8 @@ extern const lua_type_t Type;
 extern const lua_touserdata_t ToUserdata;
 extern const lua_toboolean_t ToBoolean;
 extern const luaL_error_t Error;
+extern const lua_pcall_t PCall;
+extern const lua_rawseti_t RawSetI;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
 // Wrap it so callers can write `Game::Lua::ToString(L, n)`.

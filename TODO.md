@@ -144,9 +144,11 @@ of the surface is fine as Lua wrappers).
     `PickupSpellBookItem`, `GetSpellBookItemName`. Forwards only.
   * **C_Texture** — `GetAtlasInfo`. Depends on the addon's bundled
     `ATLAS_INFO_STORAGE` table; not native-portable.
-  * **C_Timer** — `After`, `NewTimer`, `NewTicker`. 3.3.5 already
-    ships `C_Timer` natively; this file is a fallback for very
-    old 3.3.5 builds (`if not C_Timer then` guard). No native work.
+  * **C_Timer** ✅ — already native: `After`, `NewTimer`,
+    `NewTicker`. 3.3.5 doesn't ship `C_Timer` natively (none of
+    those strings appear in the binary; TODO previously claimed it
+    did, that was wrong). Implementation drives a min-heap from a
+    `FrameScript_FireOnUpdate` hook.
   * **C_UI** — `Reload = ReloadUI`. One-line forward.
   * **C_VoiceChat** — `GetTtsVoices = function() return {} end`.
     Stub only.

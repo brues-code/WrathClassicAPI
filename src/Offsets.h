@@ -380,6 +380,16 @@ enum Offsets {
     LUAL_ERROR        = 0x0084F280, // int  luaL_error(L, fmt, ...) (cdecl, varargs)
     LUA_TO_USERDATA   = 0x0084E1C0, // void *lua_touserdata(L, idx) — returns NULL for non-userdata
     LUA_TO_BOOLEAN    = 0x0084E0B0, // int   lua_toboolean(L, idx) — returns 0 for nil/false/missing, 1 otherwise
+    LUA_PCALL         = 0x0084EC50, // int   lua_pcall(L, nargs, nresults, errfunc) — protected call
+    LUA_RAW_SETI      = 0x0084EA00, // void  lua_rawseti(L, idx, n) — t[n] = top, pops top
+
+    // `FrameScript_FireOnUpdate` — engine's per-frame dispatcher that
+    // fires every Lua-bound `OnUpdate` handler. Cross-checked against
+    // awesome_wotlk (uses this same offset for its own per-frame hook).
+    // `__cdecl(int a1, int a2, int a3, int a4)`; body is just a pair
+    // of helper calls (dispatch all frame OnUpdates + process delayed
+    // events). We hook to drive `C_Timer.*` dispatch — args ignored.
+    FUN_FRAMESCRIPT_FIRE_ON_UPDATE = 0x00495810,
 
     // Player spell-knowledge bitmap pointer — single-deref global
     // holding the base of a dword bitmap with one bit per spellID.
