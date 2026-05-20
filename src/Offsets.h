@@ -297,6 +297,15 @@ enum Offsets {
     // arg before calling.
     FUN_ITEMMGR_GET_ITEM_BY_SLOT = 0x00754390,
 
+    // CGContainer (bag) layout. First dword is the slot count —
+    // verified at `Script_GetContainerNumSlots` (FUN_005D74A0): after
+    // `(**(code **)(*piVar4 + 0x28))()` (= CGItem::GetContainer via
+    // vtable slot 10), the function reads `*piVar4` (the first dword
+    // of the returned container) and pushes it to Lua. Same layout as
+    // 1.12 — this slot count is the value `GetContainerNumSlots`
+    // returns.
+    OFF_CONTAINER_NUM_SLOTS = 0x00,
+
     // CGItem instance-block layout. CGItem at +0x08 holds a pointer
     // to an "instance block" (the per-item data — `ObjectEntry` in
     // awesome_wotlk's terminology). Layout:

@@ -59,4 +59,13 @@ const uint8_t *ResolveEquipmentSlot(int slot1Based);
 // bagID outside that range → nullptr (keyring, bank, etc. deferred).
 const uint8_t *ResolveBagSlot(int bagID, int slotIndex);
 
+// Returns the number of slots in the bag at `bagID`. Backpack
+// (`bagID == 0`) is the fixed `kBackpackSize = 16`; equipped bags
+// (`bagID 1..4`) read `numSlots` off the bag's `CGContainer` (via
+// `CGItem::GetContainer`, vtable slot 10). Returns 0 if the bag
+// slot is empty, the item isn't a container, or `bagID` is out of
+// range. Same data the engine's `GetContainerNumSlots` Lua C
+// function returns, exposed here for inventory walks.
+int GetBagNumSlots(int bagID);
+
 } // namespace Item::Location

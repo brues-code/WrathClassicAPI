@@ -40,14 +40,6 @@ namespace Item::GetLocation {
 
 namespace {
 
-// Upper bound for per-bag slot iteration. 3.3.5's largest bag is
-// 22 slots (Wormhole Generator: Northrend doesn't qualify; the
-// real upper bound is the 22-slot frostweave-style bags). The
-// engine bounds-checks each `GetItemBySlot` call internally and
-// returns nullptr for out-of-range slots, so iterating past a
-// bag's actual size is harmless — just wastes a few iterations.
-constexpr int kMaxBagSlots = 36;
-
 void PushEquipmentSlot(void *L, int slot1Based) {
     Game::Lua::NewTable(L);
     Game::Lua::SetFieldNumber(L, "equipmentSlotIndex",
@@ -84,9 +76,12 @@ int __cdecl Script_GetItemLocation(void *L) {
     }
 
     // Backpack (bagID 0, 16 slots) + four equipped bags (bagID 1..4).
+    // GetBagNumSlots returns 0 for empty bag slots, which short-
+    // circuits the inner loop and avoids the engine's bounds-check
+    // overhead for slots we know don't exist.
     for (int bagID = 0; bagID <= 4; ++bagID) {
-        const int upper = (bagID == 0) ? 16 : kMaxBagSlots;
-        for (int slotIndex = 1; slotIndex <= upper; ++slotIndex) {
+        const int n = Item::Location::GetBagNumSlots(bagID);
+        for (int slotIndex = 1; slotIndex <= n; ++slotIndex) {
             if (Item::Location::ResolveBagSlot(bagID, slotIndex) == target) {
                 PushBagSlot(L, bagID, slotIndex);
                 return 1;

@@ -79,6 +79,38 @@ const uint8_t *ResolveEquipmentSlot(int slot1Based) {
     return CallGetItemBySlot(invMgr, slot1Based - 1);
 }
 
+namespace {
+
+constexpr int kBackpackSize = 16;
+constexpr int kBackpackLinearBase = 0x17;
+constexpr int kInvSlotBag1Linear0Based = 19; // (= INVSLOT_BAG1 - 1)
+
+// Returns the CGContainer for `bagID 1..4`, or nullptr if the
+// bag slot is empty or the item isn't actually a container.
+// Backpack (`bagID 0`) is NOT a CGContainer — the engine treats
+// it as a special range of the player's invMgr, so callers handle
+// it separately.
+void *ResolveEquippedBagContainer(int bagID) {
+    if (bagID < 1 || bagID > 4)
+        return nullptr;
+    void *invMgr = ResolvePlayerInvMgr();
+    if (invMgr == nullptr)
+        return nullptr;
+    const uint8_t *bagItem =
+        CallGetItemBySlot(invMgr, kInvSlotBag1Linear0Based + bagID - 1);
+    if (bagItem == nullptr)
+        return nullptr;
+
+    // CGItem::GetContainer via vtable slot 10 (byte offset 0x28).
+    // Returns the bag's CGContainer if it's a container, else NULL.
+    auto vtable = *reinterpret_cast<void *const *const *>(bagItem);
+    auto getContainer =
+        reinterpret_cast<GetContainer_t>(vtable[kGetContainerVtableSlot]);
+    return getContainer(const_cast<uint8_t *>(bagItem), nullptr);
+}
+
+} // namespace
+
 const uint8_t *ResolveBagSlot(int bagID, int slotIndex) {
     if (slotIndex < 1)
         return nullptr;
@@ -86,8 +118,6 @@ const uint8_t *ResolveBagSlot(int bagID, int slotIndex) {
     if (bagID == 0) {
         // Backpack. PackBagSlot's `case 0: *outSlot += 0x17`. invMgr
         // is the player's own; linear slot = (slotIndex - 1) + 0x17.
-        constexpr int kBackpackSize = 16;
-        constexpr int kBackpackLinearBase = 0x17;
         if (slotIndex > kBackpackSize)
             return nullptr;
         void *invMgr = ResolvePlayerInvMgr();
@@ -96,42 +126,25 @@ const uint8_t *ResolveBagSlot(int bagID, int slotIndex) {
         return CallGetItemBySlot(invMgr, (slotIndex - 1) + kBackpackLinearBase);
     }
 
-    if (bagID >= 1 && bagID <= 4) {
-        // Equipped bag at character-pane slot 20..23 (`INVSLOT_BAG1 +
-        // bagID - 1`, expressed as a 0-based linear index for the
-        // direct GetItemBySlot call — sidesteps ResolveEquipmentSlot's
-        // 1..19 bound check since those slots are past the visible
-        // paperdoll range but still in the player's linearized
-        // inventory array).
-        void *invMgr = ResolvePlayerInvMgr();
-        if (invMgr == nullptr)
-            return nullptr;
-        constexpr int kInvSlotBag1Linear0Based = 19; // (= INVSLOT_BAG1 - 1)
-        const uint8_t *bagItem =
-            CallGetItemBySlot(invMgr, kInvSlotBag1Linear0Based + bagID - 1);
-        if (bagItem == nullptr)
-            return nullptr;
+    void *container = ResolveEquippedBagContainer(bagID);
+    if (container == nullptr)
+        return nullptr;
 
-        // CGItem::GetContainer via vtable slot 10. Returns the bag's
-        // CGContainer if it's a container, else NULL. Pure C++ — the
-        // thiscall is expressed as fastcall with a dummy EDX.
-        auto vtable = *reinterpret_cast<void *const *const *>(bagItem);
-        auto getContainer =
-            reinterpret_cast<GetContainer_t>(vtable[kGetContainerVtableSlot]);
-        void *container = getContainer(const_cast<uint8_t *>(bagItem), nullptr);
-        if (container == nullptr)
-            return nullptr;
+    // Slot within the bag is 1-based in Lua, 0-based for the
+    // engine. Engine bounds-checks slot < container->numSlots
+    // internally; CallGetItemBySlot returns nullptr for OOR.
+    return CallGetItemBySlot(container, slotIndex - 1);
+}
 
-        // Slot within the bag is 1-based in Lua, 0-based for the
-        // engine. Engine bounds-checks slot < container->numSlots
-        // internally; CallGetItemBySlot returns nullptr for OOR.
-        return CallGetItemBySlot(container, slotIndex - 1);
-    }
-
-    // bagID < 0 (keyring, bank, etc.) and bagID > 4 are not supported
-    // in this build — they correspond to character-pane slots outside
-    // the standard equipment+bag range and use different invMgr paths.
-    return nullptr;
+int GetBagNumSlots(int bagID) {
+    if (bagID == 0)
+        return kBackpackSize;
+    void *container = ResolveEquippedBagContainer(bagID);
+    if (container == nullptr)
+        return 0;
+    return *reinterpret_cast<const int *>(
+        static_cast<const uint8_t *>(container) +
+        Offsets::OFF_CONTAINER_NUM_SLOTS);
 }
 
 bool IsLocationArg(void *L, int idx) {
