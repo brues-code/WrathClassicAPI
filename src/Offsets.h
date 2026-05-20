@@ -701,6 +701,103 @@ enum Offsets {
     // (1.12's analog is at +0x9C — the layout drifted between builds.)
     OFF_QUEST_TITLE                    = 0xB4,
 
+    // Gossip-state arrays. Populated by `SMSG_GOSSIP_MESSAGE`'s handler
+    // and read by the engine's `Script_GetGossip*` Lua functions. We
+    // walk the same arrays directly to produce modern `C_GossipInfo.*`
+    // table-shaped returns.
+    //
+    // **Options** — inline array of 32 entries × 24-byte stride
+    // (`GOSSIP_OPTIONS_STRIDE = 0x18`). Verified at
+    // `Script_GetGossipOptions` (FUN_0058A9E0): iterates from
+    // `&DAT_00C00BF0` incrementing by 6 dwords / entry until the
+    // greeting-text buffer at +0x300 (= 32 × 24 = 0x300 bytes later).
+    // Sentinel: `entry[+0x08] == -1` marks an empty slot. The
+    // `Script_SelectGossipOption` helper (FUN_0058AF10) also caps
+    // `param_1 < 0x20`, confirming `GOSSIP_OPTIONS_MAX = 32`.
+    //
+    // Entry fields (verified across `Script_GetGossipOptions` and
+    // `Script_SelectGossipOption`):
+    //   +0x00  const char *name    — option text, pushed verbatim
+    //   +0x04  uint32 moneyCost    — gold the option charges (3.3.5
+    //                                added; 1.12 didn't have option-
+    //                                level money). Engine errors with
+    //                                "%d%s%d" if non-zero and caller
+    //                                passes copperCost=0.
+    //   +0x08  int32  gossipOptionID  (sentinel -1 = empty)
+    //   +0x0C  uint32 flags        — bit 0 = boxCoded (password required)
+    //   +0x10  uint32 requiredMoney
+    //   +0x14  uint32 icon         — gossip-type ID (0..N indexing into
+    //                                the engine's string table at
+    //                                &PTR_s_gossip_00ACEF20 for the
+    //                                "gossip"/"vendor"/etc. names)
+    VAR_GOSSIP_OPTIONS                = 0x00C00BF0,
+    GOSSIP_OPTIONS_STRIDE             = 0x18,
+    GOSSIP_OPTIONS_MAX                = 32,
+    OFF_GOSSIP_OPTION_NAME            = 0x00,
+    OFF_GOSSIP_OPTION_MONEY_COST      = 0x04,
+    OFF_GOSSIP_OPTION_INDEX           = 0x08,
+    OFF_GOSSIP_OPTION_FLAGS           = 0x0C,
+    OFF_GOSSIP_OPTION_REQUIRED_MONEY  = 0x10,
+    OFF_GOSSIP_OPTION_ICON            = 0x14,
+    GOSSIP_OPTION_FLAG_BOX_CODED      = 0x1,
+
+    // **Greeting text** — inline char buffer immediately after the
+    // options array. `Script_GetGossipText` (FUN_0058A900) is just
+    // `lua_pushstring(L, &DAT_00C00EF0)`.
+    VAR_GOSSIP_GREETING_TEXT          = 0x00C00EF0,
+
+    // **Quests** — inline array of 32 entries × 532-byte stride
+    // (`GOSSIP_QUESTS_STRIDE = 0x214`). Verified at the count helpers
+    // FUN_0058A5D0 (available) and FUN_0058A6C0 (active): both walk
+    // from `&DAT_00BFC968` in stride-0x214 increments, with the loop
+    // bound at `uVar2 < 0x4280` (= 32 × 0x214). The same accessors
+    // also confirm the entry sentinel and status semantics:
+    //   `entry[+0x00] == 0`  → end of list
+    //   `entry[+0x10] in {3, 4}` → ACTIVE quest (in player's log)
+    //   `entry[+0x10] otherwise` → AVAILABLE quest (offered, not taken)
+    // `entry[+0x10] == 4` specifically = "ready to turn in" — the
+    // bit we surface as `isComplete` in the modern shape.
+    //
+    // Entry fields:
+    //   +0x00  uint32 questID    — sentinel 0 = end of list
+    //   +0x04  int32  questLevel
+    //   +0x08  uint32 flags      — bit 0x1000 = repeatable
+    //   +0x0C  uint32 extraFlag  — non-zero on some entries; 3.3.5-
+    //                              specific, exposed by the engine's
+    //                              5th return value but unnamed
+    //   +0x10  uint32 status     — 3 = ACTIVE, 4 = ACTIVE_COMPLETE,
+    //                              otherwise AVAILABLE
+    //   +0x14  char title[N]     — inline null-terminated string
+    //                              (stride leaves ~0x200 bytes here)
+    VAR_GOSSIP_QUESTS                 = 0x00BFC968,
+    GOSSIP_QUESTS_STRIDE              = 0x214,
+    GOSSIP_QUESTS_MAX                 = 32,
+    OFF_GOSSIP_QUEST_ID               = 0x00,
+    OFF_GOSSIP_QUEST_LEVEL            = 0x04,
+    OFF_GOSSIP_QUEST_FLAGS            = 0x08,
+    OFF_GOSSIP_QUEST_STATUS           = 0x10,
+    OFF_GOSSIP_QUEST_TITLE            = 0x14,
+    GOSSIP_QUEST_FLAG_REPEATABLE      = 0x1000,
+    GOSSIP_QUEST_STATUS_ACTIVE        = 3,
+    GOSSIP_QUEST_STATUS_COMPLETE      = 4,
+
+    // Engine selectors — call directly, skipping the Lua-stack stomp
+    // of going through `Script_SelectGossip*`.
+    //
+    // SelectOption: `__cdecl(uint slot0Based, const char *password, int copperCost)`.
+    // SelectAvailable/ActiveQuest: `__cdecl(int filteredIdx0Based)` —
+    // index is into the FILTERED list (status != 3,4 for available;
+    // status in {3,4} for active), not the raw slot.
+    FUN_GOSSIP_SELECT_OPTION           = 0x0058AF10,
+    FUN_GOSSIP_SELECT_AVAILABLE_QUEST  = 0x0058B070,
+    FUN_GOSSIP_SELECT_ACTIVE_QUEST     = 0x0058B120,
+
+    // `Script_CloseGossip` Lua C function — direct Lua dispatch.
+    // Internally just calls FUN_0058A550 with a zeroed local buffer
+    // and returns 0; reusing it instead of duplicating the body
+    // means we share the engine's CMSG-send path verbatim.
+    FUN_SCRIPT_CLOSE_GOSSIP            = 0x0058AA40,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to

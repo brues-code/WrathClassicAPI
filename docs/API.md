@@ -28,6 +28,15 @@ Conventions:
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
   - [`ClassicExpansionAtMost(level)`](#classicexpansionatmostlevel)
+- [Gossip](#gossip)
+  - [`C_GossipInfo.GetText()`](#c_gossipinfogettext)
+  - [`C_GossipInfo.GetOptions()`](#c_gossipinfogetoptions)
+  - [`C_GossipInfo.GetAvailableQuests()` / `GetActiveQuests()`](#c_gossipinfogetavailablequests--getactivequests)
+  - [`C_GossipInfo.GetNumOptions()` / `GetNumAvailableQuests()` / `GetNumActiveQuests()`](#c_gossipinfogetnumoptions--getnumavailablequests--getnumactivequests)
+  - [`C_GossipInfo.SelectOption(gossipOptionID[, text[, copperCost]])`](#c_gossipinfoselectoptiongossipoptionid-text-coppercost)
+  - [`C_GossipInfo.SelectOptionByIndex(orderIndex)`](#c_gossipinfoselectoptionbyindexorderindex)
+  - [`C_GossipInfo.SelectAvailableQuest(questID)` / `SelectActiveQuest(questID)`](#c_gossipinfoselectavailablequestquestid--selectactivequestquestid)
+  - [`C_GossipInfo.CloseGossip()`](#c_gossipinfoclosegossip)
 - [Item](#item)
   - [`C_Item.GetItemID(itemLocation)` / `GetItemGUID`](#c_itemgetitemiditemlocation)
   - [`C_Item.GetItemLocation(itemGUID)`](#c_itemgetitemlocationitemguid)
@@ -177,6 +186,91 @@ end
 
 Returns `true` iff `level >= GetClassicExpansionLevel()`. Mirror of
 `ClassicExpansionAtLeast` for upper-bound checks.
+
+---
+
+## Gossip
+
+Modern table-shaped wrappers around 3.3.5's flat
+`GetGossipText` / `GetGossipOptions` / `GetGossip*Quests` /
+`SelectGossip*` surface. All getters read directly from the
+engine's two gossip-state arrays (populated by
+`SMSG_GOSSIP_MESSAGE` and cleared each open); selectors
+translate the modern arg shape back to the engine's slot index
+and call the engine helpers directly so we share the
+CMSG-send path and money / password gating.
+
+Fields the 3.3.5 wire protocol doesn't transmit are omitted
+(modern `rewards` / `spellID` / per-option `status`, modern UX
+hints like `overrideIconID` / `selectOptionWhenOnlyOption`).
+
+### `C_GossipInfo.GetText()`
+
+Returns the greeting string the engine resolved for the
+gossip-giver's `NPC_TEXT.dbc` entry, or empty string when no
+gossip frame is open.
+
+### `C_GossipInfo.GetOptions()`
+
+Returns an array (1-indexed) of `GossipOptionUIInfo` tables in
+display order:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `gossipOptionID` | number | Stable engine option ID — same value `SelectOption` matches against. |
+| `name` | string | Option text. |
+| `icon` | number | Engine gossip-type byte (0..N: gossip / vendor / taxi / trainer / healer / binder / banker / petition / tabard / battlemaster / auctioneer). NOT a retail-style fileID. |
+| `flags` | number | Bit 0 = `boxCoded` (option requires a password). |
+| `moneyCost` | number | Copper required to take the option (added in 3.3.5; `0` for free options). |
+| `orderIndex` | number | 1-based display position. Matches `SelectOptionByIndex`'s arg. |
+
+### `C_GossipInfo.GetAvailableQuests()` / `GetActiveQuests()`
+
+Return arrays of `GossipQuestUIInfo` tables. `GetAvailableQuests`
+covers quests the giver offers but the player hasn't taken;
+`GetActiveQuests` covers quests in the player's log that the
+giver tracks. Per-entry fields:
+
+| Field | Type | When |
+|-------|------|------|
+| `questID` | number | Always. |
+| `title` | string | Always. Inline buffer from the gossip packet. |
+| `questLevel` | number | Always. |
+| `repeatable` | boolean | Always. Flag bit `0x1000`. |
+| `isComplete` | boolean | Active-only. `true` when ready to turn in. |
+
+### `C_GossipInfo.GetNumOptions()` / `GetNumAvailableQuests()` / `GetNumActiveQuests()`
+
+Count-only variants. Avoid the table allocations when all you
+need is "are there any?".
+
+### `C_GossipInfo.SelectOption(gossipOptionID[, text[, copperCost]])`
+
+Selects the option with matching `gossipOptionID`. `text` is the
+password for `boxCoded` options; `copperCost` is required for
+money-charging options (3.3.5 added option-level money — pass `0`
+for free options, which is the engine's default).
+
+No-op if the gossip frame is closed or the option ID isn't
+currently in the array.
+
+### `C_GossipInfo.SelectOptionByIndex(orderIndex)`
+
+Selects by 1-based display position rather than ID. Matches the
+`orderIndex` field returned by `GetOptions()`. Doesn't accept a
+password — use `SelectOption` for `boxCoded` options.
+
+### `C_GossipInfo.SelectAvailableQuest(questID)` / `SelectActiveQuest(questID)`
+
+Accepts the available quest or hands in the active quest with the
+matching `questID`. No-op if `questID` isn't in the respective
+filtered list.
+
+### `C_GossipInfo.CloseGossip()`
+
+Closes the gossip frame and clears the engine's gossip state.
+Same effect as clicking the X / pressing Escape — delegates to
+the engine's `Script_CloseGossip` so the CMSG path is verbatim.
 
 ---
 

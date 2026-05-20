@@ -37,6 +37,7 @@ Per-function reference with shape, semantics, and edge cases is in
 |-----------|-------|
 | Events    | `C_EventUtils.IsEventValid` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
+| Gossip    | `C_GossipInfo.GetText`, `C_GossipInfo.GetOptions`, `C_GossipInfo.GetAvailableQuests`, `C_GossipInfo.GetActiveQuests`, `C_GossipInfo.GetNumOptions`, `C_GossipInfo.GetNumAvailableQuests`, `C_GossipInfo.GetNumActiveQuests`, `C_GossipInfo.SelectOption`, `C_GossipInfo.SelectOptionByIndex`, `C_GossipInfo.SelectAvailableQuest`, `C_GossipInfo.SelectActiveQuest`, `C_GossipInfo.CloseGossip` |
 | Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemGUID`, `C_Item.GetItemID`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemLocation`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | Quest Log | `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Spell     | `IsPlayerSpell` |
