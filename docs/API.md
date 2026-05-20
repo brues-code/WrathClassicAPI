@@ -52,6 +52,7 @@ Conventions:
   - [`C_Item.IsItemDataCached[ByID]` / `RequestLoadItemData[ByID]`](#c_itemisitemdatacacheditemlocation--isitemdatacachedbyiditem)
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
   - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
+  - [`C_Item.GetItemSpell(item)`](#c_itemgetitemspellitem)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetTitleForQuestID(questID)`](#c_questloggettitleforquestidquestid)
   - [`C_QuestLog.RequestLoadQuestByID(questID)`](#c_questlogrequestloadquestbyidquestid)
@@ -445,6 +446,25 @@ trade / mail / loot interactions). **Currently a stub** that always
 returns `false` — the ITEM_FIELD_FLAGS bit hasn't been mapped on
 this build. Safe to use; just won't return `true` when the lock is
 actually set.
+
+### `C_Item.GetItemSpell(item)`
+
+Returns `(spellName, spellID)` for the item's first on-use spell,
+or `(nil, nil)` for items with no on-use spell or that aren't
+cached yet. `item` is `itemID | "item:N..." | itemLink | name`.
+
+```lua
+C_Item.GetItemSpell(6948)  -- "Hearthstone", 8690
+C_Item.GetItemSpell(33312) -- "Conjure Refreshment", 33312 (potion-style item)
+C_Item.GetItemSpell(2589)  -- nil, nil (Linen Cloth — no spell)
+```
+
+3.3.5 already has the stock `GetItemSpell(item)` global, but it
+returns `(name, rank)` instead of `(name, spellID)` — the older
+shape. This namespaced version returns the modern shape, leaving
+the stock global untouched. Useful for spellID-based item
+identification (e.g. "does this item cast the Hearthstone spell?"
+— compare `select(2, C_Item.GetItemSpell(itemID))` against `8690`).
 
 ### `C_Item.IsBound(itemLocation)`
 

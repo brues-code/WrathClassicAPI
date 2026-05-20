@@ -150,6 +150,24 @@ enum Offsets {
     // ACCOUNT_BOUND bit so far.
     OFF_ITEMSTATS_FLAGS = 0x18,
     ITEM_PROTO_FLAG_ACCOUNT_BOUND = 0x08000000,
+    // `GetItemOnUseSpell(itemID) -> spellID` — engine helper that
+    // walks the item-stats cache record's 5 spell slots and returns
+    // the first `spellID` whose trigger is `0` (on-use). Same
+    // primary path the engine's stock `Script_GetItemSpell` takes
+    // for items not currently held as instances. We use it to
+    // implement `C_Item.GetItemSpell` (which returns the modern
+    // `(name, spellID)` shape rather than 3.3.5's
+    // `(name, rank)`) and to detect hearthstone-equivalents by
+    // matching the returned spellID against `HEARTHSTONE_SPELL_ID`.
+    //
+    // Verified at FUN_00706B90: pulls the stats record from
+    // `VAR_ITEMDB_CACHE`, scans `record[0x40..0x44]` (spellIDs)
+    // against `record[0x45..0x49]` (trigger types), returns the
+    // first non-zero spellID whose trigger is 0. Returns 0 for
+    // uncached items, non-existent items, or items with no
+    // on-use spell.
+    FUN_ITEM_GET_ONUSE_SPELL = 0x00706B90,
+
     OFF_ITEMSTATS_INVENTORY_TYPE = 0x28,
     OFF_ITEMSTATS_ITEM_LEVEL = 0x34,
     OFF_ITEMSTATS_STACK_COUNT = 0x5C,
