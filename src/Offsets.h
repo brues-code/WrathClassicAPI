@@ -666,6 +666,32 @@ enum Offsets {
     // verbatim and modern callers consume it as-is.
     OFF_SPELLICON_PATH                 = 0x04,
 
+    // Quest static-info cache (`DBCache<QuestCache, int, HASHKEY_INT>`)
+    // — same generic shape as the item cache (`FUN_DBCACHE_ITEMSTATS_GET_RECORD`).
+    // `__thiscall(this, questID, *outBuf, callback, userData, char unused)`
+    // → returns the data block (`entry + 0x18`) on cache hit, NULL on
+    // miss (and queues a `CMSG_QUEST_QUERY` if `callback != nullptr`).
+    //
+    // The single global instance lives at `VAR_QUEST_CACHE`; the
+    // string `"questcache.wdb"` (its WDB filename) cross-references
+    // there. Verified by following `Script_GetQuestLink` at
+    // FUN_005E51D0, which calls `FUN_0067DE90(&DAT_00C5DA48, questID,
+    // ...)` then reads `puVar3[2]` (quest level) at offset +0x08 of
+    // the returned record.
+    FUN_DBCACHE_QUEST_GET_RECORD       = 0x0067DE90,
+    VAR_QUEST_CACHE                    = 0x00C5DA48,
+
+    // Inline `char title[N]` inside the data block returned by the
+    // quest cache's `_GetRecord`. Derivation: the engine's
+    // `FUN_005DEC70(questID)` helper does exactly:
+    //   puVar1 = FUN_0067DE90(&DAT_00C5DA48, questID, ..., callback,
+    //                         0, 0);
+    //   if (puVar1 != nullptr) return puVar1 + 0x2D;
+    // With `puVar1` typed as `uint *`, `+0x2D` advances 0x2D * 4 = 0xB4
+    // bytes. So the title is a null-terminated C string at +0xB4.
+    // (1.12's analog is at +0x9C — the layout drifted between builds.)
+    OFF_QUEST_TITLE                    = 0xB4,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to

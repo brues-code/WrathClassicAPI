@@ -23,6 +23,7 @@ Conventions:
   - [`C_EventUtils.IsEventValid(eventName)`](#c_eventutilsiseventvalideventname)
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
   - [`ITEM_DATA_LOAD_RESULT` event](#item_data_load_result-event)
+  - [`QUEST_DATA_LOAD_RESULT` event](#quest_data_load_result-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -40,6 +41,9 @@ Conventions:
   - [`C_Item.GetItemLink(itemLocation)`](#c_itemgetitemlinkitemlocation)
   - [`C_Item.IsItemDataCached[ByID]` / `RequestLoadItemData[ByID]`](#c_itemisitemdatacacheditemlocation--isitemdatacachedbyiditem)
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
+- [Quest Log](#quest-log)
+  - [`C_QuestLog.GetTitleForQuestID(questID)`](#c_questloggettitleforquestidquestid)
+  - [`C_QuestLog.RequestLoadQuestByID(questID)`](#c_questlogrequestloadquestbyidquestid)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
 - [Talent](#talent)
@@ -127,6 +131,22 @@ Fires when the engine has just filled the cache for an **explicit**
 exactly one of `GET_ITEM_INFO_RECEIVED` / `ITEM_DATA_LOAD_RESULT` —
 never both — depending on what initiated the request. Same split as
 modern WoW.
+
+### `QUEST_DATA_LOAD_RESULT` event
+
+Payload: `questID, success`
+
+Fires when the engine has filled the quest static-info cache for an
+**explicit** `C_QuestLog.RequestLoadQuestByID` call. `success` is
+`1` on a cache hit or successful `SMSG_QUEST_QUERY_RESPONSE`, `0` if
+the server rejected the query. Modern WoW (8.0+) addons listen for
+this to know when `C_QuestLog.GetTitleForQuestID(questID)` will
+return non-nil for a previously uncached quest.
+
+Like its modern counterpart, this fires once per explicit request —
+including for quests that were already cached when the request was
+made (we synthesize the event so addons get a uniform notification
+regardless of cache state).
 
 ---
 
@@ -292,6 +312,66 @@ trade / mail / loot interactions). **Currently a stub** that always
 returns `false` — the ITEM_FIELD_FLAGS bit hasn't been mapped on
 this build. Safe to use; just won't return `true` when the lock is
 actually set.
+
+---
+
+## Quest Log
+
+A pair of modern (8.0+) static-info accessors layered over 3.3.5's
+existing `questcache.wdb` infrastructure. Pair them: call
+`RequestLoadQuestByID` when you want a quest, listen for
+`QUEST_DATA_LOAD_RESULT`, then read with `GetTitleForQuestID` once
+the event fires.
+
+### `C_QuestLog.GetTitleForQuestID(questID)`
+
+Returns the locale-applied quest title from the engine's quest
+static-info cache, or `nil` if the cache hasn't loaded the record yet.
+
+```lua
+C_QuestLog.GetTitleForQuestID(70)    -- "Hare Today, Gone Tomorrow" (if cached)
+C_QuestLog.GetTitleForQuestID(99999) -- nil for unknown / uncached
+```
+
+Title-only getter — doesn't auto-warm the cache. For quests that
+might not be cached yet (because the player has never visited the
+giver and the title hasn't come up via tooltip / chatlink), pair
+this with `C_QuestLog.RequestLoadQuestByID(questID)` and listen for
+[`QUEST_DATA_LOAD_RESULT`](#quest_data_load_result-event).
+
+Cache state is independent of the player's active quest log —
+quests the player has never seen can still resolve once their
+`SMSG_QUEST_QUERY_RESPONSE` has been processed (e.g. after a
+hyperlink hover, a chat-link click, or our explicit request path).
+
+### `C_QuestLog.RequestLoadQuestByID(questID)`
+
+Kicks off a `CMSG_QUEST_QUERY` for `questID` if its data isn't
+already cached, then fires
+[`QUEST_DATA_LOAD_RESULT(questID, success)`](#quest_data_load_result-event)
+when the response arrives (or immediately, if it was already
+cached).
+
+```lua
+local function ReadyTitle(questID, callback)
+    if C_QuestLog.GetTitleForQuestID(questID) then
+        callback(C_QuestLog.GetTitleForQuestID(questID))
+        return
+    end
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("QUEST_DATA_LOAD_RESULT")
+    f:SetScript("OnEvent", function(_, _, id, success)
+        if id == questID then
+            f:UnregisterAllEvents()
+            callback(success == 1 and C_QuestLog.GetTitleForQuestID(id) or nil)
+        end
+    end)
+    C_QuestLog.RequestLoadQuestByID(questID)
+end
+```
+
+Returns nothing — same as modern WoW. The completion event is the
+contract.
 
 ---
 
