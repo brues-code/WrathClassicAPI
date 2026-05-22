@@ -72,41 +72,52 @@ void FireItemDataLoadResult(int itemID, int success) {
 // for explicit `RequestLoadItemData(ByID)` paths to match modern API
 // semantics.
 //
-// Calling convention is __stdcall, 2 args / 8 bytes. ClassicAPI
-// verified this on its 1.12 equivalent by induction (the engine's own
-// callback ends in `ret 8`); the same shape transfers to 3.3.5 since
-// `GetItemRecord_t`'s callback slot is invoked through the same
-// __stdcall path in `FUN_0067CA30`.
-void __stdcall ItemLoadCallback_Implicit(void *userData, int success) {
-    const auto itemID = static_cast<int>(reinterpret_cast<uintptr_t>(userData));
-    FireGetItemInfoReceived(itemID, success != 0 ? 1 : 0);
+// Calling convention is __cdecl, 4 args / 16 bytes. Verified at
+// `FUN_0067CBD0`'s callback dispatch (0x0067CD3F):
+//   PUSH 1; PUSH userData; PUSH guidPtr; PUSH itemID;
+//   CALL EDX;
+//   ADD ESP, 0x10        <-- CALLER cleans up = __cdecl, not __stdcall
+// Signature: `void(__cdecl *)(uint32_t itemID, const uint64_t *guid,
+//                             void *userData, int success)`.
+// A `__stdcall ret 16` callback into this site double-pops by 16
+// (callee ret 16 + caller add esp 16), each invocation lifts ESP by
+// 16 bytes; the loop's `param_1` stream pointer comes back as garbage
+// and the next FUN_0098D910 call crashes in FUN_0047B3C0 reading
+// [esi+0x14].
+void __cdecl ItemLoadCallback_Implicit(uint32_t itemID, const uint64_t *guid,
+                                       void *userData, int success) {
+    (void)guid;
+    (void)userData;
+    FireGetItemInfoReceived(static_cast<int>(itemID), success != 0 ? 1 : 0);
 }
 
 // Engine callback for **explicit** cache fills
 // (`C_Item.RequestLoadItemData(ByID)`). Fires ITEM_DATA_LOAD_RESULT
 // only.
-void __stdcall ItemLoadCallback_Explicit(void *userData, int success) {
-    const auto itemID = static_cast<int>(reinterpret_cast<uintptr_t>(userData));
-    FireItemDataLoadResult(itemID, success != 0 ? 1 : 0);
+void __cdecl ItemLoadCallback_Explicit(uint32_t itemID, const uint64_t *guid,
+                                       void *userData, int success) {
+    (void)guid;
+    (void)userData;
+    FireItemDataLoadResult(static_cast<int>(itemID), success != 0 ? 1 : 0);
 }
 
-using ItemLoadCallback_t = void(__stdcall *)(void *userData, int success);
+using ItemLoadCallback_t = void(__cdecl *)(uint32_t itemID, const uint64_t *guid,
+                                           void *userData, int success);
 
 // Calls `DBCache_ItemStats_C::GetRecord`. With `callback == nullptr`,
 // performs only the hash-table lookup; returns the cached record or
 // nullptr. With a non-null callback, also kicks off the
 // `SMSG_ITEM_QUERY_SINGLE` if the item isn't cached — the engine fills
-// the cache asynchronously and invokes `callback(userData, success)`.
-// We smuggle the itemID through `userData` (the engine just stores
-// and replays it without dereferencing).
+// the cache asynchronously and invokes
+// `callback(itemID, guid, userData, success)` from the batch handler
+// (FUN_0067CBD0). The itemID is supplied as the first arg directly,
+// so we don't need to smuggle anything through `userData`.
 const uint8_t *CacheFetch(uint32_t itemID, ItemLoadCallback_t callback) {
     auto fn = reinterpret_cast<GetItemRecord_t>(Offsets::FUN_DBCACHE_ITEMSTATS_GET_RECORD);
     auto *cache = reinterpret_cast<void *>(Offsets::VAR_ITEMDB_CACHE);
     const uint64_t zeroGuid = 0;
     void *cb = reinterpret_cast<void *>(callback);
-    void *userData =
-        callback ? reinterpret_cast<void *>(static_cast<uintptr_t>(itemID)) : nullptr;
-    return fn(cache, itemID, &zeroGuid, cb, userData, 0);
+    return fn(cache, itemID, &zeroGuid, cb, nullptr, 0);
 }
 
 int __cdecl Script_IsItemDataCachedByID(void *L) {
