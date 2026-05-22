@@ -22,3 +22,4 @@ Util\TimedCallback.lua
 Util\EquipmentManager.lua
 Util\PlayerUtil.lua
 Util\EnumUtil.lua
+Util\LinkUtil.lua
