@@ -860,6 +860,66 @@ enum Offsets {
     // means we share the engine's CMSG-send path verbatim.
     FUN_SCRIPT_CLOSE_GOSSIP            = 0x0058AA40,
 
+    // Quest log entry array. Populated by SMSG_QUEST_QUERY_RESPONSE and
+    // friends; read by every `Script_GetQuestLog*` that takes a log
+    // index. Verified at `Script_GetQuestLogTitle` (FUN_005E5CC0):
+    //   uVar7 = lua_arg - 1                       // Lua 1-based → 0-based
+    //   if (uVar7 < 0 || uVar7 >= DAT_00c23ad0) bail
+    //   if ((&DAT_00c237b8)[uVar7 * 4] != 0) "is header" → bail
+    //   questID = (&DAT_00c237b0)[uVar7 * 4]
+    //
+    // Entry stride 0x10 (4 dwords). Layout:
+    //   +0x00  questID
+    //   +0x04  (level — `(&DAT_00c237b4)[uVar7 * 4]`, used as suggestedGroup
+    //          source elsewhere; not needed for questID-only path)
+    //   +0x08  isHeader sentinel (non-zero = category header, not a real quest)
+    //   +0x0C  isComplete flag (`(&DAT_00c237bc)[uVar7 * 4]`)
+    VAR_QUEST_LOG_ENTRIES              = 0x00C237B0,
+    VAR_QUEST_LOG_COUNT                = 0x00C23AD0,
+    QUEST_LOG_ENTRY_STRIDE             = 0x10,
+    OFF_QUEST_LOG_QUEST_ID             = 0x00,
+    OFF_QUEST_LOG_IS_HEADER            = 0x08,
+    // Inline "active-complete" flag — non-zero = objectives done,
+    // ready for turn-in. Verified in `Script_GetQuestLogTitle`
+    // (FUN_005E5CC0) at the `(&DAT_00c237bc)[uVar7 * 4] != 0` test
+    // that gates the "complete" return value. Same semantic as
+    // gossip's `GOSSIP_QUEST_STATUS_COMPLETE = 4`.
+    //
+    // NOTE: this flag is only set when the *server* has marked the
+    // quest complete (e.g. SMSG_QUESTUPDATE_COMPLETE landed). It is
+    // NOT set for quests that are "intrinsically complete" — quests
+    // with no objectives ("talk to NPC X", auto-complete quests). For
+    // those, fall through to `FUN_QUEST_IS_COMPLETABLE` below.
+    OFF_QUEST_LOG_IS_COMPLETE          = 0x0C,
+
+    // `bool __cdecl IsQuestCompletable(uint32_t logIndex0, char strict)`
+    // — engine helper used by `Script_GetQuestLogTitle` (FUN_005E5CC0)
+    // as the second "completable" probe after the inline `+0x0C` flag.
+    //
+    // Walks the quest cache record (via FUN_DBCACHE_QUEST_GET_RECORD)
+    // for the quest at `logIndex0`, then checks objective satisfaction
+    // (item counts in inventory, monster kill counts, money earned)
+    // against the live progress data on the log entry.
+    //
+    // The `strict` arg controls a fast-path bail (verified at 0x005E0FC7
+    // in disassembly): when strict=1 AND the quest has zero declared
+    // objectives AND no required money, the function returns false
+    // immediately. `Script_GetQuestLogTitle` passes strict=1 because it
+    // only wants to display "complete" for explicitly-marked quests.
+    //
+    // For `ReadyForTurnIn` semantics — "is this quest ready to hand in
+    // right now?" — pass **strict=0** so the function falls through to
+    // the objective-progress evaluation. For zero-objective quests with
+    // no required money, the final compare `progress_money (0) >=
+    // required_money (0)` returns true, matching what the user expects
+    // ("talk to NPC X"-style quests are immediately turn-in-able).
+    //
+    // Returns false unconditionally for: out-of-range index, headers,
+    // local-player resolve failure, or any quest whose cache record
+    // isn't yet loaded — so callers may need to pre-warm the quest
+    // cache (see [[Quest::Cache]]).
+    FUN_QUEST_IS_COMPLETABLE           = 0x005E0EA0,
+
     // Engine event registry. The "table" at VAR_EVENT_TABLE is a
     // hash-bucketed name → entry map, not a flat array (different
     // layout from 1.12's stride-0x10 array). The simplest way to

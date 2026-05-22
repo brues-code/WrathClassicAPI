@@ -54,6 +54,8 @@ Conventions:
   - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
   - [`C_Item.GetItemSpell(item)`](#c_itemgetitemspellitem)
 - [Quest Log](#quest-log)
+  - [`C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`](#c_questloggetquestidforlogindexquestlogindex)
+  - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
   - [`C_QuestLog.GetTitleForQuestID(questID)`](#c_questloggettitleforquestidquestid)
   - [`C_QuestLog.RequestLoadQuestByID(questID)`](#c_questlogrequestloadquestbyidquestid)
 - [Spell](#spell)
@@ -496,11 +498,78 @@ recently-seen item that might not be loaded).
 
 ## Quest Log
 
-A pair of modern (8.0+) static-info accessors layered over 3.3.5's
-existing `questcache.wdb` infrastructure. Pair them: call
-`RequestLoadQuestByID` when you want a quest, listen for
-`QUEST_DATA_LOAD_RESULT`, then read with `GetTitleForQuestID` once
-the event fires.
+A mix of modern accessors. Two flavors:
+
+* **Active-log** (`GetQuestIDForLogIndex`, `ReadyForTurnIn`) read the
+  player's current quest log array — the same data 3.3.5's
+  `GetQuestLogTitle(index)` exposes, but reshaped to match retail's
+  questID-keyed surface.
+* **Static-info** (`GetTitleForQuestID`, `RequestLoadQuestByID`) read
+  the `questcache.wdb` store keyed by questID; works for any quest
+  the engine has seen, even ones not in the player's log. Pair them:
+  call `RequestLoadQuestByID` when you want a quest, listen for
+  `QUEST_DATA_LOAD_RESULT`, then read with `GetTitleForQuestID` once
+  the event fires.
+
+### `C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`
+
+Returns the `questID` for the given 1-based slot in the player's
+quest log, or `nil` if the slot is empty / out of range / a category
+header.
+
+```lua
+for i = 1, GetNumQuestLogEntries() do
+    local id = C_QuestLog.GetQuestIDForLogIndex(i)
+    if id then
+        print(i, id, GetQuestLogTitle(i))
+    end
+end
+```
+
+The quest log alternates real quests with category-header rows
+("Elwynn Forest", "Westfall", ...). Headers return `nil` to match
+retail semantics — modern callers walk by index and skip whatever
+the index getter rejects, instead of having to inspect the
+`isHeader` return from `GetQuestLogTitle` directly.
+
+Indexing is **stable within a session** but resets across
+SMSG_QUESTLOG_FULL_UPDATE pushes (zone changes, /reload, log
+collapse/expand). Cache the questID, not the index, if you need
+durable references.
+
+### `C_QuestLog.ReadyForTurnIn(questID)`
+
+Returns `true` iff `questID` is in the player's quest log AND ready
+to be handed in to a turn-in NPC.
+
+```lua
+C_QuestLog.ReadyForTurnIn(70)    -- true if "Hare Today, Gone Tomorrow" is complete
+C_QuestLog.ReadyForTurnIn(99999) -- false for quests not in the log
+```
+
+Two-step evaluation:
+
+1. **Server-marked complete**: if the engine has received
+   `SMSG_QUESTUPDATE_COMPLETE` for this quest, returns `true`
+   immediately. This is the common path — covers any quest with
+   real objectives the server confirms.
+2. **Fallback**: for quests that never trigger the server-complete
+   flag (zero-objective "talk to NPC X" quests, auto-complete
+   quests), falls back to the engine's own completability evaluator
+   — walks the quest cache record's objective slots against the live
+   log progress (item counts in inventory, kill tallies, money
+   earned).
+
+The fallback path needs the **quest cache record** loaded. For
+quests the player has accepted, this is virtually always cached
+because the engine queries the quest data on accept. If you're
+querying a quest the engine hasn't seen, pair with
+`C_QuestLog.RequestLoadQuestByID(questID)` and re-check after
+`QUEST_DATA_LOAD_RESULT`.
+
+Returns `false` (not `nil`) for: quest not in log, quest in log but
+in-progress, quest in log but failed, invalid input. The boolean
+return shape matches retail.
 
 ### `C_QuestLog.GetTitleForQuestID(questID)`
 
