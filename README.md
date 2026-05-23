@@ -20,9 +20,7 @@ function ABI to `__cdecl`).
 
 Verified in-game on ChromieCraft 3.3.5a. Loads cleanly alongside
 [awesome_wotlk][aw]; coexistence is non-conflicting (no shared
-detours on hot dispatch sites). The work-in-progress scope is "the
-modern item-cache API surface plus the supporting event-injection
-plumbing"; more features will follow.
+detours on hot dispatch sites). Currently adding various functions and events as I think of them.
 
 [aw]: https://github.com/FrostAtom/awesome_wotlk
 
