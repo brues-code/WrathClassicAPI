@@ -87,7 +87,7 @@ the target `Wow.exe` is 32-bit and won't load an x64 DLL.
 
 WrathClassicAPI is loaded via [LichLoader][lichloader]. Copy
 `WrathClassicAPI.dll` into the same directory as your `Wow.exe` (or a
-`dll\` subdirectory next to it) and add its path to `dlls.txt`:
+`dll\` subdirectory next to it) and add its path to `lichloader.txt`:
 
 ```
 dll\WrathClassicAPI.dll
