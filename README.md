@@ -72,25 +72,6 @@ on what initiated the request. Same split as modern WoW.
 | `GetItemInfo(itemID|"item:N..."|"name")` | The 3.3.5 implementation returns nil on cache misses with no follow-up query. We hook it so a miss now kicks off `SMSG_ITEM_QUERY_SINGLE` transparently; the original still returns nil this call, but subsequent calls return data and `GET_ITEM_INFO_RECEIVED` fires when the response arrives. Same shape as modern WoW (5.4+). |
 | `GameTooltip:SetSpellByID(spellID)` | The 3.3.5 implementation gates on a spellbook+petbar walk and silently no-ops for any spell not in those displayable structures (profession recipes, item-granted spells, anything else the engine tracks only in the player-spell bitmap). We hook the gate to allow any non-zero spellID. Same shape as modern WoW (5.4+) where Blizzard removed the gate. |
 
-### itemLocation argument shape
-
-The `_ByID`-suffixed `C_Item` calls take an integer item ID. The
-unsuffixed variants take a Lua table — same as the modern
-[ItemLocation mixin][item-location] — or a GUID string:
-
-```lua
-{ equipmentSlotIndex = N }      -- character-pane slot, 1..19
-{ bagID = 0, slotIndex = N }    -- backpack, 1..16
-{ bagID = 1..4, slotIndex = N } -- equipped bag
-"0xHHHHHHHHLLLLLLLL"            -- engine GUID string (with or without "0x")
-```
-
-The string form is parsed via the engine's `HexString2Guid` + resolved
-via `ObjectMgr::Get` with the ITEM type-mask. Negative `bagID` values
-(keyring, bank) and non-item GUIDs both return nil-equivalent.
-
-[item-location]: https://warcraft.wiki.gg/wiki/ItemLocationMixin
-
 ## Building
 
 ```powershell
