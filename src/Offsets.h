@@ -932,4 +932,25 @@ enum Offsets {
     // wiring the frame's event subscription.
     VAR_EVENT_TABLE      = 0x00D3F7A8,
     FUN_EVENT_TABLE_FIND = 0x004BC410,
+
+    // Addon TOC executor — `int __cdecl(char *toc_path, char *addon_name,
+    // void *unused, void **logger)`. Reads the TOC file line-by-line and
+    // dispatches each non-`#` entry through the per-file loader
+    // (`FUN_00813ee0`), which routes `.lua` files to `FUN_00818f60` and
+    // ultimately `lua_pcall(chunk, name, namespaceTable)`.
+    //
+    // We hook this for `C_AddOns.GetAddOnLocalTable`: the LoadAddOn flow
+    // at FUN_005f80b0 pushes a fresh `lua_newtable` onto the Lua stack
+    // immediately before calling this — that table is the per-addon
+    // namespace bound as the second vararg to every addon file. By
+    // dup'ing and stashing it in our own registry table at entry, we
+    // keep a stable reference past the LoadAddOn flow's terminal
+    // `lua_settop(L, -2)` that would otherwise drop it for GC.
+    //
+    // Three callers — FUN_005f80b0 (LoadAddOn), FUN_0052a980 (GameUIInit
+    // loading FrameXML.toc), FUN_004da5f0 (glue-side TOC) — but only
+    // the LoadAddOn path leaves a table on the Lua stack at entry, so
+    // our hook gates on (a) path prefix "Interface\\AddOns\\" and
+    // (b) `lua_type(L, -1) == LUA_TTABLE` to ignore the others.
+    FUN_TOC_EXECUTOR = 0x00814340,
 };

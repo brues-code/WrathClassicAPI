@@ -19,6 +19,8 @@ Conventions:
 
 ## Contents
 
+- [AddOns](#addons)
+  - [`C_AddOns.GetAddOnLocalTable(addOnName)`](#c_addonsgetaddonlocaltableaddonname)
 - [Events](#events)
   - [`C_EventUtils.IsEventValid(eventName)`](#c_eventutilsiseventvalideventname)
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
@@ -98,6 +100,60 @@ Conventions:
   - [`GameTooltip:SetSpellByID` — works for unknown spells](#gametooltipsetspellbyid--works-for-unknown-spells)
 - [Argument shapes](#argument-shapes)
   - [`itemLocation`](#itemlocation)
+
+---
+
+## AddOns
+
+### `C_AddOns.GetAddOnLocalTable(addOnName)`
+
+Returns the addon's private namespace table — the same table the
+addon's own files receive as the second `...` vararg via the standard
+`local addOnName, addon = ...` idiom — so cross-addon code can read
+shared state without going through an explicit global.
+
+```lua
+-- Inside MyAddon's own files:
+local addOnName, addon = ...
+addon.shared = { greeting = "hi" }
+
+-- From any other addon, after MyAddon has loaded:
+local t = C_AddOns.GetAddOnLocalTable("MyAddon")
+print(t.shared.greeting)   -- "hi"
+```
+
+Gated by the TOC directive `## AllowAddOnTableAccess: 1` — without
+it (or with the value `0`), this call returns `nil` even for loaded
+addons. Opt-in by design so addons don't unintentionally expose
+their internals to the rest of the namespace.
+
+The directive lives in the addon's `.toc` file alongside the other
+`##` metadata lines; placement order doesn't matter:
+
+```
+## Interface: 30300
+## Title: MyAddon
+## AllowAddOnTableAccess: 1
+MyAddon.lua
+```
+
+Returns `nil` for:
+
+- Unknown addon name (typo, never-loaded addon)
+- Loaded addon whose TOC doesn't declare `AllowAddOnTableAccess: 1`
+- LoadOnDemand addons that haven't actually loaded yet
+
+Name lookup is case-insensitive — `C_AddOns.GetAddOnLocalTable("MYADDON")`
+matches a directory named `MyAddon`.
+
+3.3.5 already creates a per-addon namespace table internally — the
+LoadAddOn flow does a `lua_newtable` before running any of the
+addon's `.lua` files, and the engine passes it as the second
+`pcall` arg to every script. We intercept the TOC executor at
+`FUN_00814340` and stash a reference to that table in our own
+registry-keyed lookup so it survives past the addon-load flow's
+terminal `lua_settop(L, -2)` that would otherwise drop it for GC.
+Same effective shape as modern WoW's `C_AddOns.GetAddOnLocalTable`.
 
 ---
 
