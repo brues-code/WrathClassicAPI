@@ -73,13 +73,6 @@ int __cdecl Script_ClassicExpansionAtMost(void *L) {
     return 1;
 }
 
-// Sets `_G[name] = value` via the Lua C API. Used to install the
-// LE_EXPANSION_* number globals at registration time.
-void SetGlobalNumber(void *L, const char *name, int value) {
-    Game::Lua::PushNumber(L, value);
-    Game::Lua::SetGlobal(L, name);
-}
-
 void RegisterLuaFunctions() {
     Game::Lua::RegisterGlobalFunction("GetClassicExpansionLevel",
                                       &Script_GetClassicExpansionLevel);
@@ -91,19 +84,19 @@ void RegisterLuaFunctions() {
     void *L = Game::Lua::State();
     if (L == nullptr)
         return;
-    SetGlobalNumber(L, "LE_EXPANSION_LEVEL_CURRENT",        LE_EXPANSION_LEVEL_CURRENT);
-    SetGlobalNumber(L, "LE_EXPANSION_CLASSIC",              LE_EXPANSION_CLASSIC);
-    SetGlobalNumber(L, "LE_EXPANSION_BURNING_CRUSADE",      LE_EXPANSION_BURNING_CRUSADE);
-    SetGlobalNumber(L, "LE_EXPANSION_WRATH_OF_THE_LICH_KING", LE_EXPANSION_WRATH_OF_THE_LICH_KING);
-    SetGlobalNumber(L, "LE_EXPANSION_CATACLYSM",            LE_EXPANSION_CATACLYSM);
-    SetGlobalNumber(L, "LE_EXPANSION_MISTS_OF_PANDARIA",    LE_EXPANSION_MISTS_OF_PANDARIA);
-    SetGlobalNumber(L, "LE_EXPANSION_WARLORDS_OF_DRAENOR",  LE_EXPANSION_WARLORDS_OF_DRAENOR);
-    SetGlobalNumber(L, "LE_EXPANSION_LEGION",               LE_EXPANSION_LEGION);
-    SetGlobalNumber(L, "LE_EXPANSION_BATTLE_FOR_AZEROTH",   LE_EXPANSION_BATTLE_FOR_AZEROTH);
-    SetGlobalNumber(L, "LE_EXPANSION_SHADOWLANDS",          LE_EXPANSION_SHADOWLANDS);
-    SetGlobalNumber(L, "LE_EXPANSION_DRAGONFLIGHT",         LE_EXPANSION_DRAGONFLIGHT);
-    SetGlobalNumber(L, "LE_EXPANSION_WAR_WITHIN",           LE_EXPANSION_WAR_WITHIN);
-    SetGlobalNumber(L, "LE_EXPANSION_MIDNIGHT",             LE_EXPANSION_MIDNIGHT);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_LEVEL_CURRENT",        LE_EXPANSION_LEVEL_CURRENT);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_CLASSIC",              LE_EXPANSION_CLASSIC);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_BURNING_CRUSADE",      LE_EXPANSION_BURNING_CRUSADE);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_WRATH_OF_THE_LICH_KING", LE_EXPANSION_WRATH_OF_THE_LICH_KING);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_CATACLYSM",            LE_EXPANSION_CATACLYSM);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_MISTS_OF_PANDARIA",    LE_EXPANSION_MISTS_OF_PANDARIA);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_WARLORDS_OF_DRAENOR",  LE_EXPANSION_WARLORDS_OF_DRAENOR);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_LEGION",               LE_EXPANSION_LEGION);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_BATTLE_FOR_AZEROTH",   LE_EXPANSION_BATTLE_FOR_AZEROTH);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_SHADOWLANDS",          LE_EXPANSION_SHADOWLANDS);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_DRAGONFLIGHT",         LE_EXPANSION_DRAGONFLIGHT);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_WAR_WITHIN",           LE_EXPANSION_WAR_WITHIN);
+    Game::Lua::SetGlobalNumber(L, "LE_EXPANSION_MIDNIGHT",             LE_EXPANSION_MIDNIGHT);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

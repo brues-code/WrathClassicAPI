@@ -108,6 +108,11 @@ extern const lua_rawset_t RawSet;
 // Helper: lua_setglobal(L, name) is lua_setfield(L, LUA_GLOBALSINDEX, name).
 inline void SetGlobal(void *L, const char *name) { SetField(L, GLOBALS_INDEX, name); }
 inline void GetGlobal(void *L, const char *name) { GetField(L, GLOBALS_INDEX, name); }
+// Convenience: `_G[name] = value` for a numeric global.
+inline void SetGlobalNumber(void *L, const char *name, double value) {
+    PushNumber(L, value);
+    SetGlobal(L, name);
+}
 // Helpers: `table[name] = value` for the table currently on top of
 // the stack. PushNumber/PushString puts the value at -1 (table shifts
 // to -2); SetField on -2 sets table[name] = top and pops the value,
