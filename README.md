@@ -52,6 +52,7 @@ Per-function reference with shape, semantics, and edge cases is in
 
 | Group | Constants |
 |-------|-----------|
+| Version | `WRATH_CLASSIC_API_VERSION` |
 | Expansion | `LE_EXPANSION_LEVEL_CURRENT`, `LE_EXPANSION_CLASSIC` … `LE_EXPANSION_MIDNIGHT` |
 
 ### Events
@@ -82,6 +83,10 @@ cmake --build build --config Release
 
 Output: `build/Release/WrathClassicAPI.dll`. Must be **Win32 (x86)** —
 the target `Wow.exe` is 32-bit and won't load an x64 DLL.
+
+To stamp a version into `WRATH_CLASSIC_API_VERSION`, pass
+`-DWRATHCLASSICAPI_TAG=vX.Y.Z` at configure time; the value exposed to
+Lua will be `X*10000 + Y*100 + Z`.
 
 ## Deploying
 
