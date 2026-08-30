@@ -1223,4 +1223,30 @@ enum Offsets {
     // so it is false at character select and across every loading screen.
     // The engine's own "is in game" getter FUN_008C6330 reads it.
     VAR_IN_WORLD = 0x00BD0792,
+
+    // --- ExportInterfaceFiles console command (src/interface/Export.cpp) ---
+
+    // MPQ listfile enumerator (by path prefix). `void __cdecl(const char
+    // *pathPrefix, EnumCb cb, void *userParam)` where
+    // `EnumCb = int __cdecl(const char *fullPath, void *userParam)` — the
+    // archive-relative path arrives as a STACK arg; return 0 to STOP, nonzero
+    // to continue. Walks each mounted archive's `(listfile)`, prefix-filtered.
+    // This wrapper auto-picks the archive selector; the macro-icon builder
+    // FUN_00565840 calls it with "Interface\\Icons\\".
+    FUN_MPQ_ENUM_FILES = 0x00404A80,
+
+    // Developer-console command registrar. `int __cdecl(const char *name,
+    // Handler handler, int category, const char *help)` — Handler is
+    // `int __cdecl(void *unused, const char *argsText)` (argsText = text after
+    // the command name, "" when bare). Stores name/help BY POINTER (must be
+    // static). Dedup-safe by name (returns 0 on repeat), so calling from a
+    // re-firing hook is a no-op. `category` is cosmetic (help grouping);
+    // 0 = "debug".
+    FUN_CONSOLE_REGISTER_COMMAND = 0x00769100,
+    CONSOLE_CATEGORY_DEBUG = 0,
+
+    // Console output. `void __cdecl(const char *line, int category)` — appends
+    // one line to the console buffer; no-ops safely when the console isn't
+    // active. Pass 0 for the default category.
+    FUN_CONSOLE_WRITE = 0x00765270,
 };

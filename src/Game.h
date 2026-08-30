@@ -186,6 +186,26 @@ struct ModuleAutoRegister {
 
 void RunModuleRegistrations();
 
+// Login-screen / glue registration. Callbacks fire once from the `Load()`
+// export (LichCore calls it at `CGlueMgr::Initialize` — the login-screen init,
+// after GlueXML has loaded — on the main thread), so anything registered here
+// exists at the login screen and persists for the session. Use for
+// process-global registrations that must be available BEFORE entering the world
+// — e.g. developer-console commands, which the in-game `ModuleAutoRegister`
+// bootstrap (in-world only) registers too late for the login console. Declare a
+// file-scope `static const Game::GlueModuleAutoRegister _g{&Register};`.
+//
+// Only fires on the LichCore `Load()` path; the no-LichCore fallback worker
+// installs hooks but has no login-screen-timed signal, so it skips these.
+struct GlueModuleAutoRegister {
+    using Fn = void (*)();
+    explicit GlueModuleAutoRegister(Fn fn);
+    Fn fn;
+    GlueModuleAutoRegister *next;
+};
+
+void RunGlueModuleRegistrations();
+
 // Declarative MinHook registration. Each feature module declares a
 // file-scope `static const Game::HookAutoRegister _hookreg{target,
 // &hook_fn, reinterpret_cast<void**>(&original_fn)};` and

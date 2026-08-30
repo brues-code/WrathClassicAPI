@@ -113,6 +113,7 @@ void RegisterTableFunction(const char *tableName, const char *methodName, CFunct
 
 namespace {
 ModuleAutoRegister *g_moduleHead = nullptr;
+GlueModuleAutoRegister *g_glueHead = nullptr;
 HookAutoRegister *g_hookHead = nullptr;
 ReloadAutoRegister *g_reloadHead = nullptr;
 } // namespace
@@ -123,6 +124,15 @@ ModuleAutoRegister::ModuleAutoRegister(Fn f) : fn(f), next(g_moduleHead) {
 
 void RunModuleRegistrations() {
     for (auto *node = g_moduleHead; node != nullptr; node = node->next)
+        node->fn();
+}
+
+GlueModuleAutoRegister::GlueModuleAutoRegister(Fn f) : fn(f), next(g_glueHead) {
+    g_glueHead = this;
+}
+
+void RunGlueModuleRegistrations() {
+    for (auto *node = g_glueHead; node != nullptr; node = node->next)
         node->fn();
 }
 

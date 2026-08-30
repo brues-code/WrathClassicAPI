@@ -159,9 +159,18 @@ static DWORD WINAPI InitWorker(LPVOID) {
 
 // LichCore calls this on the game's MAIN thread after injection
 // (GetProcAddress(module, "Load")), outside the loader lock and with no
-// timeout. Returns 0 on success; LichCore reports any non-zero result to the
-// user. Exported undecorated as "Load" via src/WrathClassicAPI.def.
-extern "C" DWORD __cdecl Load() { return EnsureInitialized(); }
+// timeout, at CGlueMgr::Initialize (the login-screen init). Returns 0 on
+// success; LichCore reports any non-zero result to the user. Exported
+// undecorated as "Load" via src/WrathClassicAPI.def.
+extern "C" DWORD __cdecl Load() {
+    const DWORD result = EnsureInitialized();
+    // Fire login-screen registrations (console commands, ...) now: the login
+    // `~` console is up and GlueXML has loaded. Main-thread, LichCore-only —
+    // the fallback worker path has no login-screen-timed signal.
+    if (result == 0)
+        Game::RunGlueModuleRegistrations();
+    return result;
+}
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
