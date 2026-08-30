@@ -1136,4 +1136,32 @@ enum Offsets {
     FUN_VFS_IS_DIR = 0x004281D0,
     VAR_VFS_BASE_PATH = 0x00B32360,   // recorded game dir (index keys are relative to it)
     VAR_VFS_INDEX_READY = 0x00B324A4, // u8 latch: loose-file index built
+
+    // --- BAG_UPDATE_DELAYED (src/bag/UpdateDelayed.cpp) ---
+    //
+    // "BAG_UPDATE" is event ID 0x13A (slot 0x13A in the event-name array at
+    // 0x00C24EB0). Verified by imm32-scanning .text for 0x13A and classifying
+    // every hit: it fires from exactly five sites in the two functions below.
+    // Post-hooking both covers every BAG_UPDATE; the drain then coalesces to
+    // one BAG_UPDATE_DELAYED per frame. Both live in the 0x005Dxxxx item/
+    // container region (4 and 2 callers) — quiet, no known DLL touches them.
+
+    // Item -> container resolver: `void __cdecl(int guidLo, int guidHi)`.
+    // Fires BAG_UPDATE(0/-2/-4) when the changed container is the player
+    // (backpack/keyring/token bag), else scans the bag-GUID cache and fires
+    // BAG_UPDATE(1..11). Four of the five fire sites.
+    FUN_BAG_ITEM_TO_BAG = 0x005D7070,
+
+    // Bag-slot diff loop: `void __cdecl(void)`. Diffs the player's bag
+    // descriptor fields against the cache at 0x00C23540; fires BAG_CLOSED
+    // for removed bags and BAG_UPDATE for added ones, re-registering the
+    // per-bag content-change callbacks. The fifth fire site.
+    FUN_BAG_SLOT_DIFF = 0x005D9960,
+
+    // `u8`, nonzero exactly while the player is in the world: set by the
+    // enter-world handler FUN_00528010 (which fires PLAYER_ENTERING_WORLD),
+    // cleared by the leave-world handler FUN_00528C30 (PLAYER_LEAVING_WORLD),
+    // so it is false at character select and across every loading screen.
+    // The engine's own "is in game" getter FUN_008C6330 reads it.
+    VAR_IN_WORLD = 0x00BD0792,
 };

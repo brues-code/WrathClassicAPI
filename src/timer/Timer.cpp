@@ -25,6 +25,10 @@
 // So we use `std::priority_queue` keyed by `fireAt`. The frame-cost
 // when nothing is due is one comparison against the heap top.
 //
+// The per-frame drive comes from the shared `Tick::FrameTick`
+// subscription (which owns the single `FrameScript_FireOnUpdate`
+// hook), so this module coexists with other per-frame consumers.
+//
 // **Cancel semantics** — lazy deletion. The returned timer table
 // stores its `_ref` (callback registry key) and a `_cancelled`
 // boolean. `:Cancel()` clears `refs[_ref] = nil` and flips the flag;
@@ -38,7 +42,7 @@
 // timer fires ~1.0s after the call in either clock.
 
 #include "Game.h"
-#include "Offsets.h"
+#include "tick/FrameTick.h"
 
 #include <cstdint>
 #include <queue>
@@ -160,22 +164,10 @@ void Tick() {
     Game::Lua::SetTop(L, refsIdx - 1); // pop refs table
 }
 
-using FireOnUpdate_t = void(__cdecl *)(int a1, int a2, int a3, int a4);
-FireOnUpdate_t FireOnUpdate_o = nullptr;
-
-void __cdecl FireOnUpdate_h(int a1, int a2, int a3, int a4) {
-    // Run the engine's per-frame dispatch first so user OnUpdate
-    // handlers see "the world has progressed" before our timer
-    // callbacks fire — matches the expectations of modern WoW where
-    // C_Timer is logically a downstream consumer of the same tick.
-    FireOnUpdate_o(a1, a2, a3, a4);
-    Tick();
-}
-
-const Game::HookAutoRegister _hookreg{
-    Offsets::FUN_FRAMESCRIPT_FIRE_ON_UPDATE,
-    reinterpret_cast<void *>(&FireOnUpdate_h),
-    reinterpret_cast<void **>(&FireOnUpdate_o)};
+// Subscribed to the shared per-frame tick (runs after the engine's
+// OnUpdate dispatch) — matches the expectations of modern WoW where
+// C_Timer is logically a downstream consumer of the same tick.
+const Tick::FrameTick::AutoSubscribe _tickSub{&Tick};
 
 // `timer:Cancel()` — pops self off the stack, marks `_cancelled =
 // true`, clears the callback ref so the heap entry becomes a no-op

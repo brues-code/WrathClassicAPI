@@ -62,6 +62,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `GET_ITEM_INFO_RECEIVED` | `itemID, success` | The engine has just filled the item-stats cache from an `SMSG_ITEM_QUERY_SINGLE_RESPONSE` triggered by an **implicit** path (`GetItemInfo(uncachedID)`, hyperlink hover, chat-link resolution, etc.) |
 | `ITEM_DATA_LOAD_RESULT`  | `itemID, success` | The engine has just filled the cache for an **explicit** `C_Item.RequestLoadItemData(ByID)` call |
 | `QUEST_DATA_LOAD_RESULT` | `questID, success` | The engine has just filled the quest static-info cache for an **explicit** `C_QuestLog.RequestLoadQuestByID` call |
+| `BAG_UPDATE_DELAYED` | *(none)* | Once at the end of a frame in which one or more `BAG_UPDATE` events fired. Register for this event instead of `BAG_UPDATE` and rescan bags once per frame. During a loading screen, the event holds; the first in-world frame fires it once for the settled inventory |
 
 A given cache fill fires exactly one of these — never both — depending
 on what initiated the request. Same split as modern WoW.
