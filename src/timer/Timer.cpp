@@ -282,7 +282,20 @@ void RegisterLuaFunctions() {
                                      &Script_C_Timer_NewTicker);
 }
 
+// The in-game Lua state (and its registry, where every pending timer's
+// callback ref lives) is about to be destroyed on /reload or /logout. Drop
+// all pending timers: the heap holds refIDs into the dying registry, and a
+// reload cancels pending C_Timer callbacks anyway (modern WoW behaves the
+// same — the callbacks are closures that don't survive the reset). Clearing
+// the C++ heap is enough; the refs table dies with the state.
+void PrepareForReload() {
+    decltype(g_heap) empty;
+    g_heap.swap(empty);
+    g_nextRef = 1;
+}
+
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};
+const Game::ReloadAutoRegister _reloadReg{&PrepareForReload};
 
 } // namespace
 } // namespace Timer

@@ -114,6 +114,7 @@ void RegisterTableFunction(const char *tableName, const char *methodName, CFunct
 namespace {
 ModuleAutoRegister *g_moduleHead = nullptr;
 HookAutoRegister *g_hookHead = nullptr;
+ReloadAutoRegister *g_reloadHead = nullptr;
 } // namespace
 
 ModuleAutoRegister::ModuleAutoRegister(Fn f) : fn(f), next(g_moduleHead) {
@@ -145,6 +146,15 @@ bool RunHookRegistrations() {
             return false;
     }
     return true;
+}
+
+ReloadAutoRegister::ReloadAutoRegister(Fn f) : fn(f), next(g_reloadHead) {
+    g_reloadHead = this;
+}
+
+void RunReloadCleanups() {
+    for (auto *node = g_reloadHead; node != nullptr; node = node->next)
+        node->fn();
 }
 
 } // namespace Game

@@ -382,6 +382,16 @@ enum Offsets {
     // through this pointer.
     VAR_LUA_STATE = 0x00D3F78C,
 
+    // FrameScript in-game Lua-state teardown — `void __cdecl(void)`.
+    // `lua_close`s the state at VAR_LUA_STATE, nulls the pointer, and
+    // frees the event table. Runs on `/reload` and `/logout` (from
+    // GameUIInit `FUN_0052A980` and the logout/shutdown paths) BEFORE the
+    // matching FrameScript_Initialize (`FUN_00819BB0`) builds the new
+    // state — the two are separate functions in 3.3.5 (1.12 fused them).
+    // Pre-hooked in DllMain to run `Game::RunReloadCleanups()` while the
+    // old state is still valid.
+    FUN_FRAMESCRIPT_SHUTDOWN = 0x0081A9A0,
+
     // Lua 5.1 C API — all __cdecl, all live in the 0x0084xxxx cluster.
     // Cross-checked against `C:\Git\awesome_wotlk`, which has a hand-
     // curated table of these same offsets for the same 3.3.5 binary.

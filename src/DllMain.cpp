@@ -51,6 +51,18 @@ static void __cdecl UIBindingsInit_h() {
     Game::RunModuleRegistrations();
 }
 
+// FrameScript in-game Lua-state teardown — see `Offsets::FUN_FRAMESCRIPT_SHUTDOWN`.
+// Fires on `/reload` and `/logout` before the old state is destroyed. Pre-hooked
+// so modules can clear reload-fragile state (Lua refs, pointer-keyed maps) while
+// the old state is still valid (see `Game::ReloadAutoRegister`).
+using FrameScriptShutdown_t = void(__cdecl *)();
+static FrameScriptShutdown_t FrameScriptShutdown_o = nullptr;
+
+static void __cdecl FrameScriptShutdown_h() {
+    Game::RunReloadCleanups();
+    FrameScriptShutdown_o();
+}
+
 // ---------------------------------------------------------------------------
 // Hook install — kept OFF the Windows loader lock.
 //
@@ -108,6 +120,13 @@ static bool InstallHooks() {
     if (!CreateAndQueue(Offsets::FUN_UIBINDINGS_INIT,
                         reinterpret_cast<void *>(UIBindingsInit_h),
                         reinterpret_cast<void **>(&UIBindingsInit_o)))
+        return false;
+
+    // Core reload hook: fires module reload-cleanups before the in-game
+    // Lua state is torn down on /reload or /logout (see FrameScriptShutdown_h).
+    if (!CreateAndQueue(Offsets::FUN_FRAMESCRIPT_SHUTDOWN,
+                        reinterpret_cast<void *>(FrameScriptShutdown_h),
+                        reinterpret_cast<void **>(&FrameScriptShutdown_o)))
         return false;
 
     // Feature hooks declared via `Game::HookAutoRegister` at file scope in

@@ -207,4 +207,34 @@ struct HookAutoRegister {
 
 bool RunHookRegistrations();
 
+// Self-registration for per-/reload state cleanup. A module that keeps
+// file-static state which goes STALE across a game /reload or /logout
+// declares a file-scope
+// `static const Game::ReloadAutoRegister _reload{&PrepareForReload};`
+// right after its `void PrepareForReload()`. `RunReloadCleanups()` — called
+// from the FrameScript-shutdown hook in DllMain BEFORE the engine destroys
+// the in-game Lua state — fires them all, so DllMain doesn't hand-maintain
+// the list and a new module can't forget to wire itself in.
+//
+// State is "reload-fragile" when it survives in C++ but its meaning does not:
+//   - Lua registry refs / handler cells (the Lua state reset invalidates them);
+//   - maps/sets keyed by a frame/object POINTER (the allocator recycles
+//     addresses, so an old entry aliases an unrelated new object);
+//   - cached event-slot indices (rebuilt when the event table is rebuilt).
+// The callback runs while the OLD state is still valid, so it can release
+// Lua refs. A pure-C++ cache keyed by spellID/itemID is NOT fragile and must
+// not register.
+//
+// Same lifetime + ordering rules as ModuleAutoRegister: static-init chaining,
+// undefined cross-TU order — fine, because each callback clears only its OWN
+// state.
+struct ReloadAutoRegister {
+    using Fn = void (*)();
+    explicit ReloadAutoRegister(Fn fn);
+    Fn fn;
+    ReloadAutoRegister *next;
+};
+
+void RunReloadCleanups();
+
 } // namespace Game
