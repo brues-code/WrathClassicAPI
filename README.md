@@ -66,12 +66,14 @@ Per-function reference with shape, semantics, and edge cases is in
 A given cache fill fires exactly one of these — never both — depending
 on what initiated the request. Same split as modern WoW.
 
-### Behavioral extensions
+### Client extensions
 
-| Function | Change |
-|----------|--------|
-| `GetItemInfo(itemID|"item:N..."|"name")` | The 3.3.5 implementation returns nil on cache misses with no follow-up query. We hook it so a miss now kicks off `SMSG_ITEM_QUERY_SINGLE` transparently; the original still returns nil this call, but subsequent calls return data and `GET_ITEM_INFO_RECEIVED` fires when the response arrives. Same shape as modern WoW (5.4+). |
-| `GameTooltip:SetSpellByID(spellID)` | The 3.3.5 implementation gates on a spellbook+petbar walk and silently no-ops for any spell not in those displayable structures (profession recipes, item-granted spells, anything else the engine tracks only in the player-spell bitmap). We hook the gate to allow any non-zero spellID. Same shape as modern WoW (5.4+) where Blizzard removed the gate. |
+| Feature | Change |
+|---------|--------|
+| `GetItemInfo(itemID\|"item:N..."\|"name")` | A cache miss sends `SMSG_ITEM_QUERY_SINGLE` to the server. The first call still returns nil. Later calls return the item data, and `GET_ITEM_INFO_RECEIVED` fires when the response arrives. |
+| `GameTooltip:SetSpellByID(spellID)` | The call accepts any non-zero spellID, not only spells in the spellbook or on the pet bar (profession recipes, item-granted spells). |
+| Embedded `!!!WrathClassicAPI` addon | The DLL contains a Lua utility addon (`Mixin`, `EventRegistry` + `CallbackRegistryMixin`, `ColorMixin`/`ColorUtil`, `ItemUtil`/`ItemLocation`, `EnumUtil`, `TableUtil`, `MathUtil`, `Pools`, `EventUtil`, `FunctionUtil`, `LinkUtil`, `PlayerUtil`, `EquipmentManager`, timed callbacks, frame watching) and registers it at login. You do not install it on disk. It loads before all other addons. It does not show in the AddOns list. You cannot disable it. It loads as Blizzard-secure code, so its closures do not taint protected paths. If the disk copy at `Interface\AddOns\!!!WrathClassicAPI` is newer, the DLL uses the disk copy. Release DLLs write the git tag into the embedded `## Version:`. When a disk copy exists, a local `DEV` build always uses it. A `.wrathclassicapi-dev` marker file in the folder also forces the disk copy. |
+| Retail-like `/reload` (hot reload) | On `/reload`, a new addon folder loads as a normal addon. New files in an existing addon load. A first-time SavedVariables file survives. Edits to `##` lines apply (for example `## SavedVariables:` and `## Dependencies:`). The DLL removes a deleted addon folder from the addon list. |
 
 ## Building
 
@@ -98,7 +100,10 @@ WrathClassicAPI is loaded via [LichLoader][lichloader]. Copy
 dll\WrathClassicAPI.dll
 ```
 
-Launch via `LichLoader.exe`. Hooks install before the game's main
-thread starts.
+Launch via `LichLoader.exe`. `LichCore.dll` calls the DLL's exported
+`Load()` on the game's main thread after boot — that's when the hooks
+install (off the Windows loader lock, after every injected DLL's
+`DllMain` has completed). Without LichCore present, the DLL falls back
+to installing from a worker thread.
 
 [lichloader]: https://github.com/brues-code/LichLoader
