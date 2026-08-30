@@ -23,10 +23,16 @@
 //      array per file plus a `{path, data, size}` manifest.
 //
 //   2. We hook the engine's file reader `FUN_FILE_READ`. For any path under
-//      `Interface\AddOns\!!!WrathClassicAPI\`, the DISK copy wins when
-//      present (so the on-disk addon stays editable without rebuilding the
-//      DLL); only on a disk miss do we hand back a Storm buffer holding the
-//      embedded content. The caller's normal `SMemFree` reclaims it.
+//      `Interface\AddOns\!!!WrathClassicAPI\`, we choose disk vs embedded ONCE
+//      (see DecideSource) and serve accordingly, handing back a Storm buffer
+//      the caller's normal `SMemFree` reclaims. Precedence:
+//        * a `.wrathclassicapi-dev` marker in the on-disk folder → disk wins
+//          unconditionally (explicit developer override, so a dev edits the
+//          on-disk addon against a *released* DLL);
+//        * otherwise the newer `## Version:` wins (embedded is stamped from the
+//          release tag; the "DEV" sentinel sorts below every real release), so
+//          non-devs always get the DLL's copy — even with a stale one on disk —
+//          while a locally-built DEV dll defers to a DEV disk copy.
 //
 //   3. We post-hook `FUN_ADDON_INIT`. After the engine's own
 //      `Interface\AddOns\` scan finishes, we call the TOC parser
@@ -47,6 +53,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 namespace Addons::Embedded {
@@ -54,6 +61,13 @@ namespace Addons::Embedded {
 namespace {
 
 constexpr const char *kAddonName = "!!!WrathClassicAPI";
+constexpr const char *kAddonTocFile = "!!!WrathClassicAPI.toc";
+
+// Developer marker. When this file exists in the on-disk addon folder, the
+// disk copy wins unconditionally (see DiskHasDevMarker / DecideSource). It is
+// gitignored, excluded from the embed, and the release ships only the DLL — so
+// it only ever exists in a developer working tree.
+constexpr const char *kDevMarkerFile = ".wrathclassicapi-dev";
 
 // `Interface\AddOns\!!!WrathClassicAPI\` — the prefix the engine builds for
 // any of this addon's files. Matched case-insensitively (Windows paths are
@@ -96,14 +110,147 @@ const WrathClassicAPIFiles::File *LookupEmbedded(const char *suffix) {
     return nullptr;
 }
 
-// Engine file reader + Storm allocator — see the ABI notes on the offsets.
+// Engine file reader + Storm allocator/free — see the ABI notes on the offsets.
 using FileReadFn = int(__stdcall *)(int unused, const char *path, void **outBuf,
                                     size_t *outSize, size_t extraBytes,
                                     int flag1, int flag2);
 using SMemAllocFn = void *(__stdcall *)(size_t size, const char *file, int line,
                                         int flags);
+using SMemFreeFn = int(__stdcall *)(void *ptr, const char *file, int line,
+                                    int flags);
 
 FileReadFn FileRead_o = nullptr;
+
+// Extract the trimmed value of the `## Version:` line from a TOC buffer into
+// `out`. Returns true on success. Line-oriented, case-insensitive on the key,
+// matching the engine's `## Key: Value` TOC format — same scan ClassicAPI's
+// AddOns::Toc::FindValue does, inlined here since this is its only user.
+bool ExtractTocVersion(const char *content, size_t size, char *out,
+                       size_t outSize) {
+    if (outSize == 0) return false;
+    out[0] = '\0';
+    static const char kDirective[] = "## Version:";
+    const size_t dlen = sizeof(kDirective) - 1;
+    for (size_t i = 0; i + dlen <= size; ++i) {
+        const bool atLineStart = (i == 0) || content[i - 1] == '\n';
+        if (!atLineStart || _strnicmp(content + i, kDirective, dlen) != 0)
+            continue;
+        const char *p = content + i + dlen;
+        const char *end = content + size;
+        while (p < end && (*p == ' ' || *p == '\t')) ++p;
+        const char *v = p;
+        while (p < end && *p != '\r' && *p != '\n') ++p;
+        while (p > v && (p[-1] == ' ' || p[-1] == '\t')) --p;
+        size_t n = static_cast<size_t>(p - v);
+        if (n >= outSize) n = outSize - 1;
+        std::memcpy(out, v, n);
+        out[n] = '\0';
+        return n > 0;
+    }
+    return false;
+}
+
+// Returns -1/0/+1 for a < b / a == b / a > b. "DEV" is the local-build
+// sentinel: two DEV builds are equal, but a DEV build sorts BELOW any real
+// release. Otherwise the strings are walked as dot-separated numeric semver
+// components (`1.2` < `1.10`).
+int CompareVersions(const char *a, const char *b) {
+    const bool aDev = std::strcmp(a, "DEV") == 0;
+    const bool bDev = std::strcmp(b, "DEV") == 0;
+    if (aDev && bDev) return 0;
+    if (aDev) return -1;
+    if (bDev) return 1;
+    while (*a || *b) {
+        int va = 0, vb = 0;
+        while (*a >= '0' && *a <= '9') { va = va * 10 + (*a - '0'); ++a; }
+        while (*b >= '0' && *b <= '9') { vb = vb * 10 + (*b - '0'); ++b; }
+        if (va != vb) return va < vb ? -1 : 1;
+        if (*a == '.') ++a;
+        if (*b == '.') ++b;
+        if (!*a && !*b) break;
+        if (!*a) return -1;
+        if (!*b) return 1;
+    }
+    return 0;
+}
+
+// Pre-extracted embedded TOC version, populated lazily on first DecideSource.
+char g_embeddedVersion[64] = "";
+
+void EnsureEmbeddedVersionExtracted() {
+    if (g_embeddedVersion[0] != '\0') return;
+    for (size_t i = 0; i < WrathClassicAPIFiles::kFileCount; ++i) {
+        if (PathEqualsCI(kAddonTocFile, WrathClassicAPIFiles::kFiles[i].path)) {
+            ExtractTocVersion(
+                reinterpret_cast<const char *>(WrathClassicAPIFiles::kFiles[i].data),
+                WrathClassicAPIFiles::kFiles[i].size, g_embeddedVersion,
+                sizeof(g_embeddedVersion));
+            return;
+        }
+    }
+}
+
+// True iff the on-disk addon folder contains the `.wrathclassicapi-dev` marker.
+// Read via the ORIGINAL FileRead (bypassing our embed hook), so it reflects a
+// real file on disk / in an MPQ — never an embedded copy. That makes it a clean
+// "is this a developer working tree" signal.
+bool DiskHasDevMarker() {
+    char fullPath[256];
+    std::snprintf(fullPath, sizeof(fullPath), "%s%s", kAddonPathPrefix,
+                  kDevMarkerFile);
+    void *buf = nullptr;
+    size_t size = 0;
+    const int ok = FileRead_o(0, fullPath, &buf, &size, 1, 1, 0);
+    if (ok == 0 || buf == nullptr) return false;
+    auto SMemFree = reinterpret_cast<SMemFreeFn>(Offsets::FUN_STORM_SMEM_FREE);
+    SMemFree(buf, __FILE__, __LINE__, 0);
+    return true;
+}
+
+// Which source serves every read for this addon, decided once on the first
+// matching file read.
+enum class Source { Undecided, Disk, Embedded };
+Source g_source = Source::Undecided;
+
+// Decide disk vs embedded. The `.wrathclassicapi-dev` marker forces disk
+// unconditionally (explicit developer override). Otherwise read the on-disk
+// TOC via the ORIGINAL FileRead (bypassing our hook), parse its version,
+// compare to the embedded version, and cache the newer. No disk TOC at all →
+// embedded wins by default.
+void DecideSource() {
+    if (g_source != Source::Undecided) return;
+    EnsureEmbeddedVersionExtracted();
+
+    if (DiskHasDevMarker()) {
+        g_source = Source::Disk;
+        return;
+    }
+
+    char fullPath[256];
+    std::snprintf(fullPath, sizeof(fullPath), "%s%s", kAddonPathPrefix,
+                  kAddonTocFile);
+    void *diskBuf = nullptr;
+    size_t diskSize = 0;
+    const int ok = FileRead_o(0, fullPath, &diskBuf, &diskSize, 1, 1, 0);
+    if (ok == 0 || diskBuf == nullptr) {
+        g_source = Source::Embedded;
+        return;
+    }
+
+    char diskVersion[64] = "";
+    ExtractTocVersion(static_cast<const char *>(diskBuf), diskSize, diskVersion,
+                      sizeof(diskVersion));
+    auto SMemFree = reinterpret_cast<SMemFreeFn>(Offsets::FUN_STORM_SMEM_FREE);
+    SMemFree(diskBuf, __FILE__, __LINE__, 0);
+
+    // Missing/unparseable disk version → assume older than anything we ship.
+    if (diskVersion[0] == '\0') {
+        g_source = Source::Embedded;
+        return;
+    }
+    const int cmp = CompareVersions(g_embeddedVersion, diskVersion);
+    g_source = (cmp > 0) ? Source::Embedded : Source::Disk;
+}
 
 int __stdcall FileRead_h(int unused, const char *path, void **outBuf,
                          size_t *outSize, size_t extraBytes, int flag1,
@@ -114,17 +261,21 @@ int __stdcall FileRead_h(int unused, const char *path, void **outBuf,
         return FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
     }
 
-    // Disk copy wins when present, so a developer editing the on-disk addon
-    // sees changes without rebuilding the DLL. Only synthesize the embedded
-    // copy on a disk miss.
-    const int diskResult =
-        FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
-    if (diskResult != 0) return diskResult;
+    DecideSource();
 
+    if (g_source == Source::Disk) {
+        // Disk is dev-marked or at least as new — serve it. If disk lacks this
+        // specific file (embedded may carry files disk doesn't), fall through.
+        const int diskResult =
+            FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
+        if (diskResult != 0) return diskResult;
+    }
+
+    // Source::Embedded, or Source::Disk with this file missing.
     const auto *entry = LookupEmbedded(suffix);
     if (entry == nullptr) {
-        // Not in the embedded set either — genuine miss.
-        return 0;
+        // Not in the embedded set either — let the engine try disk once more.
+        return FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
     }
 
     auto SMemAlloc = reinterpret_cast<SMemAllocFn>(Offsets::FUN_STORM_SMEM_ALLOC);

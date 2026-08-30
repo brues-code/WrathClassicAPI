@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: !!!WrathClassicAPI
 ## Notes: Library to emulate aspects of the modern WoW API on 3.3.5a / Lua 5.1.
-## Version: 1.0
+## Version: DEV
 ## Author: Brues
 ## DefaultState: enabled
 

@@ -46,3 +46,8 @@
 *.dwo
 
 CLAUDE.md
+
+# Developer override: when this marker exists in the on-disk addon folder, the
+# disk copy wins over the DLL-embedded copy unconditionally (see
+# src/addons/Embedded.cpp DiskHasDevMarker). Never committed, never embedded.
+/AddOns/!!!WrathClassicAPI/.wrathclassicapi-dev

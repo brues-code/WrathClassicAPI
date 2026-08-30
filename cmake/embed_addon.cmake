@@ -32,6 +32,10 @@ if(NOT ADDON_NAME)
 endif()
 
 file(GLOB_RECURSE INPUT_FILES RELATIVE "${SRC_DIR}" "${SRC_DIR}/*")
+# Never embed the developer marker — it must reflect on-disk presence only
+# (see src/addons/Embedded.cpp DiskHasDevMarker), and it is gitignored so it
+# only exists in a developer working tree anyway.
+list(FILTER INPUT_FILES EXCLUDE REGEX "(^|/)\\.wrathclassicapi-dev$")
 list(SORT INPUT_FILES) # deterministic codegen
 
 set(BODY "")
