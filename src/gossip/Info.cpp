@@ -24,6 +24,21 @@
 // and call the engine's own helpers directly, so we share the
 // engine's CMSG-send path and error semantics.
 //
+// There is a SECOND questgiver path this namespace also covers: an NPC
+// with only quests and no gossip menu sends SMSG_QUESTGIVER_QUEST_LIST
+// instead — the QUEST_GREETING event and the "Greetings / Current Quests
+// / Available Quests" panel — whose data lands in storage separate from
+// the gossip arrays (VAR_GREETING_* in Offsets.h). Without this, those
+// NPCs return empty from C_GossipInfo. We serve whichever session is live:
+//   - gossip session live (VAR_GOSSIP_NPC_GUID != 0)   -> gossip arrays
+//   - greeting session live (VAR_QUESTGIVER_GUID != 0
+//     and == VAR_GREETING_NPC_GUID)                    -> greeting arrays
+//   - neither                                          -> empty / ""
+// The GUID gates double as staleness protection: both storages persist
+// after their frames close (the engine never clears them until the next
+// open), so ungated reads would report the previous NPC. Options stay
+// gossip-only — greetings have no options.
+//
 // Missing modern fields — 3.3.5's wire protocol simply doesn't
 // transmit them, so there's nothing to surface:
 //   - `rewards`, `spellID` (post-WotLK feature)
@@ -39,6 +54,53 @@
 namespace Gossip::Info {
 
 namespace {
+
+uint64_t ReadU64(uintptr_t va) {
+    return *reinterpret_cast<const uint64_t *>(va);
+}
+
+// A gossip session is live from SMSG_GOSSIP_MESSAGE until the close
+// worker (FUN_0058A550) zeroes the GUID and fires GOSSIP_CLOSED.
+bool GossipSessionActive() {
+    return ReadU64(Offsets::VAR_GOSSIP_NPC_GUID) != 0;
+}
+
+// A quest-greeting session is live while the questgiver GUID is set AND
+// the greeting arrays were filled for that same NPC. The second check
+// matters because a gossip-menu quest click opens a questgiver panel
+// without touching the greeting arrays — without it, leftovers from an
+// older greeting NPC would leak through.
+bool GreetingSessionActive() {
+    const uint64_t giver = ReadU64(Offsets::VAR_QUESTGIVER_GUID);
+    return giver != 0 && giver == ReadU64(Offsets::VAR_GREETING_NPC_GUID);
+}
+
+const uint8_t *GreetingEntry(bool active, int slot) {
+    const uintptr_t base = active ? Offsets::VAR_GREETING_ACTIVE_ENTRIES
+                                  : Offsets::VAR_GREETING_AVAILABLE_ENTRIES;
+    return reinterpret_cast<const uint8_t *>(
+        base + static_cast<uintptr_t>(slot) *
+                   static_cast<uintptr_t>(Offsets::GREETING_QUESTS_STRIDE));
+}
+
+int GreetingCount(bool active) {
+    const int count = *reinterpret_cast<const int *>(static_cast<uintptr_t>(
+        active ? Offsets::VAR_GREETING_ACTIVE_COUNT
+               : Offsets::VAR_GREETING_AVAILABLE_COUNT));
+    return (count < 0) ? 0
+           : (count > Offsets::GREETING_QUESTS_MAX)
+               ? Offsets::GREETING_QUESTS_MAX
+               : count;
+}
+
+// `int __cdecl(uint activeIdx0Based)` -> nonzero when the active greeting
+// quest at that index is complete / ready to turn in.
+using GreetingActiveComplete_t = int(__cdecl *)(uint32_t activeIdx0Based);
+bool GreetingActiveIsComplete(int activeSlot) {
+    auto fn = reinterpret_cast<GreetingActiveComplete_t>(
+        static_cast<uintptr_t>(Offsets::FUN_GREETING_ACTIVE_IS_COMPLETE));
+    return fn(static_cast<uint32_t>(activeSlot)) != 0;
+}
 
 const uint8_t *OptionEntry(int slot) {
     return reinterpret_cast<const uint8_t *>(
@@ -77,9 +139,18 @@ bool IsActiveQuest(uint32_t status) {
            status == Offsets::GOSSIP_QUEST_STATUS_COMPLETE;
 }
 
+// The greeting string of whichever questgiver session is live: the gossip
+// buffer for a gossip session, the quest-greeting buffer for a greeting
+// session, "" when neither is open. Both persist after close, so the gates
+// keep stale text from the previous NPC out.
 int __cdecl Script_GetText(void *L) {
-    Game::Lua::PushString(L, reinterpret_cast<const char *>(
-        static_cast<uintptr_t>(Offsets::VAR_GOSSIP_GREETING_TEXT)));
+    uintptr_t buf = 0;
+    if (GossipSessionActive())
+        buf = Offsets::VAR_GOSSIP_GREETING_TEXT;
+    else if (GreetingSessionActive())
+        buf = Offsets::VAR_QUEST_GREETING_TEXT;
+    Game::Lua::PushString(
+        L, (buf != 0) ? reinterpret_cast<const char *>(buf) : "");
     return 1;
 }
 
@@ -100,6 +171,8 @@ int __cdecl Script_GetText(void *L) {
 int __cdecl Script_GetOptions(void *L) {
     Game::Lua::SetTop(L, 0);
     Game::Lua::NewTable(L);
+    if (!GossipSessionActive())
+        return 1; // greeting sessions have no options; stale data stays hidden
 
     int outIdx = 0;
     for (int slot = 0; slot < Offsets::GOSSIP_OPTIONS_MAX; ++slot) {
@@ -132,11 +205,45 @@ int __cdecl Script_GetOptions(void *L) {
     return 1;
 }
 
+// Greeting-session variant: walks the pre-split greeting array for the
+// wanted side. Same table shape as the gossip rows (questID / title /
+// questLevel / isComplete) so consumers can't tell the sources apart.
+int PushGreetingQuestList(void *L, bool wantActive) {
+    const int count = GreetingCount(wantActive);
+    for (int slot = 0; slot < count; ++slot) {
+        const uint8_t *entry = GreetingEntry(wantActive, slot);
+
+        Game::Lua::PushNumber(L, static_cast<double>(slot + 1));
+        Game::Lua::NewTable(L);
+
+        Game::Lua::SetFieldNumber(L, "questID",
+            static_cast<double>(*reinterpret_cast<const uint32_t *>(
+                entry + Offsets::OFF_GREETING_QUEST_ID)));
+        Game::Lua::SetFieldString(L, "title", reinterpret_cast<const char *>(
+            entry + Offsets::OFF_GREETING_QUEST_TITLE));
+        Game::Lua::SetFieldNumber(L, "questLevel",
+            static_cast<double>(*reinterpret_cast<const int32_t *>(
+                entry + Offsets::OFF_GREETING_QUEST_LEVEL)));
+        if (wantActive)
+            Game::Lua::SetFieldBool(L, "isComplete",
+                                    GreetingActiveIsComplete(slot));
+
+        Game::Lua::RawSet(L, -3);
+    }
+    return 1;
+}
+
 // Shared body for `GetAvailableQuests` / `GetActiveQuests`. Walks
 // the unified backing array; `wantActive` inverts the status filter.
 int PushQuestList(void *L, bool wantActive) {
     Game::Lua::SetTop(L, 0);
     Game::Lua::NewTable(L);
+
+    if (!GossipSessionActive()) {
+        if (GreetingSessionActive())
+            return PushGreetingQuestList(L, wantActive);
+        return 1; // no questgiver session — empty table, never stale data
+    }
 
     int outIdx = 0;
     for (int slot = 0; slot < Offsets::GOSSIP_QUESTS_MAX; ++slot) {
@@ -180,6 +287,8 @@ int __cdecl Script_GetActiveQuests(void *L) {
 }
 
 int CountOptions() {
+    if (!GossipSessionActive())
+        return 0;
     int count = 0;
     for (int slot = 0; slot < Offsets::GOSSIP_OPTIONS_MAX; ++slot) {
         if (OptionIndex(OptionEntry(slot)) >= 0)
@@ -189,6 +298,8 @@ int CountOptions() {
 }
 
 int CountQuests(bool wantActive) {
+    if (!GossipSessionActive())
+        return GreetingSessionActive() ? GreetingCount(wantActive) : 0;
     int count = 0;
     for (int slot = 0; slot < Offsets::GOSSIP_QUESTS_MAX; ++slot) {
         const uint8_t *entry = QuestEntry(slot);
@@ -240,6 +351,16 @@ void EngineSelectActiveQuest(int idx0Based) {
     fn(idx0Based);
 }
 
+// Greeting-session selectors — the workers Script_Select{Available,Active}Quest
+// call. Index straight into the corresponding greeting array (they validate
+// the questgiver GUID internally before sending the CMSG).
+void EngineSelectGreetingQuest(bool wantActive, int idx0Based) {
+    auto fn = reinterpret_cast<SelectQuest_t>(static_cast<uintptr_t>(
+        wantActive ? Offsets::FUN_GREETING_SELECT_ACTIVE_QUEST
+                   : Offsets::FUN_GREETING_SELECT_AVAILABLE_QUEST));
+    fn(idx0Based);
+}
+
 // `C_GossipInfo.SelectOption(gossipOptionID[, text[, copperCost]])`.
 // Walks the options array to find the matching `gossipOptionID`,
 // then calls the engine selector with the 0-based slot. `text` is
@@ -255,6 +376,8 @@ int __cdecl Script_SelectOption(void *L) {
         Game::Lua::IsString(L, 2) ? Game::Lua::ToString(L, 2) : nullptr;
     const int copperCost =
         Game::Lua::IsNumber(L, 3) ? static_cast<int>(Game::Lua::ToNumber(L, 3)) : 0;
+    if (!GossipSessionActive())
+        return 0; // stale option slots must not send a CMSG
 
     for (int slot = 0; slot < Offsets::GOSSIP_OPTIONS_MAX; ++slot) {
         const uint8_t *entry = OptionEntry(slot);
@@ -279,7 +402,7 @@ int __cdecl Script_SelectOptionByIndex(void *L) {
         return Game::Lua::Error(L,
             "Usage: C_GossipInfo.SelectOptionByIndex(orderIndex)");
     const int target = static_cast<int>(Game::Lua::ToNumber(L, 1));
-    if (target < 1)
+    if (target < 1 || !GossipSessionActive())
         return 0;
 
     int seen = 0;
@@ -305,6 +428,21 @@ int SelectQuestByID(void *L, bool wantActive, const char *errUsage) {
     if (!Game::Lua::IsNumber(L, 1))
         return Game::Lua::Error(L, errUsage);
     const uint32_t target = static_cast<uint32_t>(Game::Lua::ToNumber(L, 1));
+
+    if (!GossipSessionActive()) {
+        if (!GreetingSessionActive())
+            return 0;
+        const int count = GreetingCount(wantActive);
+        for (int slot = 0; slot < count; ++slot) {
+            const uint32_t questID = *reinterpret_cast<const uint32_t *>(
+                GreetingEntry(wantActive, slot) + Offsets::OFF_GREETING_QUEST_ID);
+            if (questID == target) {
+                EngineSelectGreetingQuest(wantActive, slot);
+                return 0;
+            }
+        }
+        return 0;
+    }
 
     int idx = 0;
     for (int slot = 0; slot < Offsets::GOSSIP_QUESTS_MAX; ++slot) {

@@ -870,6 +870,55 @@ enum Offsets {
     // means we share the engine's CMSG-send path verbatim.
     FUN_SCRIPT_CLOSE_GOSSIP            = 0x0058AA40,
 
+    // Quest-greeting path (SMSG_QUESTGIVER_QUEST_LIST -> QUEST_GREETING,
+    // the "Greetings, $N / Current Quests / Available Quests" panel). An
+    // NPC with only quests and no gossip menu uses this instead of
+    // SMSG_GOSSIP_MESSAGE, and its data lands in storage entirely separate
+    // from the gossip arrays above — so C_GossipInfo has to serve whichever
+    // questgiver session is live:
+    //   gossip live  (VAR_GOSSIP_NPC_GUID != 0)                 -> gossip arrays
+    //   greeting live(VAR_QUESTGIVER_GUID != 0 && == greeting)  -> greeting arrays
+    //   neither                                                 -> empty / ""
+    // Both storages persist after their frame closes, so the GUID gates
+    // double as staleness protection (an ungated read reports the last NPC).
+
+    // Session GUIDs (u64). VAR_GOSSIP_NPC_GUID: set by the gossip handler
+    // FUN_0058A550, zeroed on close (fires GOSSIP_CLOSED 0x11C).
+    // VAR_QUESTGIVER_GUID: current questgiver-panel GUID.
+    // VAR_GREETING_NPC_GUID: the GUID the greeting arrays were filled for
+    // (written only by the SMSG_QUESTGIVER_QUEST_LIST handler FUN_006D0240).
+    VAR_GOSSIP_NPC_GUID               = 0x00C016F0,
+    VAR_QUESTGIVER_GUID               = 0x00C0D648,
+    VAR_GREETING_NPC_GUID             = 0x00C9D548,
+
+    // Greeting quest arrays: available (offered) and active (in-log), 32
+    // entries each, stride 0x214. Per-entry: questID @+0x00, level @+0x04,
+    // title (char[0x200]) @+0x0C. Counts are separate ints. Confirmed via
+    // GetAvailableTitle (FUN_0058BE30) / GetActiveTitle (FUN_0058BED0).
+    VAR_GREETING_AVAILABLE_ENTRIES    = 0x00C05AE8,
+    VAR_GREETING_ACTIVE_ENTRIES       = 0x00C01868,
+    VAR_GREETING_AVAILABLE_COUNT      = 0x00C0D69C,
+    VAR_GREETING_ACTIVE_COUNT         = 0x00C0D6A0,
+    GREETING_QUESTS_STRIDE            = 0x214,
+    GREETING_QUESTS_MAX               = 32,
+    OFF_GREETING_QUEST_ID             = 0x00,
+    OFF_GREETING_QUEST_LEVEL          = 0x04,
+    OFF_GREETING_QUEST_TITLE          = 0x0C,
+
+    // Greeting greeting-text buffer (char[0x800]) — GetGreetingText
+    // (FUN_0058BD30) pushes it.
+    VAR_QUEST_GREETING_TEXT           = 0x00C0CC48,
+
+    // Greeting-session engine helpers, all `__cdecl(int idx0Based)` where
+    // the index is 0-based into the respective greeting array. The select
+    // workers validate the questgiver GUID + busy flag internally.
+    FUN_GREETING_SELECT_AVAILABLE_QUEST = 0x0058CC20,
+    FUN_GREETING_SELECT_ACTIVE_QUEST    = 0x0058CCB0,
+    // `int __cdecl(uint activeIdx0Based)` -> 1 when the active greeting
+    // quest at that index is complete / ready to turn in (the 2nd return
+    // of GetActiveTitle). Used for the greeting `isComplete` field.
+    FUN_GREETING_ACTIVE_IS_COMPLETE     = 0x0058BCB0,
+
     // Quest log entry array. Populated by SMSG_QUEST_QUERY_RESPONSE and
     // friends; read by every `Script_GetQuestLog*` that takes a log
     // index. Verified at `Script_GetQuestLogTitle` (FUN_005E5CC0):
