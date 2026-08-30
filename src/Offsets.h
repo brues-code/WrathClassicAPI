@@ -977,11 +977,49 @@ enum Offsets {
     FUN_STORM_SMEM_FREE = 0x0076E5A0,
 
     // Addon-subsystem init: `void __cdecl AddonInit(char *basePath)`.
-    // Runs the `Interface\AddOns\` disk scan (registering every on-disk
-    // addon) then sets the "addons initialized" flag `DAT_00C24918 = 1`.
-    // Post-hooked: after it returns, every disk addon is registered, so
-    // we register the embedded one via FUN_TOC_PARSER.
+    // Runs registry setup, then the disk scan FUN_ADDON_DISK_SCAN, then sets
+    // the "addons initialized" flag `DAT_00C24918 = 1` (VAR_ADDON_INITIALIZED).
     FUN_ADDON_INIT = 0x005F9080,
+
+    // The login disk scan, `void __cdecl DiskScan(void)` — called once by
+    // FUN_ADDON_INIT after registry setup. Registers every on-disk addon (each
+    // appended at the list TAIL via the intrusive-list insert) and builds the
+    // reverse-LoadWith lists. Embedded.cpp PRE-hooks it to register
+    // `!!!WrathClassicAPI` BEFORE the scan runs, so the embedded addon lands at
+    // the HEAD of the load-order list and loads FIRST — the load pass
+    // (FUN_005F84A0) walks head->tail, so a post-scan registration would load
+    // LAST, after addons that consume the embedded globals.
+    FUN_ADDON_DISK_SCAN = 0x005F8F50,
+
+    // AddOnEntry security level (dword): 0 = SECURE, 1 = INSECURE, 2 = BANNED.
+    // LoadAddOn (FUN_005F80B0) derives the taint stamped on the addon's Lua
+    // chunks/closures from it: `taint = entry[0x24] != 0 ? addonName : 0` (the
+    // taint then rides the pushed name string via FUN_0084E300, so a nonzero
+    // level re-taints every file even if the global is cleared later). Tainted
+    // code is BLOCKED from protected actions (ADDON_ACTION_BLOCKED — e.g. the
+    // game menu on Escape). Forcing our entry to 0 loads it SECURE (untainted),
+    // the same path Blizzard's own secure addons take. The load gate treats 2
+    // as banned; 0 loads fine. WotLK-only (1.12 has no taint system).
+    OFF_ADDON_ENTRY_SECURITY = 0x24,
+
+    // LoadAddOn — `uint32 __cdecl(char *name, uint32 flags, int *ctx)`. Loads a
+    // registered addon (recursively resolving deps), stamps the load taint from
+    // the entry's security level, then runs its TOC. Pre-hooked to mark
+    // `!!!WrathClassicAPI` SECURE (OFF_ADDON_ENTRY_SECURITY = 0) right before
+    // each load (login and every /reload), so the write can't be raced.
+    FUN_ADDON_LOADADDON = 0x005F80B0,
+
+    // Fatal-error dispatcher: `void __cdecl FatalError(uint code)` — stores the
+    // code in DAT_00B2F9A4 and tail-jumps into process teardown; the exit path
+    // shows a localized popup keyed off it. Code 10 = "interface files are
+    // corrupt". LoadAddOn fires it for SECURE entries whose 16-byte file digest
+    // (accumulated over the TOC + every file as read) mismatches the expected
+    // digest at entry+0x1D2 — Blizzard's secure addons carry a signed digest;
+    // our parser-registered embedded entry has none, so the check can never
+    // pass. Embedded.cpp hooks this and swallows code 10 ONLY while the
+    // embedded addon is loading (flag-scoped, unlike ClassicAPI's global
+    // suppression) — genuine corruption elsewhere still terminates.
+    FUN_FATAL_ERROR = 0x004033C0,
 
     // Parse + register ONE addon by name. UNUSUAL ABI: the single
     // `const char *addonName` is passed in **EAX** (a register-call the
@@ -1010,7 +1048,92 @@ enum Offsets {
     // char-select list builder `FUN_005F79A0` copies an entry into the
     // display array ONLY when this byte is 0, so setting it to 1 hides the
     // addon from the list. Does NOT affect loading (the load pass walks the
-    // raw linked list and never reads it). NOTE: +0x28 is a different
-    // (present/loadable) byte — the filter byte is +0x29.
+    // raw linked list and never reads it). NOTE: +0x28 is `## Secure:` and
+    // +0x2c is `## LoadOnDemand:` — the filter byte is +0x29.
     OFF_ADDON_ENTRY_FILTER_OUT = 0x29,
+
+    // --- Retail-like `/reload` hot reload (src/addons/Rescan.cpp) ---
+    //
+    // Registry field map (verified from the TOC parser `FUN_005F86A0`):
+    //   name@+0x14, Secure@+0x28, filter-out@+0x29, DefaultState@+0x2b,
+    //   LoadOnDemand@+0x2c; growable descriptors {cap,count,data,quantum}
+    //   at LoadWith@+0x58 and reverse-LoadWith@+0x98.
+
+    // AddOnEntry name pointer (`char *`). The registry walk / display
+    // rebuild read it; `FUN_005F86A0` writes it (entry[5]).
+    OFF_ADDON_ENTRY_NAME_PTR = 0x14,
+
+    // `## Secure:` byte — SMSG-managed/packet-delivered entries. Excluded
+    // from the evict+re-register path (the parser can't restore that state).
+    OFF_ADDON_ENTRY_SECURE = 0x28,
+
+    // The addon registry's intrusive-list control + head. Walk (verified
+    // identical in the load pass FUN_005F84A0, the scan, and the display
+    // builder):  linkOffset = *(int*)VAR_ADDON_LIST_CTRL;
+    //            entry = *(uintptr_t*)VAR_ADDON_LIST_HEAD;
+    //            next  = *(uintptr_t*)(entry + linkOffset + 4);
+    //            stop when (entry & 1) || entry == 0.
+    VAR_ADDON_LIST_CTRL = 0x00C24920,
+    VAR_ADDON_LIST_HEAD = 0x00C24928,
+
+    // `u8` set to 1 by FUN_ADDON_INIT once the login disk scan completes.
+    // Gate: the rescan only runs once the registry is populated.
+    VAR_ADDON_INITIALIZED = 0x00C24918,
+
+    // Replay the login disk scan to register new folders. NOT __fastcall —
+    // `bool __cdecl ScanDiskDirs(char *basePath, void *pattern,
+    //                            void *perDirCB, void *userParam, int hidden)`.
+    // Call site (FUN_005F8F50):
+    //   ScanDiskDirs("Interface\\AddOns\\", "*", FUN_005F8F30, 0, 0)
+    // The per-directory callback feeds names to the dedup-safe TOC parser.
+    FUN_ADDON_SCAN_DISK_DIRS = 0x00462000,
+    VAR_ADDON_PATH_PREFIX = 0x00A1D74C,  // "Interface\AddOns\"
+    VAR_ADDON_SCAN_PATTERN = 0x009E3EC8, // "*"
+    FUN_ADDON_DISK_DIR_CB = 0x005F8F30,  // __cdecl(FindInfo*)
+
+    // Complete per-entry destructor: `void __stdcall EntryDestroy(void *entry)`
+    // (`RET 0x4`). Frees the name and every owned desc array, then self-
+    // unlinks from BOTH the registry list and the name hash (via FUN_007F4AC0)
+    // and Storm-frees the struct. Does NOT scrub this entry's pointer out of
+    // OTHER entries' reverse-LoadWith lists — the caller must do that first.
+    FUN_ADDON_ENTRY_DESTROY = 0x005F7240,
+
+    // Reverse-LoadWith descriptor {cap@+0x98, count@+0x9c, data@+0xa0,
+    // quantum@+0xa4}: the entries that name THIS one in `## LoadWith:`.
+    OFF_ADDON_REVLOADWITH_DESC = 0x98,
+    // The grow instantiation that reallocs the reverse-LoadWith `data`
+    // (`AddOnEntry*[]`): `__thiscall(desc /*ECX*/, uint newCap)`.
+    FUN_ADDON_REVLOADWITH_GROW = 0x005F4E30,
+
+    // Forward `## LoadWith:` descriptor count + data (header @+0x58).
+    OFF_ADDON_LOADWITH_COUNT = 0x5C,
+    OFF_ADDON_LOADWITH_ARRAY = 0x60,
+
+    // The flat `GetNumAddOns`/`GetAddOnInfo(i)` display-array descriptor
+    // {cap@0xC24944, count@0xC24948, data@0xC2494C, quantum@0xC24950} and its
+    // grow (`__thiscall(desc, newCap)`). Rebuilt from the linked list after a
+    // membership/identity change, then sorted with the engine's comparator.
+    VAR_ADDON_ARRAY_CAP = 0x00C24944,
+    FUN_ADDON_ARRAY_GROW = 0x004D85A0,
+    // Name comparator (`__cdecl(void **a, void **b)`; resolves each name and
+    // compares its Title case-insensitively) + the CRT qsort it feeds.
+    FUN_ADDON_NAME_COMPARE = 0x005F7910,
+    FUN_CRT_QSORT = 0x0040BE50,
+
+    // Descriptor quantum calculator `uint __thiscall(void *desc, uint needed)`
+    // — the engine's own grow-append uses it when a desc has no quantum yet.
+    FUN_DESC_QUANTUM_CALC = 0x005D0040,
+
+    // Loose-file index: every relative-path read resolves through a hash index
+    // built ONCE at boot, so files created after boot are invisible until
+    // restart. Re-run the boot root indexer per /reload to register new files
+    // (dedup-safe). `void __cdecl IndexRoot(const char *basePath)` walks
+    // basePath recursively, keys relative to basePath — the game-dir root
+    // covers both Interface\AddOns and WTF\Account.
+    FUN_VFS_INDEX_ROOT = 0x00424610,
+    // `bool __cdecl IsDir(const char *path)` — boot uses it to fall back to
+    // "." when the recorded base path isn't a directory.
+    FUN_VFS_IS_DIR = 0x004281D0,
+    VAR_VFS_BASE_PATH = 0x00B32360,   // recorded game dir (index keys are relative to it)
+    VAR_VFS_INDEX_READY = 0x00B324A4, // u8 latch: loose-file index built
 };

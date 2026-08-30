@@ -34,22 +34,24 @@
 //          non-devs always get the DLL's copy — even with a stale one on disk —
 //          while a locally-built DEV dll defers to a DEV disk copy.
 //
-//   3. We post-hook `FUN_ADDON_INIT`. After the engine's own
-//      `Interface\AddOns\` scan finishes, we call the TOC parser
-//      (`FUN_TOC_PARSER`) with `"!!!WrathClassicAPI"`. It reads the TOC via
-//      our hooked reader, registers the addon at the HEAD of the load list
-//      (so it loads before dependents), and honors `## DefaultState:
-//      enabled` so it loads without a UI toggle. The parser is dedup-safe:
-//      if the user already has the addon on disk, the engine's scan
-//      registered it and our call early-outs — so "only if not on disk" is
-//      free. We then hide the entry from the character-select AddOns list
-//      (it's an implementation-detail library, not a user-toggleable addon)
-//      by setting its filter byte via the engine's own name->entry lookup.
+//   3. We PRE-hook the login disk scan `FUN_ADDON_DISK_SCAN`: BEFORE the
+//      engine walks `Interface\AddOns\`, we call the TOC parser
+//      (`FUN_TOC_PARSER`) with `"!!!WrathClassicAPI"`. The scan then appends
+//      every disk addon AFTER ours, so the embedded entry sits at the HEAD of
+//      the load-order list and loads FIRST — before any addon that consumes
+//      its globals (the load pass walks head->tail; a post-scan registration
+//      would load LAST). It reads the TOC via our hooked reader and honors
+//      `## DefaultState: enabled` so it loads without a UI toggle. The parser
+//      is dedup-safe: a disk copy the scan also finds early-outs. We then hide
+//      the entry from the character-select AddOns list (an implementation-
+//      detail library, not a user-toggleable addon) via the engine's own
+//      name->entry lookup.
 
 #include "embedded_wrathclassicapi.h"
 
 #include "Game.h"
 #include "Offsets.h"
+#include "addons/EngineIO.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -110,14 +112,11 @@ const WrathClassicAPIFiles::File *LookupEmbedded(const char *suffix) {
     return nullptr;
 }
 
-// Engine file reader + Storm allocator/free — see the ABI notes on the offsets.
-using FileReadFn = int(__stdcall *)(int unused, const char *path, void **outBuf,
-                                    size_t *outSize, size_t extraBytes,
-                                    int flag1, int flag2);
-using SMemAllocFn = void *(__stdcall *)(size_t size, const char *file, int line,
-                                        int flags);
-using SMemFreeFn = int(__stdcall *)(void *ptr, const char *file, int line,
-                                    int flags);
+// Engine file reader + Storm allocator/free — shapes centralized in EngineIO.h
+// (ABI-critical: all __stdcall).
+using Addons::EngineIO::FileReadFn;
+using Addons::EngineIO::SMemAllocFn;
+using Addons::EngineIO::SMemFreeFn;
 
 FileReadFn FileRead_o = nullptr;
 
@@ -318,25 +317,88 @@ void HideEmbeddedEntry() {
         entry[Offsets::OFF_ADDON_ENTRY_FILTER_OUT] = 1;
 }
 
-// `FUN_ADDON_INIT` — `void __cdecl(char *basePath)`. Post-hooked: let the
-// engine's `Interface\AddOns\` disk scan run first, then register the
-// embedded addon and hide it from the list. Dedup-safe (see file header).
-using AddonInitFn = void(__cdecl *)(char *basePath);
-AddonInitFn AddonInit_o = nullptr;
+// `FUN_ADDON_DISK_SCAN` — `void __cdecl(void)`, the login disk scan called from
+// FUN_ADDON_INIT after registry setup. PRE-hooked: register the embedded addon
+// BEFORE the scan runs so it lands at the HEAD of the load-order list (the scan
+// appends disk addons after it) and therefore loads FIRST — before any addon
+// that consumes its globals (e.g. EventRegistry). A post-scan registration
+// would append at the tail and load last. Dedup-safe, so a disk copy the scan
+// also finds is a no-op. Registering here (not post-INIT) is the load-order fix.
+using DiskScanFn = void(__cdecl *)();
+DiskScanFn DiskScan_o = nullptr;
 
-void __cdecl AddonInit_h(char *basePath) {
-    AddonInit_o(basePath);
+void __cdecl DiskScan_h() {
     RegisterAddonToc(kAddonName);
     HideEmbeddedEntry();
+    DiskScan_o();
+}
+
+// `FUN_ADDON_LOADADDON` — `uint32 __cdecl(char *name, uint32 flags, int *ctx)`.
+// PRE-hooked to mark the embedded addon SECURE right before it loads. The
+// engine derives the taint stamped on an addon's Lua chunks/closures from the
+// entry's security level (entry+0x24) at the top of this call; a nonzero level
+// taints our library closures, and the engine then BLOCKS them from protected
+// actions (e.g. the game menu on Escape). Setting it to 0 loads our code
+// untainted — the same path Blizzard's own secure addons take. Applied here
+// (not once at registration) so it lands right before each load — login and
+// every /reload — and can't be raced by any security re-resolution.
+using LoadAddOnFn = uint32_t(__cdecl *)(char *name, uint32_t flags, int *ctx);
+LoadAddOnFn LoadAddOn_o = nullptr;
+
+// True while OUR addon's LoadAddOn call is on the stack — the window in which
+// the fatal-error hook below swallows the digest-mismatch error. Main-thread
+// only (all addon loading is), so a plain bool suffices; still marked volatile
+// against the detour boundary. No re-entrancy concern: the flag only guards
+// our own (dependency-free) load.
+volatile bool g_loadingEmbedded = false;
+
+uint32_t __cdecl LoadAddOn_h(char *name, uint32_t flags, int *ctx) {
+    const bool ours = name != nullptr && std::strcmp(name, kAddonName) == 0;
+    if (ours) {
+        auto Lookup = reinterpret_cast<AddonLookupFn>(Offsets::FUN_ADDON_HASH_LOOKUP);
+        uint8_t *entry =
+            Lookup(reinterpret_cast<void *>(Offsets::VAR_ADDON_NAME_HASH), name);
+        if (entry != nullptr)
+            *reinterpret_cast<uint32_t *>(
+                entry + Offsets::OFF_ADDON_ENTRY_SECURITY) = 0;
+        g_loadingEmbedded = true;
+    }
+    const uint32_t result = LoadAddOn_o(name, flags, ctx);
+    if (ours)
+        g_loadingEmbedded = false;
+    return result;
+}
+
+// Swallow the SECURE-addon digest-mismatch fatal (code 10, "interface files
+// are corrupt") while OUR addon loads: the engine digest-verifies secure
+// entries against a signed digest at entry+0x1D2, which a parser-registered
+// embedded addon can never carry. Scoped to the load window via the flag so
+// genuine corruption elsewhere still terminates. Every other code passes
+// through untouched.
+using FatalErrorFn = void(__cdecl *)(uint32_t code);
+FatalErrorFn FatalError_o = nullptr;
+
+void __cdecl FatalError_h(uint32_t code) {
+    if (code == 10 && g_loadingEmbedded)
+        return;
+    FatalError_o(code);
 }
 
 const Game::HookAutoRegister _hookFileRead{
     Offsets::FUN_FILE_READ, reinterpret_cast<void *>(&FileRead_h),
     reinterpret_cast<void **>(&FileRead_o)};
 
-const Game::HookAutoRegister _hookAddonInit{
-    Offsets::FUN_ADDON_INIT, reinterpret_cast<void *>(&AddonInit_h),
-    reinterpret_cast<void **>(&AddonInit_o)};
+const Game::HookAutoRegister _hookDiskScan{
+    Offsets::FUN_ADDON_DISK_SCAN, reinterpret_cast<void *>(&DiskScan_h),
+    reinterpret_cast<void **>(&DiskScan_o)};
+
+const Game::HookAutoRegister _hookLoadAddOn{
+    Offsets::FUN_ADDON_LOADADDON, reinterpret_cast<void *>(&LoadAddOn_h),
+    reinterpret_cast<void **>(&LoadAddOn_o)};
+
+const Game::HookAutoRegister _hookFatalError{
+    Offsets::FUN_FATAL_ERROR, reinterpret_cast<void *>(&FatalError_h),
+    reinterpret_cast<void **>(&FatalError_o)};
 
 } // namespace
 

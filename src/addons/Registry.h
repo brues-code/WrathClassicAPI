@@ -1,0 +1,49 @@
+// This file is part of WrathClassicAPI.
+//
+// WrathClassicAPI is free software: you can redistribute it and/or modify it under the terms
+// of the GNU Lesser General Public License as published by the Free Software Foundation, either
+// version 3 of the License, or (at your option) any later version.
+//
+// WrathClassicAPI is distributed in the hope that it will be useful, but WITHOUT ANY
+// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+// PURPOSE. See the GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License along with
+// WrathClassicAPI. If not, see <https://www.gnu.org/licenses/>.
+
+#pragma once
+
+#include "Offsets.h"
+
+#include <cstdint>
+#include <type_traits>
+
+namespace Addons {
+
+// Walk the engine's intrusive AddOn-registry linked list, calling `fn(entry)`
+// for each `AddOnEntry *`. Head at `[VAR_ADDON_LIST_HEAD]`; the next-pointer
+// field is at `entry + [VAR_ADDON_LIST_CTRL] + 4`; a low-bit-1 sentinel or
+// NULL terminates. Verified identical in the engine's own load pass
+// (`FUN_005F84A0`), disk scan, and display builder.
+//
+// `fn` may return `void` (always continue) or `bool` (return `false` to STOP
+// early). Early stop matters for a visitor that mutates the list — e.g. the
+// engine's entry destructor zeroes the entry's next-pointer, so the walk must
+// not follow it. Collect victims during the walk and mutate after.
+template <typename Fn> void ForEachEntry(Fn fn) {
+    const int linkOffset = *reinterpret_cast<const int *>(
+        static_cast<uintptr_t>(Offsets::VAR_ADDON_LIST_CTRL));
+    uintptr_t entry = *reinterpret_cast<const uintptr_t *>(
+        static_cast<uintptr_t>(Offsets::VAR_ADDON_LIST_HEAD));
+    while ((entry & 1) == 0 && entry != 0) {
+        if constexpr (std::is_void_v<decltype(fn(entry))>) {
+            fn(entry);
+        } else {
+            if (!fn(entry))
+                return;
+        }
+        entry = *reinterpret_cast<const uintptr_t *>(entry + linkOffset + 4);
+    }
+}
+
+} // namespace Addons
