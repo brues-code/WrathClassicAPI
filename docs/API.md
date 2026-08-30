@@ -21,6 +21,9 @@ Conventions:
 
 - [AddOns](#addons)
   - [`C_AddOns.GetAddOnLocalTable(addOnName)`](#c_addonsgetaddonlocaltableaddonname)
+- [Console](#console)
+  - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
+  - [`ExportDBCFiles`](#exportdbcfiles)
 - [Events](#events)
   - [`C_EventUtils.IsEventValid(eventName)`](#c_eventutilsiseventvalideventname)
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
@@ -154,6 +157,37 @@ addon's `.lua` files, and the engine passes it as the second
 registry-keyed lookup so it survives past the addon-load flow's
 terminal `lua_settop(L, -2)` that would otherwise drop it for GC.
 Same effective shape as modern WoW's `C_AddOns.GetAddOnLocalTable`.
+
+---
+
+## Console
+
+Developer-console commands (the `~` console, available when the client is
+launched with `-console`). Registered at the login screen, so they can be run
+before entering the world. Each dumps Blizzard data out of the mounted MPQ
+archives to disk, relative to the client's working directory, and prints a
+`wrote N file(s)` line to the console. The `.text`/archive scan briefly hitches
+the client — expected for a one-shot extraction.
+
+### `ExportInterfaceFiles art|code`
+
+Extracts Blizzard's stock UI files from the MPQs.
+
+- `code` — `.lua` / `.xml` / `.toc` / `.xsd` → `BlizzardInterfaceCode\`
+- `art` — `.blp` / `.tga` → `BlizzardInterfaceArt\`
+
+Enumerates the archives' `(listfile)` under `Interface\`, so it includes
+Blizzard's own bundled UI addons (`Blizzard_AuctionUI`, `Blizzard_TalentUI`,
+…) — those are part of the stock UI source. Your loose on-disk addons aren't
+in any archive's listfile, so they're never enumerated. A bare
+`ExportInterfaceFiles` (no argument) prints the usage line.
+
+### `ExportDBCFiles`
+
+Extracts every client DBC table to `DBFilesClient\`. Unions the archive
+`(listfile)` under `DBFilesClient\` with a scan of the client's DBC
+path-getters, deduped case-insensitively — so it captures the authoritative
+set of DBCs the build loads, including ones the listfile doesn't index.
 
 ---
 

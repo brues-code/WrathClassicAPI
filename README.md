@@ -76,6 +76,23 @@ on what initiated the request. Same split as modern WoW.
 | Embedded `!!!WrathClassicAPI` addon | The DLL contains a Lua utility addon (`Mixin`, `EventRegistry` + `CallbackRegistryMixin`, `ColorMixin`/`ColorUtil`, `ItemUtil`/`ItemLocation`, `EnumUtil`, `TableUtil`, `MathUtil`, `Pools`, `EventUtil`, `FunctionUtil`, `LinkUtil`, `PlayerUtil`, `EquipmentManager`, timed callbacks, frame watching) and registers it at login. You do not install it on disk. It loads before all other addons. It does not show in the AddOns list. You cannot disable it. It loads as Blizzard-secure code, so its closures do not taint protected paths. If the disk copy at `Interface\AddOns\!!!WrathClassicAPI` is newer, the DLL uses the disk copy. Release DLLs write the git tag into the embedded `## Version:`. When a disk copy exists, a local `DEV` build always uses it. A `.wrathclassicapi-dev` marker file in the folder also forces the disk copy. |
 | Retail-like `/reload` (hot reload) | On `/reload`, a new addon folder loads as a normal addon. New files in an existing addon load. A first-time SavedVariables file survives. Edits to `##` lines apply (for example `## SavedVariables:` and `## Dependencies:`). The DLL removes a deleted addon folder from the addon list. |
 
+### Console commands
+
+Developer-console commands (the `~` console, launch with `-console`),
+registered at the login screen so you can run them before entering the world.
+Each extracts Blizzard data from the mounted MPQs to disk, under the client's
+working directory, and prints a `wrote N file(s)` line.
+
+| Command | Extracts |
+|---------|----------|
+| `ExportInterfaceFiles code` | Blizzard UI source (`.lua`/`.xml`/`.toc`/`.xsd`) → `BlizzardInterfaceCode\` |
+| `ExportInterfaceFiles art` | Blizzard UI textures (`.blp`/`.tga`) → `BlizzardInterfaceArt\` |
+| `ExportDBCFiles` | Every client DBC table (`.dbc`) → `DBFilesClient\` |
+
+`ExportInterfaceFiles` includes Blizzard's own bundled UI addons (they live in
+the archives); your loose on-disk addons aren't in any listfile, so they're
+never touched. `ExportDBCFiles` also captures DBCs the listfile doesn't index.
+
 ## Building
 
 ```powershell
