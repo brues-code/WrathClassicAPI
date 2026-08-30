@@ -43,7 +43,6 @@
 //   * Spell / item / unit content offsets all live on the tooltip
 //     frame itself — see comments on `OFF_TOOLTIP_*` in `Offsets.h`.
 
-#include "Common.h"
 #include "Game.h"
 #include "MinHook.h"
 #include "Offsets.h"

@@ -1,0 +1,10 @@
+; Exports for WrathClassicAPI.dll.
+;
+; `Load` is LichCore's post-injection entry point: after LichLoader injects
+; each lichloader.txt DLL and the game resumes, LichCore calls the DLL's
+; `Load` export on the game's MAIN thread (GetProcAddress(module, "Load")),
+; outside the loader lock and with no timeout. Listing it here exports it
+; undecorated as "Load" so GetProcAddress finds it regardless of calling
+; convention. See the loader-lock rationale in src/DllMain.cpp.
+EXPORTS
+    Load

@@ -189,9 +189,11 @@ void RunModuleRegistrations();
 // Declarative MinHook registration. Each feature module declares a
 // file-scope `static const Game::HookAutoRegister _hookreg{target,
 // &hook_fn, reinterpret_cast<void**>(&original_fn)};` and
-// `RunHookRegistrations` (called from DllMain after `MH_Initialize`)
-// walks the list installing each one. Returns false on the first
-// `MH_CreateHook` or `MH_EnableHook` failure so DllMain can fail-fast.
+// `RunHookRegistrations` (called from `InstallHooks` after `MH_Initialize`)
+// walks the list, `MH_CreateHook`-ing each and QUEUEING its enable. The
+// caller applies the whole batch with one `MH_ApplyQueued`. Returns false
+// on the first `MH_CreateHook` or `MH_QueueEnableHook` failure so the
+// installer can fail-fast.
 //
 // Use only for feature hooks; the core GameUI hook in DllMain itself
 // is interleaved with module-registration logic and stays there.

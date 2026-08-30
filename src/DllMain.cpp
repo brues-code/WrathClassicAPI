@@ -11,7 +11,6 @@
 // You should have received a copy of the GNU Lesser General Public License along with
 // WrathClassicAPI. If not, see <https://www.gnu.org/licenses/>.
 
-#include "Common.h"
 #include "Game.h"
 #include "MinHook.h"
 #include "Offsets.h"
@@ -52,28 +51,120 @@ static void __cdecl UIBindingsInit_h() {
     Game::RunModuleRegistrations();
 }
 
+// ---------------------------------------------------------------------------
+// Hook install — kept OFF the Windows loader lock.
+//
+// Every MH_ApplyQueued freezes all process threads (CreateToolhelp32Snapshot +
+// SuspendThread/GetThreadContext each). Doing that from DllMain, under the
+// loader lock, is the pattern MinHook documents as unsafe: it can stall the
+// remote LoadLibrary thread and it races the DllMains of the OTHER DLLs the
+// loader injects after us (each injection is serialized, so a worker spawned
+// from our DllMain starts while LichLoader is still injecting the next
+// lichloader.txt entry, and our prologue patching then fights that DLL's
+// DllMain over the same engine functions).
+//
+// So DllMain installs nothing. The install runs later, off the loader lock,
+// via one of two triggers that both funnel through the latched
+// EnsureInitialized():
+//   * LichCore's `Load` export, called on the game's main thread after the
+//     process resumes, when every DllMain in the injection chain has already
+//     completed, serialized in lichloader.txt order — no race, and
+//   * a fallback worker thread we spawn from DllMain, ONLY when LichCore is
+//     not present (LichLoader runs without it, just warns), so a plain
+//     injection still initializes.
+// This mirrors ClassicAPI's DllMain exactly (VanillaFixes `Load` there;
+// LichCore `Load` here).
+// ---------------------------------------------------------------------------
+
+static volatile LONG g_initClaimed = 0;    // 0 until a thread takes the installer role
+static volatile LONG g_initDone = 0;       // 0 until the install has finished
+static volatile LONG g_initResult = 1;     // 0 = success, 1 = failure (until proven)
+static volatile LONG g_mhInitialized = 0;  // MH_Initialize succeeded (gates detach teardown)
+
+static bool CreateAndQueue(uintptr_t offset, void *hook, void **original) {
+    auto *target = reinterpret_cast<LPVOID>(offset);
+    if (MH_CreateHook(target, hook, original) != MH_OK)
+        return false;
+    // Queue only — a single MH_ApplyQueued below applies the whole batch in
+    // one thread-freeze.
+    if (MH_QueueEnableHook(target) != MH_OK)
+        return false;
+    return true;
+}
+
+static bool InstallHooks() {
+    if (MH_Initialize() != MH_OK)
+        return false;
+    InterlockedExchange(&g_mhInitialized, 1);
+
+    // Disable the engine's "function pointer must live in Wow.exe's .text"
+    // gate before any of our Script_* closures are invoked. A plain data
+    // write (no thread-freeze); safe here, well before our closures are
+    // registered by the UIBindings hook.
+    DisableInvalidFunctionPtrCheck();
+
+    // Core bootstrap hook: fires the module chain once the in-game Lua
+    // state is ready (see UIBindingsInit_h). Create + queue only.
+    if (!CreateAndQueue(Offsets::FUN_UIBINDINGS_INIT,
+                        reinterpret_cast<void *>(UIBindingsInit_h),
+                        reinterpret_cast<void **>(&UIBindingsInit_o)))
+        return false;
+
+    // Feature hooks declared via `Game::HookAutoRegister` at file scope in
+    // their respective modules (create + queue-enable, no apply yet).
+    if (!Game::RunHookRegistrations())
+        return false;
+
+    // One thread-freeze that activates every queued hook at once.
+    return MH_ApplyQueued() == MH_OK;
+}
+
+// Runs InstallHooks exactly once. Returns 0 on success, 1 on failure. If a
+// second caller arrives while the install is in flight, it blocks briefly so
+// both callers observe the real result.
+static DWORD EnsureInitialized() {
+    if (InterlockedCompareExchange(&g_initClaimed, 1, 0) == 0) {
+        g_initResult = InstallHooks() ? 0 : 1;
+        InterlockedExchange(&g_initDone, 1);
+    } else {
+        while (InterlockedCompareExchange(&g_initDone, 0, 0) == 0)
+            Sleep(1);
+    }
+    return static_cast<DWORD>(g_initResult);
+}
+
+static DWORD WINAPI InitWorker(LPVOID) {
+    EnsureInitialized();
+    return 0;
+}
+
+// LichCore calls this on the game's MAIN thread after injection
+// (GetProcAddress(module, "Load")), outside the loader lock and with no
+// timeout. Returns 0 on success; LichCore reports any non-zero result to the
+// user. Exported undecorated as "Load" via src/WrathClassicAPI.def.
+extern "C" DWORD __cdecl Load() { return EnsureInitialized(); }
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
 
-        if (MH_Initialize() != MH_OK)
-            return FALSE;
-
-        // Disable the engine's "function pointer must live in Wow.exe's
-        // .text" gate before any of our Script_* closures are invoked.
-        DisableInvalidFunctionPtrCheck();
-
-        HOOK_FUNCTION(Offsets::FUN_UIBINDINGS_INIT, UIBindingsInit_h, UIBindingsInit_o);
-
-        // Feature hooks declared via `Game::HookAutoRegister` at file
-        // scope in their respective modules. Installed AFTER the core
-        // bootstrap hook so feature hooks can rely on MinHook being
-        // live but the install order between features themselves is
-        // unspecified (static-init order across TUs).
-        if (!Game::RunHookRegistrations())
-            return FALSE;
+        // Install nothing here (loader lock — see the block comment above).
+        // Under LichCore, `Load` is the ONLY install trigger; spawning the
+        // worker would race the DllMains of the DLLs LichLoader injects after
+        // us. Only when LichCore is absent (LichLoader ran without it) do we
+        // self-init from a worker off the lock.
+        if (GetModuleHandleW(L"LichCore.dll") == nullptr) {
+            // The new thread cannot run its body until DllMain returns and the
+            // loader lock releases, and we never wait on it.
+            // DisableThreadLibraryCalls suppressed its THREAD_ATTACH.
+            HANDLE worker = CreateThread(nullptr, 0, InitWorker, nullptr, 0, nullptr);
+            if (worker != nullptr)
+                CloseHandle(worker);
+        }
     } else if (reason == DLL_PROCESS_DETACH) {
-        MH_Uninitialize();
+        // Only tear down if we actually initialized.
+        if (g_mhInitialized)
+            MH_Uninitialize();
     }
     return TRUE;
 }

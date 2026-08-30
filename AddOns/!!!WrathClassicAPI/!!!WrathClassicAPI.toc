@@ -3,6 +3,7 @@
 ## Notes: Library to emulate aspects of the modern WoW API on 3.3.5a / Lua 5.1.
 ## Version: 1.0
 ## Author: Brues
+## DefaultState: enabled
 
 Util\Constants.lua
 Util\Mixin.lua

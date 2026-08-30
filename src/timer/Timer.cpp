@@ -37,7 +37,6 @@
 // User-visible `GetTime()` advances at the same rate, so a 1.0s
 // timer fires ~1.0s after the call in either clock.
 
-#include "Common.h"
 #include "Game.h"
 #include "Offsets.h"
 

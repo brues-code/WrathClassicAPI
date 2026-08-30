@@ -136,7 +136,12 @@ bool RunHookRegistrations() {
         if (MH_CreateHook(targetPtr, node->hook,
                           reinterpret_cast<LPVOID *>(node->original)) != MH_OK)
             return false;
-        if (MH_EnableHook(targetPtr) != MH_OK)
+        // Queue, don't enable. The caller (InstallHooks) applies every
+        // queued hook with a single MH_ApplyQueued, so all hooks share ONE
+        // thread-freeze instead of one freeze per hook. Since the install
+        // runs from Load() (off the loader lock), this keeps it cheap on
+        // machines whose security stack intercepts SuspendThread per call.
+        if (MH_QueueEnableHook(targetPtr) != MH_OK)
             return false;
     }
     return true;

@@ -953,4 +953,64 @@ enum Offsets {
     // our hook gates on (a) path prefix "Interface\\AddOns\\" and
     // (b) `lua_type(L, -1) == LUA_TTABLE` to ignore the others.
     FUN_TOC_EXECUTOR = 0x00814340,
+
+    // --- Embedded `!!!WrathClassicAPI` addon (src/addons/Embedded.cpp) ---
+
+    // Engine's main file-content reader (MPQ or loose disk file).
+    // `__stdcall`, `RET 0x1C` (7 stack args, callee-cleaned):
+    //   int FileRead(int unused, const char *path, void **outBuf,
+    //                size_t *outSize, size_t extraBytes,
+    //                int flag1, int flag2)
+    // Opens `path`, SMemAllocs a buffer of `content + extraBytes`,
+    // copies the file and zero-fills the trailing `extraBytes`, stores
+    // buffer/size through outBuf/outSize (outSize MAY be NULL — the TOC
+    // parser calls it that way), returns 1 on success / 0 on miss. We
+    // hook it to serve embedded addon files on a disk miss.
+    FUN_FILE_READ = 0x00424E80,
+
+    // Storm allocator pair. Both `__stdcall`, `RET 0x10`:
+    //   void *SMemAlloc(uint size, const char *file, int line, int flags)
+    //   int   SMemFree (void *ptr,  const char *file, int line, int flags)
+    // A buffer we SMemAlloc in the file-read hook is freed cleanly by the
+    // engine's own SMemFree when it finishes with the file.
+    FUN_STORM_SMEM_ALLOC = 0x0076E540,
+    FUN_STORM_SMEM_FREE = 0x0076E5A0,
+
+    // Addon-subsystem init: `void __cdecl AddonInit(char *basePath)`.
+    // Runs the `Interface\AddOns\` disk scan (registering every on-disk
+    // addon) then sets the "addons initialized" flag `DAT_00C24918 = 1`.
+    // Post-hooked: after it returns, every disk addon is registered, so
+    // we register the embedded one via FUN_TOC_PARSER.
+    FUN_ADDON_INIT = 0x005F9080,
+
+    // Parse + register ONE addon by name. UNUSUAL ABI: the single
+    // `const char *addonName` is passed in **EAX** (a register-call the
+    // compiler emitted — both call sites load EAX and `CALL` with no
+    // push), plain `RET`. Call it via the inline-asm thunk in
+    // Embedded.cpp. Reads `Interface\AddOns\<name>\<name>.toc` via
+    // FUN_FILE_READ, builds a registry entry, appends it at the list
+    // HEAD (so a post-scan registration loads FIRST), and parses
+    // `## DefaultState: enabled` into entry+0x2b. Dedup-safe: early-out
+    // via a name hash lookup, so this is a no-op when the user already
+    // has the addon on disk (the scan registered it first).
+    FUN_TOC_PARSER = 0x005F86A0,
+
+    // Addon name -> entry lookup (the same hash `FUN_TOC_PARSER` uses for
+    // its dedup check). `__thiscall`, `RET 0x4`:
+    //   AddOnEntry *Lookup(void *nameHash /*ECX*/, const char *name)
+    // Returns the entry base (entry+0x14 is its name pointer) or NULL. We
+    // call it after registering to fetch our own entry and hide it.
+    FUN_ADDON_HASH_LOOKUP = 0x0055F4D0,
+
+    // The addon-registry name hash table (the `this` for the lookup above;
+    // `&DAT_00C2491C` at the TOC parser's call site).
+    VAR_ADDON_NAME_HASH = 0x00C2491C,
+
+    // AddOnEntry field: "filter out of the AddOns list" byte. The
+    // char-select list builder `FUN_005F79A0` copies an entry into the
+    // display array ONLY when this byte is 0, so setting it to 1 hides the
+    // addon from the list. Does NOT affect loading (the load pass walks the
+    // raw linked list and never reads it). NOTE: +0x28 is a different
+    // (present/loadable) byte — the filter byte is +0x29.
+    OFF_ADDON_ENTRY_FILTER_OUT = 0x29,
 };

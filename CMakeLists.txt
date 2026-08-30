@@ -16,7 +16,28 @@ add_subdirectory(external/minhook)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h")
 
-add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
+# Bundle `AddOns/!!!WrathClassicAPI/` into a generated header so the DLL can
+# surface the addon to the engine even when the user doesn't have it installed
+# on disk. The file-read hook in `src/addons/Embedded.cpp` returns these
+# buffers when the engine asks for paths under
+# `Interface\AddOns\!!!WrathClassicAPI\` (disk copy wins when present).
+set(EMBEDDED_ADDON_SRC "${CMAKE_CURRENT_SOURCE_DIR}/AddOns/!!!WrathClassicAPI")
+set(EMBEDDED_ADDON_HEADER "${CMAKE_BINARY_DIR}/generated/embedded_wrathclassicapi.h")
+file(GLOB_RECURSE EMBEDDED_ADDON_FILES CONFIGURE_DEPENDS "${EMBEDDED_ADDON_SRC}/*")
+add_custom_command(
+    OUTPUT "${EMBEDDED_ADDON_HEADER}"
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC_DIR=${EMBEDDED_ADDON_SRC}
+        -DOUT_HEADER=${EMBEDDED_ADDON_HEADER}
+        -DADDON_NAME=WrathClassicAPI
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_addon.cmake"
+    DEPENDS
+        ${EMBEDDED_ADDON_FILES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_addon.cmake"
+    COMMENT "Embedding !!!WrathClassicAPI addon into ${EMBEDDED_ADDON_HEADER}"
+    VERBATIM)
+
+add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS} ${EMBEDDED_ADDON_HEADER})
 
 set(WRATHCLASSICAPI_VERSION_VALUE 1)
 
@@ -45,6 +66,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE minhook)
 
 target_include_directories(
   ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+                          ${CMAKE_BINARY_DIR}/generated
                           external/minhook/include
                           external)
 
@@ -52,6 +74,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "WrathClassicAPI")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MT")
 set(CMAKE_CXX_FLAGS_RELEASE "/MT /O2 /Ob2 /DNDEBUG")
+# /DEF exports `Load` (LichCore's post-injection entry point) undecorated so
+# its GetProcAddress(module, "Load") resolves. See src/WrathClassicAPI.def and
+# the loader-lock rationale in src/DllMain.cpp.
 set(CMAKE_SHARED_LINKER_FLAGS
-    "/OPT:REF /OPT:ICF /MERGE:.rdata=.text /MERGE:.pdata=.text /SECTION:.text,EWR /NODEFAULTLIB:MSVCRT"
+    "/OPT:REF /OPT:ICF /MERGE:.rdata=.text /MERGE:.pdata=.text /SECTION:.text,EWR /NODEFAULTLIB:MSVCRT /DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/WrathClassicAPI.def"
 )
