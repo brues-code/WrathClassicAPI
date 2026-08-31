@@ -16,6 +16,18 @@ add_subdirectory(external/minhook)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h")
 
+# tinycbor (vendored, external/tinycbor) — the C sources for C_EncodingUtil's
+# CBOR serializer. Compiled straight into the DLL. picojson (external/picojson)
+# is header-only, so C_EncodingUtil's JSON serializer needs no sources here.
+set(TINYCBOR_SOURCES
+    external/tinycbor/src/cborencoder.c
+    external/tinycbor/src/cborencoder_close_container_checked.c
+    external/tinycbor/src/cborencoder_float.c
+    external/tinycbor/src/cborparser.c
+    external/tinycbor/src/cborparser_dup_string.c
+    external/tinycbor/src/cborparser_float.c
+    external/tinycbor/src/cborerrorstrings.c)
+
 # Version derivation. Dev builds use the "DEV" sentinel, which the embedded
 # addon's version-precedence check treats as OLDER than every real release —
 # so a locally-built DLL never shadows an on-disk working copy. CI release
@@ -68,7 +80,7 @@ add_custom_command(
     COMMENT "Embedding !!!WrathClassicAPI addon into ${EMBEDDED_ADDON_HEADER}"
     VERBATIM)
 
-add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS} ${EMBEDDED_ADDON_HEADER})
+add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS} ${TINYCBOR_SOURCES} ${EMBEDDED_ADDON_HEADER})
 
 target_compile_definitions(
   ${PROJECT_NAME}
@@ -80,7 +92,8 @@ target_include_directories(
   ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
                           ${CMAKE_BINARY_DIR}/generated
                           external/minhook/include
-                          external)
+                          external
+                          external/tinycbor/src)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "WrathClassicAPI")
 
