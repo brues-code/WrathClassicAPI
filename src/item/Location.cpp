@@ -147,6 +147,8 @@ int GetBagNumSlots(int bagID) {
         Offsets::OFF_CONTAINER_NUM_SLOTS);
 }
 
+void *PlayerInventoryManager() { return ResolvePlayerInvMgr(); }
+
 bool IsLocationArg(void *L, int idx) {
     const int t = Game::Lua::Type(L, idx);
     return t == Game::Lua::TYPE_TABLE || t == Game::Lua::TYPE_STRING;

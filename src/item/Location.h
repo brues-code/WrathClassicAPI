@@ -68,4 +68,11 @@ const uint8_t *ResolveBagSlot(int bagID, int slotIndex);
 // function returns, exposed here for inventory walks.
 int GetBagNumSlots(int bagID);
 
+// Returns the local player's `CInventoryMgr *` (the player CGUnit +
+// `OFF_PLAYER_INVENTORY_MANAGER`), or nullptr if the player object
+// isn't resolvable yet (pre-login / loading screen). Pure engine call
+// — no Lua stack. Used as an inventory-readiness gate for tick-time
+// inventory walks (see `Item::Data`'s owned-item prefetch).
+void *PlayerInventoryManager();
+
 } // namespace Item::Location
