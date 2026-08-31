@@ -21,6 +21,8 @@ Conventions:
 
 - [AddOns](#addons)
   - [`C_AddOns.GetAddOnLocalTable(addOnName)`](#c_addonsgetaddonlocaltableaddonname)
+- [Chat Bubbles](#chat-bubbles)
+  - [`C_ChatBubbles.GetAllChatBubbles([includeForbidden])`](#c_chatbubblesgetallchatbubblesincludeforbidden)
 - [Console](#console)
   - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
   - [`ExportDBCFiles`](#exportdbcfiles)
@@ -157,6 +159,42 @@ addon's `.lua` files, and the engine passes it as the second
 registry-keyed lookup so it survives past the addon-load flow's
 terminal `lua_settop(L, -2)` that would otherwise drop it for GC.
 Same effective shape as modern WoW's `C_AddOns.GetAddOnLocalTable`.
+
+---
+
+## Chat Bubbles
+
+### `C_ChatBubbles.GetAllChatBubbles([includeForbidden])`
+
+Returns an array of the chat-bubble frames currently shown in the world —
+the speech balloons drawn over a unit's head when it speaks (`/say`,
+`/yell`, monster text). Each entry is a real `Frame`, so frame methods
+work on it directly. The spoken text lives in a `FontString` region
+parented to the bubble, so the usual idiom is to walk `GetRegions()` and
+read the first `FontString`:
+
+```lua
+for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles()) do
+    for _, region in ipairs({ bubble:GetRegions() }) do
+        if region:GetObjectType() == "FontString" then
+            print(region:GetText())
+        end
+    end
+end
+```
+
+The result is empty when no bubble is active. A bubble whose owner has
+despawned is removed on the engine's next update, so a just-orphaned
+bubble can appear for one frame; filter on `bubble:IsShown()` if that
+matters.
+
+The bubbles are created by the engine in C++, not through `CreateFrame`,
+so they have no name. The first time a bubble is returned it is given its
+Lua wrapper on demand; every later call returns the same wrapper object,
+so fields you set on a bubble persist across calls.
+
+`includeForbidden` is accepted for signature compatibility and ignored —
+every active bubble is returned.
 
 ---
 

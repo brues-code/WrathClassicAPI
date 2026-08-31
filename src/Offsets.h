@@ -1249,4 +1249,51 @@ enum Offsets {
     // one line to the console buffer; no-ops safely when the console isn't
     // active. Pass 0 for the default category.
     FUN_CONSOLE_WRITE = 0x00765270,
+
+    // --- Frame-object Lua wrapper (src/ui/FrameObject.cpp) ---
+    //
+    // `FrameScript_Object::ScriptRegister(this, name)` — `__thiscall`,
+    // `this` = a `CFrameScriptObject *` (any scriptable engine object:
+    // frame, region, chat bubble, ...). On the FIRST call for an object
+    // (refcount at this+0x04 == 0) it builds the Lua wrapper table
+    // `{ [0] = lightuserdata(this) }`, gives it the FrameScript metatable,
+    // `luaL_ref`s it into the registry (LUA_REGISTRYINDEX = -10000),
+    // writes the refkey to this+0x08, and increments the refcount. Used to
+    // hand a Lua wrapper to C++-created frames that never went through Lua
+    // `CreateFrame` (default nameplates, chat bubbles). Verified at
+    // FUN_00819880: reads the global lua_State (VAR_LUA_STATE), calls
+    // lua_createtable (0x0084E6E0), lua_pushlightuserdata (0x0084E500),
+    // luaL_ref (0x0084F6C0); 50+ xrefs incl. Script_CreateFrame
+    // (FUN_0081BB20), Script_CreateFont, Script_GetClickFrame — the shared
+    // base-class builder, not a per-frame-type function.
+    FUN_FRAMESCRIPT_OBJECT_SCRIPT_REGISTER = 0x00819880,
+
+    // CFrameScriptObject base layout (verified in the base ctor
+    // FUN_00819830 and every push site):
+    //   +0x04  Lua refcount (init 0; ScriptRegister increments). Reading
+    //          `== 0` is the "engine has never exposed this to Lua" probe.
+    //   +0x08  Lua registry refkey (init 0xFFFFFFFE = -2 "unregistered"
+    //          sentinel; ScriptRegister overwrites with a positive ref).
+    //          Pushing the frame to Lua is
+    //          `lua_rawgeti(L, LUA_REGISTRYINDEX, *(int*)(frame+0x08))`.
+    OFF_COBJECT_LUA_REFCOUNT = 0x04,
+    OFF_COBJECT_LUA_REGISTRY_REF = 0x08,
+
+    // --- Chat bubbles (src/chatbubble/Info.cpp) ---
+    //
+    // Active in-world chat bubbles (`CGChatBubbleFrame`) live on an
+    // intrusive Storm TSList. Head is the global pointer below; each
+    // node's forward link is at node+0x2A0 (paired back-link at +0x29C).
+    // End of list is the low-bit sentinel: stop when `(node & 1) != 0`
+    // or node == 0. Verified across three walk functions (FUN_0056D050
+    // per-frame update, FUN_0056CF80 teardown, FUN_0056C7A0) and the ctor
+    // FUN_0056CAD0 (RTTI ".?AVCGChatBubbleFrame@@", textures
+    // "Interface\\Tooltips\\ChatBubble-*"). `CGChatBubbleFrame` derives
+    // from CFrameScriptObject (refcount/refkey at +0x04/+0x08), so each
+    // node is pushed to Lua via `UI::FrameObject::Push`. The spoken-text
+    // FontString child sits at node+0x2A4 (created with the bubble as its
+    // parent, so it shows up in `bubble:GetRegions()`). 1.12's list used a
+    // +0x318 link; 3.3.5 differs.
+    VAR_CHAT_BUBBLE_LIST_HEAD = 0x00ACE600,
+    OFF_CHAT_BUBBLE_NEXT_LINK = 0x2A0,
 };
