@@ -431,6 +431,13 @@ enum Offsets {
     LUA_TO_BOOLEAN    = 0x0084E0B0, // int   lua_toboolean(L, idx) — returns 0 for nil/false/missing, 1 otherwise
     LUA_PCALL         = 0x0084EC50, // int   lua_pcall(L, nargs, nresults, errfunc) — protected call
     LUA_RAW_SETI      = 0x0084EA00, // void  lua_rawseti(L, idx, n) — t[n] = top, pops top
+    // lua_pushlstring — binary-safe string push (keeps embedded NULs,
+    // counts `len` explicitly). Derived from lua_pushstring (0x0084E350),
+    // which computes strlen then tail-calls this with (L, s, len).
+    LUA_PUSH_LSTRING  = 0x0084E300, // void lua_pushlstring(L, const char *s, size_t len)
+    // lua_next — pops a key, pushes the next key+value pair (or nothing
+    // and returns 0 at end of table). Cross-checked against awesome_wotlk.
+    LUA_NEXT          = 0x0084EF50, // int  lua_next(L, idx)
 
     // `FrameScript_FireOnUpdate` — engine's per-frame dispatcher that
     // fires every Lua-bound `OnUpdate` handler. Cross-checked against

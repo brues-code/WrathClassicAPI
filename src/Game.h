@@ -64,6 +64,7 @@ using lua_pushnumber_t = void(__cdecl *)(void *L, double n);
 using lua_pushnil_t = void(__cdecl *)(void *L);
 using lua_pushboolean_t = void(__cdecl *)(void *L, int b);
 using lua_pushstring_t = void(__cdecl *)(void *L, const char *s);
+using lua_pushlstring_t = void(__cdecl *)(void *L, const char *s, unsigned int len);
 using lua_pushvalue_t = void(__cdecl *)(void *L, int idx);
 using lua_pushcclosure_t = void(__cdecl *)(void *L, CFunction fn, int n);
 using lua_createtable_t = void(__cdecl *)(void *L, int narr, int nrec);
@@ -83,6 +84,7 @@ using lua_toboolean_t = int(__cdecl *)(void *L, int idx);
 using luaL_error_t = int(__cdecl *)(void *L, const char *fmt, ...);
 using lua_pcall_t = int(__cdecl *)(void *L, int nargs, int nresults, int errfunc);
 using lua_rawseti_t = void(__cdecl *)(void *L, int idx, int n);
+using lua_next_t = int(__cdecl *)(void *L, int idx);
 
 extern const lua_isnumber_t IsNumber;
 extern const lua_isstring_t IsString;
@@ -96,6 +98,10 @@ extern const lua_pushboolean_t PushBoolean;
 // takes int (any non-zero = true), so this just funnels through.
 inline void PushBool(void *L, bool b) { PushBoolean(L, b ? 1 : 0); }
 extern const lua_pushstring_t PushString;
+// Binary-safe string push — keeps embedded NULs, does not stop at the
+// first one like PushString. Use for any output that can contain raw
+// bytes (hex/base64/compressed/serialized blobs).
+extern const lua_pushlstring_t PushLString;
 extern const lua_pushvalue_t PushValue;
 extern const lua_pushcclosure_t PushCClosure;
 extern const lua_createtable_t CreateTable;
@@ -139,10 +145,26 @@ extern const lua_toboolean_t ToBoolean;
 extern const luaL_error_t Error;
 extern const lua_pcall_t PCall;
 extern const lua_rawseti_t RawSetI;
+// lua_next(L, idx): pops a key from the stack, pushes the next key+value
+// pair from the table at `idx`, and returns non-zero — or pushes nothing
+// and returns 0 at the end of the table. The standard table-iteration
+// primitive (JSON/CBOR serialization walk arbitrary Lua tables with it).
+extern const lua_next_t Next;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
 // Wrap it so callers can write `Game::Lua::ToString(L, n)`.
 inline const char *ToString(void *L, int idx) { return ToLString(L, idx, nullptr); }
+
+// Byte length of the string at `idx` (binary-safe — the string's stored
+// length, not a strlen to the first NUL). Implemented via lua_tolstring's
+// out-length. Callers should already have validated the value is a string
+// (lua_tolstring converts a number in place, which is a benign no-op here
+// but not intended for other types).
+inline unsigned int StrLen(void *L, int idx) {
+    unsigned int len = 0;
+    ToLString(L, idx, &len);
+    return len;
+}
 
 // Convenience: lua_rawgeti emulation via PushNumber + RawGet. Pushes
 // `T[i]` where T is at absolute stack index `idx`. Caller is
@@ -166,6 +188,20 @@ void RegisterGlobalFunction(const char *name, CFunction func);
 // functions, so we manipulate the globals table directly via the Lua C API.
 void RegisterTableFunction(const char *tableName, const char *methodName,
                            CFunction func);
+
+// Key/value pair for `RegisterIntegerEnum`. `key` becomes a field name
+// (PascalCase, matching Blizzard's `Enum.*` naming) and `value` is the
+// integer the enum field maps to.
+struct EnumIntegerEntry {
+    const char *key;
+    int value;
+};
+
+// Registers `_G[parent][sub] = { key = value, ... }`, creating the
+// `_G[parent]` table if it doesn't already exist. Used for Blizzard-style
+// `Enum.Base64Variant = { Standard = 0, UrlSafe = 1 }` shapes.
+void RegisterIntegerEnum(const char *parent, const char *sub,
+                         const EnumIntegerEntry *entries, int count);
 
 } // namespace Lua
 

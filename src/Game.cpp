@@ -30,6 +30,7 @@ namespace Lua {
     F(PushNil,     lua_pushnil,     LUA_PUSH_NIL)     \
     F(PushBoolean, lua_pushboolean, LUA_PUSH_BOOLEAN) \
     F(PushString,  lua_pushstring,  LUA_PUSH_STRING)  \
+    F(PushLString, lua_pushlstring, LUA_PUSH_LSTRING) \
     F(PushValue,   lua_pushvalue,   LUA_PUSH_VALUE)   \
     F(PushCClosure,lua_pushcclosure,LUA_PUSH_CCLOSURE)\
     F(CreateTable, lua_createtable, LUA_CREATE_TABLE) \
@@ -46,7 +47,8 @@ namespace Lua {
     F(ToBoolean,   lua_toboolean,   LUA_TO_BOOLEAN)   \
     F(Error,       luaL_error,      LUAL_ERROR)       \
     F(PCall,       lua_pcall,       LUA_PCALL)        \
-    F(RawSetI,     lua_rawseti,     LUA_RAW_SETI)
+    F(RawSetI,     lua_rawseti,     LUA_RAW_SETI)     \
+    F(Next,        lua_next,        LUA_NEXT)
 
 #define WRATHCLASSICAPI_BIND_LUA(Name, Typedef, Offset) \
     const Typedef##_t Name = reinterpret_cast<Typedef##_t>(Offsets::Offset);
@@ -107,6 +109,31 @@ void RegisterTableFunction(const char *tableName, const char *methodName, CFunct
     PushCClosure(L, func, 0);                // [tbl, closure]
     SetField(L, -2, methodName);             // tbl[methodName] = closure; pops closure. [tbl]
     SetTop(L, -2);                           // pop tbl. []
+}
+
+void RegisterIntegerEnum(const char *parent, const char *sub,
+                         const EnumIntegerEntry *entries, int count) {
+    void *L = State();
+    if (L == nullptr)
+        return;
+
+    // Get-or-create `_G[parent]` (same pattern as RegisterTableFunction).
+    GetField(L, GLOBALS_INDEX, parent);      // [parentTbl?]
+    if (Type(L, -1) != TYPE_TABLE) {
+        SetTop(L, -2);                       // []
+        CreateTable(L, 0, 1);                // [parentTbl]
+        PushValue(L, -1);                    // [parentTbl, parentTbl]
+        SetField(L, GLOBALS_INDEX, parent);  // _G[parent] = parentTbl; pops. [parentTbl]
+    }
+
+    // Build the sub-table and populate it, then assign parentTbl[sub].
+    CreateTable(L, 0, count);                // [parentTbl, subTbl]
+    for (int i = 0; i < count; ++i) {
+        PushNumber(L, static_cast<double>(entries[i].value)); // [.., subTbl, val]
+        SetField(L, -2, entries[i].key);     // subTbl[key] = val; pops. [.., subTbl]
+    }
+    SetField(L, -2, sub);                    // parentTbl[sub] = subTbl; pops. [parentTbl]
+    SetTop(L, -2);                           // pop parentTbl. []
 }
 
 } // namespace Lua
