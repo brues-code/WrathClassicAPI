@@ -312,6 +312,13 @@ enum Offsets {
     //   byte 0 = race, byte 1 = class, byte 2 = gender, byte 3 = power.
     OFF_UNIT_DESCRIPTOR_CLASS_BYTE = 0x45,
 
+    // Race byte — byte 0 of the SAME UNIT_FIELD_BYTES_0 dword
+    // (descriptor index 0x11, 17 * 4 + 0 = 0x44). Verified in
+    // `Script_UnitRace` (FUN_0060FD40, "Usage: UnitRace(\"unit\")"):
+    // reads `*(byte *)(*(int *)(unit + 0xD0) + 0x44)` for non-player
+    // units — the exact sibling of the class read at +0x45.
+    OFF_UNIT_DESCRIPTOR_RACE_BYTE = 0x44,
+
     // Local player class byte global. Populated by the engine during
     // login session setup — well before the unit descriptor at
     // `unit + OFF_UNIT_DESCRIPTOR` is ready. Both `Script_UnitClass`
@@ -322,6 +329,15 @@ enum Offsets {
     // `"player"` to avoid the at-login race where the descriptor
     // hasn't been populated yet.
     VAR_LOCAL_PLAYER_CLASS_BYTE = 0x00C79E89,
+
+    // Local player race byte global — byte 0 of the login-session
+    // UNIT_FIELD_BYTES_0 (race @ 0x00C79E88, class @ +1 = 0xC79E89,
+    // gender @ +2 = 0xC79E8A). `Script_UnitRace`'s "player" fast path
+    // reads it via `FUN_006B1070` (returns `*(byte *)0x00C79E88`), the
+    // race sibling of the class accessor `FUN_006B1080`. Same at-login-
+    // race rationale as the class byte — valid before the unit
+    // descriptor is populated.
+    VAR_LOCAL_PLAYER_RACE_BYTE = 0x00C79E88,
 
     // Per-player inventory manager. Offset INTO the CGPlayer
     // returned by ResolveUnitToken("player"), pointing to the

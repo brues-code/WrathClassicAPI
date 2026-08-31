@@ -96,6 +96,7 @@ Conventions:
   - [`C_UIColor.GetColors()`](#c_uicolorgetcolors)
 - [Unit](#unit)
   - [`UnitClassID(unit)`](#unitclassidunit)
+  - [`UnitRaceID(unit)`](#unitraceidunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1201,6 +1202,27 @@ Accepts any standard unit token (`"player"`, `"target"`, `"partyN"`,
 a login-session global rather than the unit descriptor, so it works
 even at the first-login window before the player descriptor is
 populated.
+
+### `UnitRaceID(unit)`
+
+Returns the integer race ID (1=Human, 2=Orc, 3=Dwarf, 4=Night Elf,
+5=Undead, 6=Tauren, 7=Gnome, 8=Troll, 10=Blood Elf, 11=Draenei) for
+the unit, or `nil` if unresolvable.
+
+```lua
+UnitRaceID("player")    -- e.g. 4 for a night elf
+UnitRaceID("target")    -- depends on selected target
+UnitRaceID("partyN")    -- N=1..4
+```
+
+The race companion to `UnitClassID`, and the additive integer form of
+`UnitRace(unit)` (which returns `(localizedName, englishToken)`), so
+addons can dispatch on the numeric ID without a token→ID lookup table.
+
+Reads the same `UNIT_FIELD_BYTES_0` field as `UnitClassID`, one byte
+over (race instead of class), and takes the same `"player"` login-session
+fast path — so it too resolves at the first-login window before the unit
+descriptor is populated. Accepts any standard unit token.
 
 ---
 

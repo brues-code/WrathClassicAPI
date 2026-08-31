@@ -47,7 +47,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |
 | Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`
 | UI Color  | `C_UIColor.GetColors` |
-| Unit      | `UnitClassID` |
+| Unit      | `UnitClassID`, `UnitRaceID` |
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
 
 ### Globals
