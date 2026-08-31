@@ -1303,4 +1303,39 @@ enum Offsets {
     // +0x318 link; 3.3.5 differs.
     VAR_CHAT_BUBBLE_LIST_HEAD = 0x00ACE600,
     OFF_CHAT_BUBBLE_NEXT_LINK = 0x2A0,
+
+    // --- zlib (src/encoding/Compress.cpp) ---
+    //
+    // The client statically links zlib 1.2.2. All entry points are
+    // __cdecl (caller-cleaned) in this build — NOT the __fastcall the
+    // 1.12 sibling used. Verified at deflateInit2_ (0x00864DC0):
+    // standard EBP frame, every arg read from [EBP+N] (no ECX/EDX),
+    // `version[0] == '1'` + `stream_size == 0x38` gate returning
+    // Z_VERSION_ERROR (-6), zlib windowBits sign/gzip handling, plain
+    // RET epilogues; and deflateEnd (0x00863E50): validates the deflate
+    // state magic (0x2A/0x71/0x29A) and frees via strm->zfree. inflate
+    // (0x00865270) loads the zlib inflate error strings. Anchored on the
+    // " deflate 1.2.2 Copyright ... " / z_errmsg literals.
+    //
+    // Signatures (all __cdecl):
+    //   int deflateInit2_(strm, level, method, windowBits, memLevel,
+    //                     strategy, version, stream_size)
+    //   int deflate(strm, flush)
+    //   int deflateEnd(strm)
+    //   int inflateInit2_(strm, windowBits, version, stream_size)
+    //   int inflate(strm, flush)
+    //   int inflateEnd(strm)
+    // Format selection rides on windowBits: Zlib = 15, Gzip = 31,
+    // Deflate = -15 (raw), auto-detect = 47 (decode only; Zlib or Gzip).
+    FUN_ZLIB_DEFLATE_INIT2 = 0x00864DC0,
+    FUN_ZLIB_DEFLATE       = 0x00863A40,
+    FUN_ZLIB_DEFLATE_END   = 0x00863E50,
+    FUN_ZLIB_INFLATE_INIT2 = 0x00865080,
+    FUN_ZLIB_INFLATE       = 0x00865270,
+    FUN_ZLIB_INFLATE_END   = 0x00866660,
+    // The version C-string ("1.2.2") the *Init2_ functions check the
+    // passed version's first byte against (mismatch → Z_VERSION_ERROR).
+    // Callers pass this same pointer through.
+    VAR_ZLIB_VERSION_STRING = 0x00A3B558,
+    ZLIB_STREAM_SIZE = 0x38, // sizeof(z_stream), 1.2.2 32-bit build
 };
