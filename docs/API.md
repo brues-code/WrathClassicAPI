@@ -26,6 +26,12 @@ Conventions:
 - [Console](#console)
   - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
   - [`ExportDBCFiles`](#exportdbcfiles)
+- [Encoding](#encoding)
+  - [`C_EncodingUtil.EncodeHex` / `DecodeHex`](#c_encodingutilencodehex--decodehex)
+  - [`C_EncodingUtil.EncodeBase64` / `DecodeBase64`](#c_encodingutilencodebase64--decodebase64)
+  - [`C_EncodingUtil.CompressString` / `DecompressString`](#c_encodingutilcompressstring--decompressstring)
+  - [`C_EncodingUtil.SerializeJSON` / `DeserializeJSON`](#c_encodingutilserializejson--deserializejson)
+  - [`C_EncodingUtil.SerializeCBOR` / `DeserializeCBOR`](#c_encodingutilserializecbor--deserializecbor)
 - [Events](#events)
   - [`C_EventUtils.IsEventValid(eventName)`](#c_eventutilsiseventvalideventname)
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
@@ -226,6 +232,94 @@ Extracts every client DBC table to `DBFilesClient\`. Unions the archive
 `(listfile)` under `DBFilesClient\` with a scan of the client's DBC
 path-getters, deduped case-insensitively — so it captures the authoritative
 set of DBCs the build loads, including ones the listfile doesn't index.
+
+---
+
+## Encoding
+
+Binary-safe encoding and serialization utilities under `C_EncodingUtil`.
+Every string argument and return value is byte-accurate — embedded NULs are
+preserved, so compressed and serialized blobs round-trip intact.
+
+### `C_EncodingUtil.EncodeHex` / `DecodeHex`
+
+`EncodeHex(data)` returns lowercase hex, two characters per input byte; the
+empty string maps to `""`. `DecodeHex(hex)` is the inverse and accepts either
+case. It returns `nil` for odd-length input or any non-hex character — bad
+input is rejected, not skipped.
+
+```lua
+C_EncodingUtil.EncodeHex("Hi")     -- "4869"
+C_EncodingUtil.DecodeHex("4869")   -- "Hi"
+C_EncodingUtil.DecodeHex("zz")     -- nil
+```
+
+### `C_EncodingUtil.EncodeBase64` / `DecodeBase64`
+
+`EncodeBase64(data [, variant])` and `DecodeBase64(data [, variant])`. The
+optional `variant` is an `Enum.Base64Variant`:
+
+- `Enum.Base64Variant.Standard` (`0`, default) — `+` / `/` alphabet, `=` padding.
+- `Enum.Base64Variant.UrlSafe` (`1`) — `-` / `_` alphabet, no padding on encode.
+
+With no `variant`, decode accepts both alphabets and optional padding; with a
+`variant`, it requires that alphabet. Decode returns `nil` on malformed input.
+
+```lua
+C_EncodingUtil.EncodeBase64("Man")                                      -- "TWFu"
+C_EncodingUtil.EncodeBase64("\255\255\254", Enum.Base64Variant.UrlSafe) -- "___-"
+C_EncodingUtil.DecodeBase64("TWFu")                                     -- "Man"
+```
+
+### `C_EncodingUtil.CompressString` / `DecompressString`
+
+`CompressString(data [, method [, level]])` and `DecompressString(data [, method])`.
+`method` is an `Enum.CompressionMethod`:
+
+- `Enum.CompressionMethod.Deflate` (`0`) — raw deflate, no header or checksum.
+- `Enum.CompressionMethod.Zlib` (`1`, default on compress) — zlib header.
+- `Enum.CompressionMethod.Gzip` (`2`) — gzip header.
+
+`level` is the zlib level `0`–`9` (`-1` = default). On decompress, omitting
+`method` auto-detects zlib vs gzip; raw deflate carries no header, so decompress
+it with an explicit `Enum.CompressionMethod.Deflate`. Both return `nil` on a
+corrupt or truncated stream.
+
+```lua
+local packed = C_EncodingUtil.CompressString(text)   -- zlib
+C_EncodingUtil.DecompressString(packed) == text      -- true (method auto-detected)
+```
+
+### `C_EncodingUtil.SerializeJSON` / `DeserializeJSON`
+
+`SerializeJSON(value)` turns a Lua value into a JSON string.
+`DeserializeJSON(json)` parses one back, returning `nil` on a parse error or
+trailing garbage. A Lua table with consecutive `1..N` integer keys becomes a
+JSON array; any other table becomes an object (numeric keys are stringified).
+`nil` / `true` / `false` / numbers / strings map to their JSON equivalents;
+non-finite numbers become `null`.
+
+```lua
+C_EncodingUtil.SerializeJSON({ 1, 2, 3 })          -- "[1,2,3]"
+C_EncodingUtil.SerializeJSON({ name = "Bob" })     -- {"name":"Bob"}
+local t = C_EncodingUtil.DeserializeJSON('{"x":10,"y":[true,null]}')
+-- t.x == 10, t.y[1] == true, t.y[2] == nil
+```
+
+### `C_EncodingUtil.SerializeCBOR` / `DeserializeCBOR`
+
+`SerializeCBOR(value)` and `DeserializeCBOR(data)` — the CBOR binary
+counterpart of the JSON pair, with the same array-vs-object table rule. Whole
+numbers within ±2^53 encode as CBOR integers (so `42` stays `42`, not `42.0`);
+other numbers encode as doubles. Map entries are emitted in canonical byte
+order, so a given table always serializes to identical bytes. `DeserializeCBOR`
+returns `nil` on malformed input.
+
+```lua
+local blob = C_EncodingUtil.SerializeCBOR({ id = 7, tags = { "a", "b" } })
+local t = C_EncodingUtil.DeserializeCBOR(blob)
+-- t.id == 7, t.tags[1] == "a"
+```
 
 ---
 
