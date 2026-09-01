@@ -260,6 +260,75 @@ enum Offsets {
     // else despite holding the local-player GUID).
     FUN_RESOLVE_UNIT_TOKEN = 0x0060C1F0,
 
+    // --- Reputation / factions ---------------------------------------------
+    // Derived from Script_GetFactionInfo (FUN_005D1150 → worker FUN_005D0DA0),
+    // Script_SetWatchedFactionIndex (FUN_005D1420), and Script_GetWatchedFactionInfo
+    // (FUN_005D1240). 3.3.5 exposes clean __cdecl(factionID) helpers for the
+    // per-faction reads, so the module calls those rather than re-deriving the
+    // rep-slot flag logic.
+    //
+    // Displayed-list resolver (index → factionID), inline in the engine:
+    //   entry = (*(void***)VAR_FACTION_DISPLAY_LIST)[idx0];
+    //   factionID = *(int*)(entry + OFF_FACTION_DISPLAY_ENTRY_ID);
+    // idx0 is the 0-based display index, valid when 0 <= idx0 <= *VAR_FACTION_VISIBLE_MAX_INDEX.
+    VAR_FACTION_DISPLAY_LIST = 0x00C23488,      // ptr to array of display-entry ptrs
+    VAR_FACTION_DISPLAY_COUNT = 0x00C23478,     // live count of display entries
+    VAR_FACTION_VISIBLE_MAX_INDEX = 0x00C23474, // max valid 0-based display index
+    OFF_FACTION_DISPLAY_ENTRY_ID = 0x04,        // factionID field within a display entry
+
+    // Faction.dbc client store: record = (*(void***)INDEX_TABLE)[factionID - *MIN_INDEX],
+    // valid when *MIN_INDEX <= factionID <= *MAX_INDEX. Names/descriptions are
+    // single (already-localized) char* pointers, not locale arrays.
+    VAR_FACTION_DBC_MIN_INDEX = 0x00AD3870,
+    VAR_FACTION_DBC_MAX_INDEX = 0x00AD386C,
+    VAR_FACTION_DBC_INDEX_TABLE = 0x00AD3880,   // ptr to array of record ptrs
+    OFF_FACTION_REP_LIST_INDEX = 0x04,          // record: rep-slot index (int)
+    OFF_FACTION_NAME = 0x5C,                    // record: name (char*)
+    OFF_FACTION_DESCRIPTION = 0x60,             // record: description (char*)
+
+    // Displayed-list category headers. HEADER_LIST is the array itself (not a
+    // ptr); COLLAPSED_BITMASK bit i SET = header i expanded, CLEAR = collapsed.
+    VAR_FACTION_HEADER_LIST = 0x00C23370,       // array of header factionIDs
+    VAR_FACTION_HEADER_COUNT = 0x00C23470,
+    VAR_FACTION_COLLAPSED_BITMASK = 0x00AD0AE4,
+    MAX_FACTION_HEADERS = 64,
+
+    // Player reputation slots, indexed by the record's rep-list index (0..127).
+    VAR_PLAYER_REP_SLOTS = 0x00C22B70,
+    REP_SLOT_STRIDE = 0x10,
+    OFF_REP_SLOT_FACTION_ID = 0x00,
+    OFF_REP_SLOT_FLAGS = 0x04,
+    OFF_REP_SLOT_BASE_STANDING = 0x08,
+    OFF_REP_SLOT_DELTA_STANDING = 0x0C,
+    MAX_REP_SLOTS = 128,
+
+    // Reaction thresholds indexed by band 0..7 (returned by GET_REACTION_BAND).
+    VAR_REACTION_MIN_TABLE = 0x00A2D2FC,
+    VAR_REACTION_MAX_TABLE = 0x00A2D300,
+
+    // CGPlayer reputation info sub-struct. `*(void**)(player + OFF_CGPLAYER_INFO)`
+    // is the info struct; the watched rep-list index lives at +WATCHED_REP_LIST_ID.
+    OFF_CGPLAYER_INFO = 0x1008,
+    OFF_CGPLAYER_INFO_WATCHED_REP_LIST_ID = 0x10E8,
+
+    // Engine helpers — all __cdecl(int factionID) except HEADER_HAS_REP, which
+    // takes the Faction.dbc record pointer. Bool results are in the low byte.
+    FUN_REPUTATION_GET_REACTION_BAND = 0x005D0600, // -> band 0..7
+    FUN_REPUTATION_GET_STANDING = 0x005D05B0,       // -> total standing (base + delta)
+    FUN_REPUTATION_GET_AT_WAR = 0x005D04B0,         // -> bool (rep-slot flag bit 1)
+    FUN_REPUTATION_GET_PEACE_FORCED = 0x005D0500,   // -> bool (rep-slot flag bit 4)
+    FUN_REPUTATION_IS_WATCHED = 0x005D0C70,         // -> bool
+    FUN_REPUTATION_IS_CHILD = 0x005D06E0,           // -> bool
+    FUN_REPUTATION_HEADER_HAS_REP = 0x005D0CE0,     // (record ptr) -> bool
+    FUN_PLAYER_SET_WATCHED_FACTION = 0x005D0BA0,    // set watched by id; 0 clears
+
+    // Per-rep-change notify — the "+X reputation" dispatcher, called from the
+    // SMSG_SET_FACTION_STANDING handler (FUN_005D20A0) only when a faction's
+    // standing actually changed and is visible; NOT from the bulk login rebuild.
+    // The hook chokepoint for FACTION_STANDING_CHANGED.
+    // void __cdecl(int factionID, int delta, int isGeneric, float rate)
+    FUN_REPUTATION_FIRE_NOTIFY = 0x0050B8C0,
+
     // `ObjectMgr::HexString2Guid(const char *s) -> uint64_t` —
     // parses `"0xHHHHHHHHLLLLLLLL"` (or bare 16-hex-char form) to a
     // 64-bit GUID. Returns via EDX:EAX (standard cdecl 64-bit

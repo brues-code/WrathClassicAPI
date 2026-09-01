@@ -43,6 +43,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemGUID`, `C_Item.GetItemID`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemLocation`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.GetItemSpell`, `C_Item.IsBound`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | Mixins    | `Mixin`, `CreateFromMixins`, `CreateAndInitFromMixin` |
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
+| Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
 | Spell     | `IsPlayerSpell` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
 | Time      | `GetServerTime`, `C_DateAndTime.AdjustTimeByDays`, `C_DateAndTime.AdjustTimeByMinutes`, `C_DateAndTime.CompareCalendarTime`, `C_DateAndTime.GetCalendarTimeFromEpoch`, `C_DateAndTime.GetCurrentCalendarTime`, `C_DateAndTime.GetSecondsUntilDailyReset`, `C_DateAndTime.GetServerTimeLocal` |
@@ -68,6 +69,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `ITEM_DATA_LOAD_RESULT`  | `itemID, success` | The engine has just filled the cache for an **explicit** `C_Item.RequestLoadItemData(ByID)` call |
 | `QUEST_DATA_LOAD_RESULT` | `questID, success` | The engine has just filled the quest static-info cache for an **explicit** `C_QuestLog.RequestLoadQuestByID` call |
 | `BAG_UPDATE_DELAYED` | *(none)* | Once at the end of a frame in which one or more `BAG_UPDATE` events fired. Register for this event instead of `BAG_UPDATE` and rescan bags once per frame. During a loading screen, the event holds; the first in-world frame fires it once for the settled inventory |
+| `FACTION_STANDING_CHANGED` | `factionID, newStanding, repGained` | Once per reputation change, after the "+N reputation" message. `repGained` is the signed delta. Does not fire for the initial faction sync at login |
 
 A given cache fill fires exactly one of these — never both — depending
 on what initiated the request. Same split as modern WoW.

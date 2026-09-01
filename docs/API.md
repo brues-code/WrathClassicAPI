@@ -80,6 +80,15 @@ Conventions:
   - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
   - [`C_QuestLog.GetTitleForQuestID(questID)`](#c_questloggettitleforquestidquestid)
   - [`C_QuestLog.RequestLoadQuestByID(questID)`](#c_questlogrequestloadquestbyidquestid)
+- [Reputation](#reputation)
+  - [`GetFactionIDByIndex(factionIndex)`](#getfactionidbyindexfactionindex)
+  - [`C_Reputation.GetFactionDataByIndex(factionSortIndex)`](#c_reputationgetfactiondatabyindexfactionsortindex)
+  - [`C_Reputation.GetWatchedFactionData()`](#c_reputationgetwatchedfactiondata)
+  - [`C_Reputation.SetWatchedFactionByID(factionID)`](#c_reputationsetwatchedfactionbyidfactionid)
+  - [`C_Reputation.GetFactionStandings()`](#c_reputationgetfactionstandings)
+  - [`C_Reputation.GetLastStandingChange()`](#c_reputationgetlaststandingchange)
+  - [`FACTION_STANDING_CHANGED` event](#faction_standing_changed-event)
+  - [`FactionData` table shape](#factiondata-table-shape)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
 - [Talent](#talent)
@@ -944,6 +953,109 @@ end
 
 Returns nothing — same as modern WoW. The completion event is the
 contract.
+
+---
+
+## Reputation
+
+`C_Reputation.*` plus `GetFactionIDByIndex` — factionID-keyed accessors for the
+reputation pane's data.
+
+The "displayed list" these index into is the 1-based, expandable list the
+reputation pane shows: real factions interleaved with category header rows.
+Indices shift when headers collapse or expand, so cache the factionID, not the
+index.
+
+### `GetFactionIDByIndex(factionIndex)`
+
+Returns the factionID at a 1-based displayed-list index, `0` for a category
+header row, or `nil` for an out-of-range index.
+
+```lua
+GetFactionIDByIndex(1)   -- e.g. 72 (Stormwind)
+```
+
+### `C_Reputation.GetFactionDataByIndex(factionSortIndex)`
+
+Returns a [`FactionData`](#factiondata-table-shape) table for a 1-based
+displayed-list index, or `nil` for an out-of-range index or a header/pseudo row
+with no faction record.
+
+```lua
+local d = C_Reputation.GetFactionDataByIndex(1)
+-- d.factionID == 72, d.name == "Stormwind", d.reaction == 5, d.currentStanding == 6685
+```
+
+### `C_Reputation.GetWatchedFactionData()`
+
+Returns the [`FactionData`](#factiondata-table-shape) for the faction tracked
+above the XP bar, or `nil` when none is tracked. `isWatched` is `true`.
+
+### `C_Reputation.SetWatchedFactionByID(factionID)`
+
+Tracks the given faction above the XP bar; `0` clears it. The choice is saved to
+the server, the same as ticking the reputation pane's watch box.
+
+```lua
+C_Reputation.SetWatchedFactionByID(72)   -- track Stormwind
+C_Reputation.SetWatchedFactionByID(0)    -- clear
+```
+
+### `C_Reputation.GetFactionStandings()`
+
+Returns a flat `{ [factionID] = currentStanding }` table over every faction the
+player has a reputation record for. Skips category headers, and doesn't require
+the reputation pane to have been opened.
+
+```lua
+for factionID, standing in pairs(C_Reputation.GetFactionStandings()) do
+    print(factionID, standing)
+end
+```
+
+### `C_Reputation.GetLastStandingChange()`
+
+Returns `(factionID, newStanding, repGained)` for the reputation change currently
+being dispatched, or `nil` outside one. Valid only inside a
+`FACTION_STANDING_CHANGED` or `CHAT_MSG_COMBAT_FACTION_CHANGE` handler.
+
+### `FACTION_STANDING_CHANGED` event
+
+Payload: `factionID, newStanding, repGained`
+
+Fires once per reputation change, after the "+N reputation with <faction>"
+message. `repGained` is the signed delta (negative on loss). Does not fire for
+the initial faction sync at login.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("FACTION_STANDING_CHANGED")
+f:SetScript("OnEvent", function(_, _, factionID, newStanding, repGained)
+    print(("%+d rep with %d -> %d"):format(repGained, factionID, newStanding))
+end)
+```
+
+### `FactionData` table shape
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `factionID` | number | Faction ID. |
+| `name` | string | Localized faction name. |
+| `description` | string | Localized description (`""` if none). |
+| `reaction` | number | 1..8 — Hated, Hostile, Unfriendly, Neutral, Friendly, Honored, Revered, Exalted. |
+| `currentReactionThreshold` | number | Standing at which the current reaction band starts. |
+| `nextReactionThreshold` | number | Standing at which the next band starts. |
+| `currentStanding` | number | Current standing. |
+| `atWarWith` | boolean | Player is at war with the faction. |
+| `canToggleAtWar` | boolean | The at-war flag can be toggled. |
+| `isHeader` | boolean | A category header row, not a faction. |
+| `isHeaderWithRep` | boolean | A header that itself has a reputation bar. |
+| `isCollapsed` | boolean | Header is collapsed in the pane. |
+| `isWatched` | boolean | Tracked above the XP bar. |
+| `canSetInactive` | boolean | Can be moved to the Inactive list. |
+| `isChild` | boolean | A sub-faction under a header. |
+| `hasBonusRepGain` | boolean | Always `false`. |
+| `isAccountWide` | boolean | Always `false`. |
 
 ---
 
