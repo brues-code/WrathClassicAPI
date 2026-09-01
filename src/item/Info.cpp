@@ -13,18 +13,22 @@
 
 // `C_Item.GetItemInfoInstant(item)` — modern WoW backport.
 //
-// Returns 7 values without requiring an item-stats network query
-// beyond the basic DBC lookups the engine already has resident:
+// Returns 7 values from client-side data alone, no item-stats network query:
 //   itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subClassID
 //
-// Important caveat for 3.3.5: unlike modern WoW, the engine here has
-// no separate "instant" cache. We read the same item-stats record
-// `Script_GetItemInfo` reads, which means an UNCACHED item returns
-// 0 results (nil to Lua) — same shape `GetItemInfo` itself does for
-// cache misses. The existing `GetItemInfo` hook in `item/Data.cpp`
-// transparently kicks off the network query on miss, so a follow-up
-// call after `GET_ITEM_INFO_RECEIVED` lands the data. To match that
-// behavior, we also call `WarmCache` on the miss path here.
+// The four numeric inputs (class, subclass, inventory type, display-info) are
+// read from the client `Item.dbc` store, resident for every item shipped with
+// the 3.3.5 client — so for those items this is genuinely instant and never
+// returns nil, matching modern. The type / subtype / equip-loc strings and the
+// icon path then resolve from `ItemClass.dbc` / `ItemSubClass.dbc` / the invtype
+// table / `ItemDisplayInfo.dbc`, all client-side.
+//
+// The one gap is a server-custom item beyond the client's `Item.dbc`: it isn't
+// in that store, so we fall back to the server-populated item-stats cache (the
+// same record `GetItemInfo` reads). If that's also a miss we kick off the
+// network query via `WarmCache` and return nil this call, so a follow-up after
+// `GET_ITEM_INFO_RECEIVED` then succeeds — the old behavior, now only for
+// custom items.
 
 #include "Game.h"
 #include "Offsets.h"
@@ -56,6 +60,48 @@ const uint8_t *FetchItemRecord(uint32_t itemID) {
     auto *cache = reinterpret_cast<void *>(Offsets::VAR_ITEMDB_CACHE);
     const uint64_t zeroGuid = 0;
     return fn(cache, itemID, &zeroGuid, nullptr, nullptr, 0);
+}
+
+// The four "instant" fields GetItemInfoInstant needs: class / subclass /
+// inventory type / display-info (icon). All derivable from client-side data
+// alone, no item-stats network query.
+struct InstantFields {
+    uint32_t classID;
+    uint32_t subClassID;
+    uint32_t invType;
+    uint32_t displayInfoID;
+};
+
+uint32_t StoreField(uintptr_t base, unsigned off) {
+    return *reinterpret_cast<const uint32_t *>(base + off);
+}
+
+// Reads the instant fields straight from client Item.dbc (no server query) via
+// the inline WowClientDB GetRow: bounds-check the itemID against [minID, maxID],
+// then index the id->record table. Returns false when the item isn't in the
+// client's Item.dbc (e.g. a server-custom item) so the caller can fall back.
+bool ReadItemDbcInstant(uint32_t itemID, InstantFields *out) {
+    const int id = static_cast<int>(itemID);
+    const int minID = static_cast<int>(StoreField(Offsets::VAR_ITEMDBC_STORE,
+                                                   Offsets::OFF_ITEMDBC_STORE_MIN_ID));
+    const int maxID = static_cast<int>(StoreField(Offsets::VAR_ITEMDBC_STORE,
+                                                   Offsets::OFF_ITEMDBC_STORE_MAX_ID));
+    if (id < minID || id > maxID)
+        return false;
+    auto *index = *reinterpret_cast<const uint8_t *const *const *>(
+        Offsets::VAR_ITEMDBC_STORE + Offsets::OFF_ITEMDBC_STORE_INDEX);
+    if (index == nullptr)
+        return false;
+    const uint8_t *record = index[id - minID];
+    if (record == nullptr)
+        return false; // gap in the id range
+    out->classID = StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_CLASS);
+    out->subClassID = StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_SUBCLASS);
+    out->invType =
+        StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_INVENTORY_TYPE);
+    out->displayInfoID =
+        StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_DISPLAY_INFO_ID);
+    return true;
 }
 
 // Resolves an ItemClass.dbc row's name. The table is bounded by
@@ -147,34 +193,37 @@ int __cdecl Script_C_Item_GetItemInfoInstant(void *L) {
     if (itemID <= 0)
         return 0;
 
-    const uint8_t *record = FetchItemRecord(static_cast<uint32_t>(itemID));
-    if (record == nullptr) {
-        // Cache miss — kick off the network query so a follow-up call
-        // after GET_ITEM_INFO_RECEIVED succeeds. Matches the implicit-
-        // warmup behavior of our GetItemInfo hook.
-        Item::Data::WarmCache(static_cast<uint32_t>(itemID));
-        return 0;
+    // Client Item.dbc first — resident for every stock item with no server
+    // query, so this is genuinely instant and never nils for them (matching
+    // modern). Only server-custom items miss here.
+    InstantFields f;
+    if (!ReadItemDbcInstant(static_cast<uint32_t>(itemID), &f)) {
+        // Not in the client's Item.dbc (a server-custom item). Fall back to the
+        // item-stats cache; a miss there kicks off the network query so a
+        // follow-up call after GET_ITEM_INFO_RECEIVED succeeds.
+        const uint8_t *record = FetchItemRecord(static_cast<uint32_t>(itemID));
+        if (record == nullptr) {
+            Item::Data::WarmCache(static_cast<uint32_t>(itemID));
+            return 0;
+        }
+        f.classID = *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_CLASS);
+        f.subClassID = *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_SUBCLASS);
+        f.displayInfoID =
+            *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_DISPLAY_INFO_ID);
+        f.invType =
+            *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_INVENTORY_TYPE);
     }
 
-    const uint32_t classID =
-        *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_CLASS);
-    const uint32_t subClassID =
-        *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_SUBCLASS);
-    const uint32_t displayInfoID =
-        *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_DISPLAY_INFO_ID);
-    const uint32_t invType =
-        *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_INVENTORY_TYPE);
-
     char iconPath[260] = {0};
-    BuildIconPath(displayInfoID, iconPath, sizeof(iconPath));
+    BuildIconPath(f.displayInfoID, iconPath, sizeof(iconPath));
 
     Game::Lua::PushNumber(L, static_cast<double>(itemID));
-    Game::Lua::PushString(L, LookupItemClassName(classID));
-    Game::Lua::PushString(L, LookupItemSubClassName(classID, subClassID));
-    Game::Lua::PushString(L, LookupInvType(invType));
+    Game::Lua::PushString(L, LookupItemClassName(f.classID));
+    Game::Lua::PushString(L, LookupItemSubClassName(f.classID, f.subClassID));
+    Game::Lua::PushString(L, LookupInvType(f.invType));
     Game::Lua::PushString(L, iconPath);
-    Game::Lua::PushNumber(L, static_cast<double>(classID));
-    Game::Lua::PushNumber(L, static_cast<double>(subClassID));
+    Game::Lua::PushNumber(L, static_cast<double>(f.classID));
+    Game::Lua::PushNumber(L, static_cast<double>(f.subClassID));
     return 7;
 }
 

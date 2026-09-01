@@ -660,16 +660,15 @@ time. Keyring / bank / mail / void-storage slots aren't covered
 
 ### `C_Item.GetItemInfoInstant(item)`
 
-Returns 7 values without requiring a fully-cached item-stats record
-beyond the basic DBC lookups the engine already has resident:
+Returns 7 values from client-side data, with no server item query:
 
 ```lua
 local itemID, itemType, itemSubType, equipLoc, icon, classID, subClassID
     = C_Item.GetItemInfoInstant(itemInfo)
 ```
 
-Returns `nil` (= no values) for cache miss; fires `WarmCache` so a
-follow-up call after `GET_ITEM_INFO_RECEIVED` lands the data.
+For any item shipped with the 3.3.5 client this is genuinely instant and never
+returns `nil` — you don't have to have seen, hovered, or cached the item first.
 
 ```lua
 C_Item.GetItemInfoInstant(6948)
@@ -679,9 +678,9 @@ C_Item.GetItemInfoInstant(7005)
 -- 7005, "Weapon", "Miscellaneous", "INVTYPE_WEAPON", "Interface\\Icons\\INV_Weapon_ShortBlade_01", 2, 14
 ```
 
-Unlike modern WoW, 3.3.5 has no separate "instant" cache — uncached
-items return nil here, same as `GetItemInfo` does. The auto-warmup
-mitigates this for the second call onward.
+The one exception is a server-added custom item the client doesn't ship: that
+returns `nil` on the first call and starts a background query, so a follow-up
+after `GET_ITEM_INFO_RECEIVED` returns its data.
 
 ### `C_Item.DoesItemExist(itemLocation)` / `DoesItemExistByID(item)`
 

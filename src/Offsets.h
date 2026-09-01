@@ -173,6 +173,27 @@ enum Offsets {
     OFF_ITEMSTATS_STACK_COUNT = 0x5C,
     OFF_ITEMSTATS_NAME = 0x1F4,
 
+    // Client-side Item.dbc store (distinct from the server-populated item-stats
+    // cache above). A WowClientDB<CItemRec> static object loaded from
+    // `DBFilesClient\Item.dbc` by FUN_00644190; every item shipped with the 3.3.5
+    // client is resident here with NO server query, so it's the truly-instant
+    // source for GetItemInfoInstant. Store fields (verified in the row-index
+    // builder FUN_0065C760): maxID @+0x0C, minID @+0x10, and the id->record index
+    // array @+0x20 (indexed by `id - minID`, entries null for gaps). GetRow(id) =
+    // `id in [minID, maxID] ? index[id - minID] : null` — the inline WowClientDB
+    // pattern. Server-custom items beyond the client's Item.dbc are absent here
+    // (fall back to the item-stats cache for those).
+    VAR_ITEMDBC_STORE = 0x00AD3D4C,
+    OFF_ITEMDBC_STORE_MAX_ID = 0x0C,
+    OFF_ITEMDBC_STORE_MIN_ID = 0x10,
+    OFF_ITEMDBC_STORE_INDEX = 0x20,
+    // Item.dbc record columns (8 uint32, 0x20-byte row): ID @+0x00, ClassID
+    // @+0x04, SubclassID @+0x08, DisplayInfoID @+0x14, InventoryType @+0x18.
+    OFF_ITEMDBC_CLASS = 0x04,
+    OFF_ITEMDBC_SUBCLASS = 0x08,
+    OFF_ITEMDBC_DISPLAY_INFO_ID = 0x14,
+    OFF_ITEMDBC_INVENTORY_TYPE = 0x18,
+
     // `CGItem::IsSoulbound` — `__thiscall(CGItem) -> bool`. Returns
     // true iff the per-instance soulbound flag is set OR any
     // attached enchantment carries the "bind-on-apply" flag.
