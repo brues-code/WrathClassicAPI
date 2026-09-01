@@ -260,6 +260,16 @@ enum Offsets {
     // else despite holding the local-player GUID).
     FUN_RESOLVE_UNIT_TOKEN = 0x0060C1F0,
 
+    // CGObject world-position virtual, shared by every unit (and the
+    // player). `float * __thiscall GetPosition(float out[3])` — writes the
+    // world position into `out` and returns a float* to it (or to an internal
+    // cached field; the caller copies from the returned pointer). vtable slot
+    // at byte offset 0x2C. Derived from Script_CheckInteractDistance
+    // (FUN_0051B240): it resolves player + unit, calls
+    // `obj->vtable[0x2C](&buf)` on each, and sums the three squared component
+    // deltas. (The 1.12 sibling uses slot 0x14; the WotLK vtable is wider.)
+    OFF_CGOBJECT_VTBL_GET_POSITION = 0x2C,
+
     // --- Reputation / factions ---------------------------------------------
     // Derived from Script_GetFactionInfo (FUN_005D1150 → worker FUN_005D0DA0),
     // Script_SetWatchedFactionIndex (FUN_005D1420), and Script_GetWatchedFactionInfo

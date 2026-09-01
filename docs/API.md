@@ -115,6 +115,7 @@ Conventions:
 - [Unit](#unit)
   - [`UnitClassID(unit)`](#unitclassidunit)
   - [`UnitRaceID(unit)`](#unitraceidunit)
+  - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1440,6 +1441,33 @@ Reads the same `UNIT_FIELD_BYTES_0` field as `UnitClassID`, one byte
 over (race instead of class), and takes the same `"player"` login-session
 fast path — so it too resolves at the first-login window before the unit
 descriptor is populated. Accepts any standard unit token.
+
+### `UnitDistanceSquared(unit)`
+
+Returns `(distanceSquared, checkedPosition)` — the **squared** world
+distance in yards from the player to `unit`, center-to-center.
+
+```lua
+local d, ok = UnitDistanceSquared("target")
+if ok then
+    print(math.sqrt(d) .. " yards")   -- take the sqrt only when you need the raw distance
+end
+```
+
+Squared because most callers compare against a threshold
+(`d <= range * range`) or rank by nearest — neither needs the square
+root. `UnitDistanceSquared("player")` is a legitimate `(0, true)`.
+
+`checkedPosition` is `false` — with `distanceSquared` returned as `0` —
+when the position can't be read: an unresolvable token, or a unit whose
+position the client doesn't currently know (for example a party or raid
+member outside your sync range). Branch on `checkedPosition`, not on the
+number: a real `0` (querying yourself, or exactly co-located units) is
+indistinguishable by value from the miss placeholder. A bad token returns
+`(0, false)` rather than raising an error.
+
+Accepts any standard unit token (`"player"`, `"target"`, `"partyN"`,
+`"mouseover"`, etc.).
 
 ---
 
