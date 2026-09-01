@@ -44,7 +44,6 @@
 //     frame itself — see comments on `OFF_TOOLTIP_*` in `Offsets.h`.
 
 #include "Game.h"
-#include "MinHook.h"
 #include "Offsets.h"
 
 #include <cstdint>

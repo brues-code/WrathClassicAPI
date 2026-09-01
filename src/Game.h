@@ -242,17 +242,42 @@ struct GlueModuleAutoRegister {
 
 void RunGlueModuleRegistrations();
 
-// Declarative MinHook registration. Each feature module declares a
-// file-scope `static const Game::HookAutoRegister _hookreg{target,
-// &hook_fn, reinterpret_cast<void**>(&original_fn)};` and
-// `RunHookRegistrations` (called from `InstallHooks` after `MH_Initialize`)
-// walks the list, `MH_CreateHook`-ing each and QUEUEING its enable. The
-// caller applies the whole batch with one `MH_ApplyQueued`. Returns false
-// on the first `MH_CreateHook` or `MH_QueueEnableHook` failure so the
-// installer can fail-fast.
-//
-// Use only for feature hooks; the core GameUI hook in DllMain itself
-// is interleaved with module-registration logic and stays there.
+// A loader-provided detour installer. The core records its feature hooks via
+// HookAutoRegister and its lifecycle hooks via InstallCoreHooks, then installs
+// both through this interface — so no core translation unit references a specific
+// hook engine, and the same core sources build into either front-end. The
+// front-ends supply the implementation:
+//   * the LichLoader-injected DLL backs it with MinHook (create + queue-enable,
+//     then one MH_ApplyQueued for the whole batch);
+//   * a WXL extension backs it with WXL's chained hook registry, which also lets
+//     our detours coexist with other extensions hooking the same engine seam.
+// `Install` patches `target`, routes it to `detour`, and writes the callable
+// trampoline to `*original`. Returns false on failure so the installer can
+// fail-fast. Any batching/commit is the front-end's concern, performed after all
+// Install calls have returned.
+struct IHookHost {
+    virtual bool Install(uintptr_t target, void *detour, void **original) = 0;
+
+protected:
+    ~IHookHost() = default;
+};
+
+// Installs the engine hooks that drive the module lifecycle, through `host`:
+//   * in-game Lua-state ready    -> RunModuleRegistrations()  (bootstrap signal)
+//   * in-game Lua-state teardown -> RunReloadCleanups()       (on /reload, /logout)
+// and performs the data write that admits our DLL-resident C closures past the
+// engine's "function pointer must live in Wow.exe's .text" gate. Both front-ends
+// call this with their own IHookHost, so the bootstrap wiring — detours, offsets,
+// and the gate write — lives in exactly one place; only the host differs.
+// Returns false on the first Install failure.
+bool InstallCoreHooks(IHookHost &host);
+
+// Declarative hook registration. Each feature module declares a file-scope
+// `static const Game::HookAutoRegister _hookreg{target, &hook_fn,
+// reinterpret_cast<void**>(&original_fn)};`, which chains itself onto a global
+// list at DLL-load time. `RunHookRegistrations(host)` walks the list and installs
+// each hook through `host`, returning false on the first Install failure so the
+// installer can fail-fast. The front-end applies/commits the batch afterwards.
 struct HookAutoRegister {
     HookAutoRegister(uintptr_t target, void *hook, void **original);
     uintptr_t target;
@@ -261,7 +286,7 @@ struct HookAutoRegister {
     HookAutoRegister *next;
 };
 
-bool RunHookRegistrations();
+bool RunHookRegistrations(IHookHost &host);
 
 // Self-registration for per-/reload state cleanup. A module that keeps
 // file-static state which goes STALE across a game /reload or /logout

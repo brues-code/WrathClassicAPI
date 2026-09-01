@@ -12,7 +12,6 @@
 // WrathClassicAPI. If not, see <https://www.gnu.org/licenses/>.
 
 #include "Game.h"
-#include "MinHook.h"
 #include "Offsets.h"
 
 namespace Game {
@@ -168,20 +167,10 @@ HookAutoRegister::HookAutoRegister(uintptr_t target, void *hook, void **original
     g_hookHead = this;
 }
 
-bool RunHookRegistrations() {
-    for (auto *node = g_hookHead; node != nullptr; node = node->next) {
-        auto *targetPtr = reinterpret_cast<LPVOID>(node->target);
-        if (MH_CreateHook(targetPtr, node->hook,
-                          reinterpret_cast<LPVOID *>(node->original)) != MH_OK)
+bool RunHookRegistrations(IHookHost &host) {
+    for (auto *node = g_hookHead; node != nullptr; node = node->next)
+        if (!host.Install(node->target, node->hook, node->original))
             return false;
-        // Queue, don't enable. The caller (InstallHooks) applies every
-        // queued hook with a single MH_ApplyQueued, so all hooks share ONE
-        // thread-freeze instead of one freeze per hook. Since the install
-        // runs from Load() (off the loader lock), this keeps it cheap on
-        // machines whose security stack intercepts SuspendThread per call.
-        if (MH_QueueEnableHook(targetPtr) != MH_OK)
-            return false;
-    }
     return true;
 }
 
