@@ -286,26 +286,36 @@ void Push(void *L, const uint8_t *unit, int slot) {
     Game::Lua::SetFieldNumber(L, "expirationTime", expiration);
     Game::Lua::SetFieldString(L, "sourceUnit", source);
     Game::Lua::SetFieldBool(L, "isFromPlayerOrPlayerPet", fromPlayerOrPet);
+    Game::Lua::SetFieldBool(L, "isStealable", stealable);
     Game::Lua::SetFieldNumber(L, "timeMod", 1.0);
 
-    // Vanilla-truthful zeros / falses for fields whose underlying
-    // engine systems don't exist in 3.3.5. Modern returns sensible
-    // defaults for these in legacy content too, so addons that read
-    // them won't crash even when no real data is available.
-    Game::Lua::SetFieldNumber(L, "charges", 0);
-    Game::Lua::SetFieldNumber(L, "maxCharges", 0);
-    Game::Lua::SetFieldBool(L, "isStealable", stealable);
+    // `points` — modern's per-effect value list. 3.3.5 doesn't keep per-aura
+    // effect amounts on the client (they're baked into stats at apply time), so
+    // it's always an empty table, matching what modern returns for an aura that
+    // exposes no points.
+    Game::Lua::PushString(L, "points");
+    Game::Lua::NewTable(L);
+    Game::Lua::SetTable(L, -3);
+
+    // Modern-shape fields with no 3.3.5 source — emitted with the same default
+    // the modern AuraData carries so consumers reading them get a sensible value
+    // rather than nil.
     Game::Lua::SetFieldBool(L, "isBossAura", false);
     Game::Lua::SetFieldBool(L, "isNameplateOnly", false);
     Game::Lua::SetFieldBool(L, "nameplateShowAll", false);
     Game::Lua::SetFieldBool(L, "nameplateShowPersonal", false);
+    Game::Lua::SetFieldBool(L, "hideOnPartyFrames", false);
     Game::Lua::SetFieldBool(L, "canApplyAura", false);
-    Game::Lua::SetFieldBool(L, "shouldConsolidate", false);
+    Game::Lua::SetFieldBool(L, "canActivePlayerDispel", false);
     Game::Lua::SetFieldBool(L, "isRaid", false);
+    Game::Lua::SetFieldBool(L, "isTankRoleAura", false);
+    Game::Lua::SetFieldBool(L, "isHealerRoleAura", false);
+    Game::Lua::SetFieldBool(L, "isDPSRoleAura", false);
 
-    // `auraInstanceID`, `points` deliberately omitted — modern
-    // returns nil for those when they don't apply, and Lua reading
-    // a missing key yields nil, so no explicit field needed.
+    // `auraInstanceID` omitted (nil): 3.3.5 has no per-application instance-ID
+    // system, and the companion APIs (GetAuraDataByAuraInstanceID, the UNIT_AURA
+    // instance payloads) don't exist here — a synthesized id would only mislead
+    // callers that key on it.
 }
 
 } // namespace Aura::Data

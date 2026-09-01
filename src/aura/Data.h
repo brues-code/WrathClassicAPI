@@ -70,12 +70,16 @@ int FindSlotBySpellID(const uint8_t *unit, uint32_t spellID,
 //   isHelpful, isHarmful, duration, expirationTime, sourceUnit,
 //   isFromPlayerOrPlayerPet, isStealable, timeMod
 //
-// Vanilla-truthful defaults (modern provides them; 3.3.5 lacks
-// the underlying systems):
-//   charges=0, maxCharges=0, points=nil, auraInstanceID=nil,
-//   isBossAura=false, isNameplateOnly=false,
+// Modern-shape fields with no 3.3.5 source — emitted with the default the
+// modern AuraData carries so consumers don't read nil:
+//   points={}, isBossAura=false, isNameplateOnly=false,
 //   nameplateShowAll=false, nameplateShowPersonal=false,
-//   canApplyAura=false, shouldConsolidate=false, isRaid=false
+//   hideOnPartyFrames=false, canApplyAura=false, canActivePlayerDispel=false,
+//   isRaid=false, isTankRoleAura=false, isHealerRoleAura=false,
+//   isDPSRoleAura=false
+//
+// Omitted (nil): auraInstanceID — no per-application instance-ID system exists
+// in 3.3.5, and none of its companion APIs do either.
 void Push(void *L, const uint8_t *unit, int slot);
 
 } // namespace Aura::Data

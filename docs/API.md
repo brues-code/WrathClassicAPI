@@ -1664,7 +1664,7 @@ Fields populated with real data:
 |-------|------|-------|
 | `name` | string | Locale-resolved spell name from `Spell.dbc`. |
 | `icon` | string | Full texture path (e.g. `Interface\Icons\Spell_Holy_Renew`). |
-| `applications` | number | Stack count. `1` = single-stack aura (not `0`). |
+| `applications` | number | Stack count; `0` for an aura that doesn't stack (matches the modern call's value for non-stacking auras). |
 | `spellId` | number | Spell ID. |
 | `dispelName` | string\|nil | `"Magic"`, `"Curse"`, `"Disease"`, `"Poison"`, `"Bleed"`, `"Enrage"`, or `nil` for none. |
 | `isHelpful` | boolean | True for buffs. |
@@ -1676,23 +1676,25 @@ Fields populated with real data:
 | `isStealable` | boolean | True iff the local player can Spellsteal this aura off `unit` right now — same predicate the engine's `Script_UnitAura` uses for its 9th return. Always `false` for non-mages, self-auras, non-magic dispel types, and friendly targets. |
 | `timeMod` | number | Always `1` (3.3.5 doesn't expose per-aura time-mod). |
 
-Vanilla-truthful defaults (modern provides these fields; 3.3.5
-lacks the underlying systems):
+Shape-parity defaults — fields the modern `AuraData` carries that have no
+3.3.5 source, returned with a sensible default so consumers don't read `nil`:
 
 | Field | Value |
 |-------|-------|
-| `charges`, `maxCharges` | `0` (3.3.5 has no spell-charge system) |
+| `points` | `{}` (3.3.5 doesn't expose per-effect aura values) |
 | `isBossAura` | `false` |
 | `isNameplateOnly` | `false` |
 | `nameplateShowAll` | `false` |
 | `nameplateShowPersonal` | `false` |
+| `hideOnPartyFrames` | `false` |
 | `canApplyAura` | `false` |
-| `shouldConsolidate` | `false` |
+| `canActivePlayerDispel` | `false` |
 | `isRaid` | `false` |
+| `isTankRoleAura`, `isHealerRoleAura`, `isDPSRoleAura` | `false` |
 
-Modern's `auraInstanceID` and `points` are omitted entirely
-(missing-key reads yield `nil`, matching modern's behavior when
-those fields don't apply).
+`auraInstanceID` is omitted (reads as `nil`): 3.3.5 has no per-application
+instance-ID system, and the companion calls that would make one meaningful
+don't exist here.
 
 ---
 
