@@ -10,19 +10,28 @@ function ColorMixin:OnLoad(r, g, b, a)
     self:SetRGBA(r, g, b, a)
 end
 
-function ColorMixin:IsEqualTo(otherColor)
+function ColorMixin:IsRGBEqualTo(otherColor)
     return self.r == otherColor.r
         and self.g == otherColor.g
         and self.b == otherColor.b
-        and self.a == otherColor.a
+end
+
+function ColorMixin:IsEqualTo(otherColor)
+    return self:IsRGBEqualTo(otherColor) and self.a == otherColor.a
 end
 
 function ColorMixin:GetRGB()
     return self.r, self.g, self.b
 end
 
+function ColorMixin:GetHSL()
+    local r, g, b, a = self.r, self.g, self.b, self.a
+    local h, s, l = C_ColorUtil.ConvertHSVToHSL(C_ColorUtil.ConvertRGBToHSV(r, g, b))
+    return h, s, l, a or 1
+end
+
 function ColorMixin:GetRGBAsBytes()
-    return self.r * 255, self.g * 255, self.b * 255
+    return Round(self.r * 255), Round(self.g * 255), Round(self.b * 255)
 end
 
 function ColorMixin:GetRGBA()
@@ -30,14 +39,14 @@ function ColorMixin:GetRGBA()
 end
 
 function ColorMixin:GetRGBAAsBytes()
-    return self.r * 255, self.g * 255, self.b * 255, (self.a or 1) * 255
+    return Round(self.r * 255), Round(self.g * 255), Round(self.b * 255), Round((self.a or 1) * 255)
 end
 
 function ColorMixin:SetRGBA(r, g, b, a)
     self.r = r
     self.g = g
     self.b = b
-    self.a = a
+    self.a = a or 1
 end
 
 function ColorMixin:SetRGB(r, g, b)
@@ -45,7 +54,11 @@ function ColorMixin:SetRGB(r, g, b)
 end
 
 function ColorMixin:GenerateHexColor()
-    return string.format("ff%.2x%.2x%.2x", self:GetRGBAsBytes())
+    return C_ColorUtil.GenerateTextColorCode(self)
+end
+
+function ColorMixin:GenerateHexColorNoAlpha()
+    return string.format("%.2X%.2X%.2X", self:GetRGBAsBytes())
 end
 
 function ColorMixin:GenerateHexColorMarkup()
@@ -53,15 +66,19 @@ function ColorMixin:GenerateHexColorMarkup()
 end
 
 function ColorMixin:WrapTextInColorCode(text)
-    return WrapTextInColorCode(text, self:GenerateHexColor())
+    return C_ColorUtil.WrapTextInColor(text, self)
 end
 
 function WrapTextInColorCode(text, colorHexString)
-    return string.format("|c%s%s|r", colorHexString, text)
+    return C_ColorUtil.WrapTextInColorCode(text, colorHexString)
 end
 
 function ColorMixin:WrapTextInColorTableCode(text)
     return WrapTextInColorCode(text, self:GenerateHexColor())
+end
+
+function WrapTextInColor(text, color)
+    return C_ColorUtil.WrapTextInColor(text, color)
 end
 
 for _, v in pairs(ITEM_QUALITY_COLORS) do
@@ -70,9 +87,10 @@ end
 
 do
     local envTbl = _G
-    for _, dbColor in ipairs(C_UIColor.GetColors()) do
-        local color = CreateColor(dbColor.color.r, dbColor.color.g, dbColor.color.b, dbColor.color.a)
-        envTbl[dbColor.baseTag] = color
-        envTbl[dbColor.baseTag.."_CODE"] = color:GenerateHexColorMarkup()
-    end
+	local DBColors = C_UIColor.GetColors();
+	for _, dbColor in ipairs(DBColors) do
+		local color = CreateColor(dbColor.color.r, dbColor.color.g, dbColor.color.b, dbColor.color.a);
+		envTbl[dbColor.baseTag] = color;
+		envTbl[dbColor.baseTag.."_CODE"] = color:GenerateHexColorMarkup();
+	end
 end
