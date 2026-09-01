@@ -37,6 +37,7 @@ namespace Lua {
     F(SetField,    lua_setfield,    LUA_SET_FIELD)    \
     F(RawGet,      lua_rawget,      LUA_RAW_GET)      \
     F(RawSet,      lua_rawset,      LUA_RAW_SET)      \
+    F(SetTable,    lua_settable,    LUA_SET_TABLE)    \
     F(Insert,      lua_insert,      LUA_INSERT)       \
     F(Remove,      lua_remove,      LUA_REMOVE)       \
     F(GetTop,      lua_gettop,      LUA_GET_TOP)      \

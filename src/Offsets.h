@@ -425,6 +425,7 @@ enum Offsets {
     LUA_GET_TOP       = 0x0084DBD0, // int  lua_gettop(L)
     LUA_SET_TOP       = 0x0084DBF0, // void lua_settop(L, idx)
     LUA_CREATE_TABLE  = 0x0084E6E0, // void lua_createtable(L, narr, nrec) — use this for new tables
+    LUA_SET_TABLE     = 0x0084E8D0, // void lua_settable(L, idx) — metamethod-aware (see the rawset/settable note above)
     LUA_INSERT        = 0x0084DCC0, // void lua_insert(L, idx)
     LUA_REMOVE        = 0x0084DC50, // void lua_remove(L, idx)
     LUA_PUSH_VALUE    = 0x0084DE50, // void lua_pushvalue(L, idx)

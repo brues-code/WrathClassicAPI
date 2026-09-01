@@ -72,6 +72,7 @@ using lua_getfield_t = void(__cdecl *)(void *L, int idx, const char *name);
 using lua_setfield_t = void(__cdecl *)(void *L, int idx, const char *name);
 using lua_rawget_t = void(__cdecl *)(void *L, int idx);
 using lua_rawset_t = void(__cdecl *)(void *L, int idx);
+using lua_settable_t = void(__cdecl *)(void *L, int idx);
 using lua_insert_t = void(__cdecl *)(void *L, int idx);
 using lua_remove_t = void(__cdecl *)(void *L, int idx);
 using lua_gettop_t = int(__cdecl *)(void *L);
@@ -111,6 +112,9 @@ extern const lua_getfield_t GetField;
 extern const lua_setfield_t SetField;
 extern const lua_rawget_t RawGet;
 extern const lua_rawset_t RawSet;
+// Metamethod-aware table set (lua_settable): `t[k] = v` honoring __newindex,
+// unlike RawSet. Mixin uses it to preserve `object[k] = v` copy semantics.
+extern const lua_settable_t SetTable;
 // Helper: lua_setglobal(L, name) is lua_setfield(L, LUA_GLOBALSINDEX, name).
 inline void SetGlobal(void *L, const char *name) { SetField(L, GLOBALS_INDEX, name); }
 inline void GetGlobal(void *L, const char *name) { GetField(L, GLOBALS_INDEX, name); }

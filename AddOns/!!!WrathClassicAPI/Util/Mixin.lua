@@ -1,24 +1,8 @@
--- Backport of FrameXML/Mixin.lua. The Mixin pattern landed in Cataclysm;
--- stock 3.3.5 FrameXML has none of these helpers.
---
--- Lua 5.1 has real varargs (`...` + `select`), so unlike the 1.12 sibling
--- there's no `arg`-table dance here.
-
-function Mixin(object, ...)
-    for i = 1, select("#", ...) do
-        local mixin = select(i, ...)
-        if mixin then
-            for k, v in pairs(mixin) do
-                object[k] = v
-            end
-        end
-    end
-    return object
-end
-
-function CreateFromMixins(...)
-    return Mixin({}, ...)
-end
+-- `Mixin` and `CreateFromMixins` are engine (DLL) natives — see
+-- src/baselib/Mixin.cpp — so they exist whenever WrathClassicAPI is injected,
+-- even with this addon disabled, mirroring retail where they live in TableUtil
+-- as C functions. Only the composite helper (which calls a Lua `:Init` method)
+-- stays here, like retail's Mixin.lua.
 
 function CreateAndInitFromMixin(mixin, ...)
     local object = CreateFromMixins(mixin)
