@@ -414,6 +414,21 @@ enum Offsets {
     OFF_UNIT_FIELD_HEALTH = 0x48,
     OFF_UNIT_FIELD_MAXHEALTH = 0x68,
 
+    // UNIT_FIELD_POWER1..7 / MAXPOWER1..7 in the same descriptor: POWER[t] at
+    // +0x4C + t*4, MAXPOWER[t] at +0x6C + t*4 (t = 0..6 = mana, rage, focus,
+    // energy, happiness, runes, runic power). The unit's ACTIVE power type is
+    // byte 3 of UNIT_FIELD_BYTES_0 (+0x47). Verified in Script_UnitPower /
+    // Script_UnitPowerMax (FUN_0060ED40 / FUN_0060EF40) and the power getter
+    // FUN_0071C2E0 (`*(*(unit+0xD0) + 0x4C + t*4)`).
+    OFF_UNIT_DESCRIPTOR_POWER_TYPE = 0x47,
+    OFF_UNIT_FIELD_POWER_BASE = 0x4C,    // POWER[t]    = base + t*4
+    OFF_UNIT_FIELD_MAXPOWER_BASE = 0x6C, // MAXPOWER[t] = base + t*4
+
+    // Power display-divisor table (uint32[], indexed by power type). Rage and
+    // runic power are stored x10, so UnitPower divides the raw field by this
+    // before returning. `FUN_007FDE00(t)` is just `t < 0 ? 1 : table[t]`.
+    VAR_POWER_DISPLAY_DIVISOR_TABLE = 0x00AF5220,
+
     // Group-roster fallback for a party/raid member outside the client's
     // object-sync range (no live object to read a descriptor from). The
     // token -> GUID -> party -> raid resolution is wrapped by Unit::ResolveMember
@@ -425,7 +440,10 @@ enum Offsets {
     //   party by GUID:  FUN_00513C30(const uint32 guid[2]) -> record* | null
     //   raid  by GUID:  FUN_00513CB0(const uint32 guid[2]) -> record* | null
     // Record fields are per-stat; the health fields (uint32) are party health
-    // @+0x0C, max @+0x10; raid health @+0x5C, max @+0x60.
+    // @+0x0C, max @+0x10; raid health @+0x5C, max @+0x60. The power fields (both
+    // u16, and the roster caches only the member's ACTIVE power type) are party
+    // type @+0x0A / current @+0x14 / max @+0x16; raid type @+0x58 / current
+    // @+0x64 / max @+0x66. All from Script_UnitPower / Script_UnitPowerMax.
     FUN_TOKEN_TO_GUID = 0x0060ABF0,
     FUN_PARTY_ROSTER_BY_GUID = 0x00513C30,
     FUN_RAID_ROSTER_BY_GUID = 0x00513CB0,
@@ -433,6 +451,12 @@ enum Offsets {
     OFF_PARTY_MEMBER_MAXHEALTH = 0x10,
     OFF_RAID_MEMBER_HEALTH = 0x5C,
     OFF_RAID_MEMBER_MAXHEALTH = 0x60,
+    OFF_PARTY_MEMBER_POWER_TYPE = 0x0A,
+    OFF_PARTY_MEMBER_POWER = 0x14,
+    OFF_PARTY_MEMBER_MAXPOWER = 0x16,
+    OFF_RAID_MEMBER_POWER_TYPE = 0x58,
+    OFF_RAID_MEMBER_POWER = 0x64,
+    OFF_RAID_MEMBER_MAXPOWER = 0x66,
 
     // Local player class byte global. Populated by the engine during
     // login session setup — well before the unit descriptor at

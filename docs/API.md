@@ -119,6 +119,7 @@ Conventions:
   - [`UnitPosition(unit)`](#unitpositionunit)
   - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
   - [`UnitHealthMissing(unit)`](#unithealthmissingunit)
+  - [`UnitPowerMissing(unit[, powerType])`](#unitpowermissingunit-powertype)
   - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -1540,6 +1541,29 @@ Stays correct for party and raid members even when they aren't near you (out
 of visible range) — it reports the same health your group frames show, so the
 deficit is right whether or not the unit is on screen. Accepts any standard
 unit token.
+
+### `UnitPowerMissing(unit[, powerType])`
+
+Returns the unit's missing power — `UnitPowerMax(unit, powerType) -
+UnitPower(unit, powerType)` — as a number, never negative. The power analog
+of `UnitHealthMissing`.
+
+```lua
+UnitPowerMissing("player")       -- deficit of your active power bar
+UnitPowerMissing("player", 0)    -- mana deficit specifically (e.g. a druid in form)
+UnitPowerMissing("target")
+```
+
+`powerType` is optional — `0` mana, `1` rage, `2` focus, `3` energy, `4`
+happiness, `5` runes, `6` runic power. Omitted, the unit's active power type
+is used, same as `UnitPower`/`UnitPowerMax`. `0` at full power, and `0` for a
+unit that can't be read. For rage and runic power the result is in displayed
+units (0–100), matching `UnitPower`/`UnitPowerMax`.
+
+Works for party and raid members out of visible range (from the roster cache),
+like `UnitHealthMissing` — but the roster caches only the member's active power
+type, so requesting a different explicit type for an out-of-range member reads
+`0`. Accepts any standard unit token.
 
 ### `UnitTokenFromGUID(guid)`
 
