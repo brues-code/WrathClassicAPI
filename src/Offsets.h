@@ -1424,4 +1424,51 @@ enum Offsets {
     // Callers pass this same pointer through.
     VAR_ZLIB_VERSION_STRING = 0x00A3B558,
     ZLIB_STREAM_SIZE = 0x38, // sizeof(z_stream), 1.2.2 32-bit build
+
+    // --- Virtual XML templates (src/xml/Templates.cpp) -------------------------
+    //
+    // The store that backs `inherits=` and `C_XMLUtil.*`. Every
+    // `<Frame virtual="true">` (etc.) the XML loader parses is registered into a
+    // Storm hash table by name via FUN_00813be0 (strings "Virtual object named
+    // %s already exists" / "-- Added virtual frame %s"); the CreateFrame-from-XML
+    // builder FUN_00812fa0 and the top-level file loader FUN_00813ee0 read it
+    // back through the generic Storm lookup. So it's the authoritative template
+    // list — fonts live in a separate registry (DAT_00D3F6E8, the frame-type
+    // factory table) and are correctly excluded.
+    //
+    // Storm hash table object at VAR_XML_TEMPLATE_OBJECT. Its bucket-array
+    // pointer is at +0x1C (VAR_XML_TEMPLATE_TABLE, 0 until first allocation) and
+    // its bucket-count mask at +0x24 (VAR_XML_TEMPLATE_MASK, 0xFFFFFFFF until the
+    // first template registers). Layout confirmed against the lookup FUN_0055F4D0.
+    VAR_XML_TEMPLATE_OBJECT = 0x00D3F6C0,
+    VAR_XML_TEMPLATE_TABLE = 0x00D3F6DC,
+    VAR_XML_TEMPLATE_MASK = 0x00D3F6E4,
+    // Bucket struct (0xC bytes): { linkOffset@+0x0, ?@+0x4, chainHead@+0x8 }.
+    // A node's next pointer is at `*(node + linkOffset + 4)`; the tail sentinel
+    // has its low bit set (chain ends on `(ptr & 1) != 0`). Identical to 1.12.
+    XML_TEMPLATE_BUCKET_STRIDE = 0xC,
+    OFF_XML_TEMPLATE_BUCKET_LINKOFF = 0x0,
+    OFF_XML_TEMPLATE_BUCKET_HEAD = 0x8,
+    // Registry node payload: hash @+0x0, template name string @+0x14, parsed
+    // definition XML node @+0x18 (virtual flag @+0x1C, in-progress byte @+0x20 —
+    // unused here). Confirmed in FUN_00813be0 (writes) and FUN_0055F4D0 (reads).
+    OFF_XML_TEMPLATE_NODE_NAME = 0x14,
+    OFF_XML_TEMPLATE_NODE_DEF = 0x18,
+    // Parsed XML element node. Unlike 1.12 (tag @+0x8, child @+0x4, sibling
+    // @+0x1C) the 3.3.5 node is larger: tag-name string ("Frame" / "Button" /
+    // …) @+0x14 — this is the frame "type" — first child @+0x8, next sibling
+    // @+0x34. Derived from the XML builder FUN_00812fa0 (`*(node+0x14)` type),
+    // the <Size> parser FUN_00815740 (`*(node+8)` first child), and the file
+    // loader FUN_00813ee0 (`*(node+0x34)` sibling walk).
+    OFF_XML_NODE_TAG = 0x14,
+    OFF_XML_NODE_CHILD = 0x8,
+    OFF_XML_NODE_SIBLING = 0x34,
+    // XML node's by-name attribute accessor. `__thiscall(node, name) -> value
+    // string` (null if absent); attributes are 0x18-byte entries at node+0x28,
+    // count at node+0x24 (name @entry+0x8, value @entry+0x14). FUN_00814730.
+    FUN_XML_NODE_GET_ATTRIBUTE = 0x00814730,
+    // Generic Storm hash lookup-by-name. `__thiscall(table, name) -> node`, 0 if
+    // unregistered (hash + case-insensitive compare). Pass VAR_XML_TEMPLATE_OBJECT
+    // for the template table; the returned node's def is at +0x18. FUN_0055F4D0.
+    FUN_STORM_HASH_LOOKUP = 0x0055F4D0,
 };

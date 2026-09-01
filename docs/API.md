@@ -123,6 +123,10 @@ Conventions:
   - [`C_UnitAuras.GetUnitAuras(unit[, filter])`](#c_unitaurasgetunitaurasunit-filter)
   - [`C_UnitAuras.GetAuraDispelTypeColor(type)`](#c_unitaurasgetauradispeltypecolortype)
   - [`AuraData` table shape](#auradata-table-shape)
+- [XML Templates](#xml-templates)
+  - [`C_XMLUtil.DoesTemplateExist(templateName)`](#c_xmlutildoestemplateexisttemplatename)
+  - [`C_XMLUtil.GetTemplateInfo(templateName)`](#c_xmlutilgettemplateinfotemplatename)
+  - [`C_XMLUtil.GetTemplates()`](#c_xmlutilgettemplates)
 - [Globals](#globals)
   - [`LE_EXPANSION_*`](#le_expansion_)
 - [Behavioral extensions](#behavioral-extensions)
@@ -1590,6 +1594,59 @@ lacks the underlying systems):
 Modern's `auraInstanceID` and `points` are omitted entirely
 (missing-key reads yield `nil`, matching modern's behavior when
 those fields don't apply).
+
+---
+
+## XML Templates
+
+Introspection of the virtual frame templates (`<Frame virtual="true">`
+and friends) that `inherits=` and `CreateFrame`'s template argument
+resolve against.
+
+### `C_XMLUtil.DoesTemplateExist(templateName)`
+
+Returns `true` if a virtual frame template of that name is registered,
+`false` otherwise. Case-insensitive.
+
+```lua
+C_XMLUtil.DoesTemplateExist("UIPanelButtonTemplate")  -- true
+C_XMLUtil.DoesTemplateExist("NopeNotReal")            -- false
+```
+
+### `C_XMLUtil.GetTemplateInfo(templateName)`
+
+Returns a table describing the template, or `nil` if no template of
+that name exists. Case-insensitive.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `type` | string | The template's frame type — `"Frame"`, `"Button"`, `"CheckButton"`, `"StatusBar"`, etc. |
+| `width` | number | Declared `<Size>` width, or `0` if the template declares no size. |
+| `height` | number | Declared `<Size>` height, or `0` if the template declares no size. |
+| `keyValues` | table | Always an empty table. |
+| `inherits` | string\|nil | The comma-delimited `inherits=` list, or `nil` if the template inherits nothing. |
+
+Most templates declare no `<Size>` (they're sized by whatever consumes
+them), so `width`/`height` come back `0` for those.
+
+```lua
+C_XMLUtil.GetTemplateInfo("UICheckButtonTemplate")
+-- { type = "CheckButton", width = 32, height = 32, keyValues = {} }
+C_XMLUtil.GetTemplateInfo("UIPanelButtonTemplate")
+-- { type = "Button", width = 0, height = 0, keyValues = {} }
+```
+
+### `C_XMLUtil.GetTemplates()`
+
+Returns an array of `{ name = templateName, type = frameType }` over
+every registered virtual frame template. Fonts are not included. The
+list reflects the XML currently loaded and is rebuilt on `/reload`.
+
+```lua
+local templates = C_XMLUtil.GetTemplates()
+print(#templates)                                  -- e.g. 317
+print(templates[1].name, templates[1].type)        -- FriendsFrameTabTemplate  Button
+```
 
 ---
 
