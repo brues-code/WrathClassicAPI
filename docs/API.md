@@ -7,10 +7,12 @@ documents shape, semantics, and edge cases per call.
 
 Conventions:
 
-- "`ByID` variant" means the call accepts a numeric `itemID` (or a
-  `"item:N..."` string / full hyperlink). The non-`ByID` variant
-  accepts an `itemLocation` — table form `{bagID, slotIndex}` or
-  `{equipmentSlotIndex}`, or a GUID string `"0xHHHHHHHHLLLLLLLL"`.
+- "`ByID` variant" means the call accepts any of retail's item-arg
+  forms: a numeric `itemID`, an item link / bare `"item:N..."`, an
+  item **name** (of a cached item), or an item **GUID** string
+  `"0xHHHHHHHHLLLLLLLL"`. The non-`ByID` variant accepts an
+  `itemLocation` — table form `{bagID, slotIndex}` or
+  `{equipmentSlotIndex}`, or that same GUID string.
 - "Returns nil on cache miss" means the call fires `WarmCache` so a
   follow-up call after `GET_ITEM_INFO_RECEIVED` lands the data —
   same behavior as the modern `GetItemInfo` (5.4+) on cache misses.
@@ -667,8 +669,10 @@ local itemID, itemType, itemSubType, equipLoc, icon, classID, subClassID
     = C_Item.GetItemInfoInstant(itemInfo)
 ```
 
-For any item shipped with the 3.3.5 client this is genuinely instant and never
-returns `nil` — you don't have to have seen, hovered, or cached the item first.
+`item` accepts any of retail's forms — item ID, item link, item name (of a
+cached item), or an item GUID string. For any item shipped with the 3.3.5
+client this is genuinely instant and never returns `nil` — you don't have to
+have seen, hovered, or cached the item first.
 
 ```lua
 C_Item.GetItemInfoInstant(6948)

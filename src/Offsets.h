@@ -121,6 +121,14 @@ enum Offsets {
     // the response arrives.
     FUN_SCRIPT_GET_ITEM_INFO = 0x00516C60,
 
+    // Engine's item-arg string -> itemID resolver — the path GetItemInfo(name),
+    // GetItemFamily, etc. take for a string arg. `__cdecl(const char *s) -> u32`:
+    // if `s` contains "item:" it parses the link's itemID; otherwise it looks
+    // `s` up as an item NAME in the item cache's name index (DAT_00CA1168) and
+    // returns that record's itemID, or 0 when the name isn't cached. Does NOT
+    // handle a bare numeric string or an item GUID (callers cover those).
+    FUN_ITEM_STRING_TO_ID = 0x00709DE0,
+
     // Item-stats cache record field offsets. Verified inside
     // `Script_GetItemInfo` (FUN_00516C60): the record pointer
     // `puVar4` is the result of `FUN_0067CA30` (DBCache::GetRecord),
