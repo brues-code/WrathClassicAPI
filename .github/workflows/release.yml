@@ -1,29 +1,83 @@
 name: Release
 
+# One tag, both front-ends. Push a vX.Y.Z tag and CI builds and publishes BOTH:
+# the LichLoader DLL (this repo) and the WarcraftXL extension
+# (brues-code/wxl-wrathclassicapi), each stamped to the tag. The wrapper repo is
+# never touched by hand.
+#
+# Requires one secret: WRAPPER_REPO_TOKEN — a fine-grained PAT scoped to
+# brues-code/wxl-wrathclassicapi with Contents: Read and write. It clones the
+# private wrapper, pushes the stamped wxl.json + tag, and creates its release.
+
 on:
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: write # GITHUB_TOKEN: this repo's release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout WrathClassicAPI (at the tag)
+        uses: actions/checkout@v4
         with:
           submodules: recursive
+          path: WrathClassicAPI
 
-      - name: Configure
-        run: cmake -B build -A Win32 "-DWRATHCLASSICAPI_TAG=${{ github.ref_name }}"
+      - name: Checkout wxl-core (extension ABI)
+        uses: actions/checkout@v4
+        with:
+          repository: WarcraftXL/wxl-core
+          path: wxl-core
 
-      - name: Build
-        run: cmake --build build --config Release
+      - name: Checkout wxl-wrathclassicapi (private, writable)
+        uses: actions/checkout@v4
+        with:
+          repository: brues-code/wxl-wrathclassicapi
+          ref: main
+          token: ${{ secrets.WRAPPER_REPO_TOKEN }}
+          path: wxl-wrathclassicapi
 
-      - name: Release
+      - name: Build WrathClassicAPI.dll (LichLoader front-end)
+        run: |
+          cmake -S WrathClassicAPI -B WrathClassicAPI/build -A Win32 "-DWRATHCLASSICAPI_TAG=${{ github.ref_name }}"
+          cmake --build WrathClassicAPI/build --config Release
+
+      - name: Build wxl-wrathclassicapi.dll (WXL extension front-end)
+        run: |
+          cmake -S wxl-wrathclassicapi -B wxl-wrathclassicapi/build -A Win32 "-DWRATHCLASSICAPI_TAG=${{ github.ref_name }}" "-DWRATHCLASSICAPI_DIR=${{ github.workspace }}/WrathClassicAPI" "-DWXL_CORE_DIR=${{ github.workspace }}/wxl-core"
+          cmake --build wxl-wrathclassicapi/build --config Release
+
+      - name: Stamp wxl.json + tag the wrapper repo
+        shell: pwsh
+        working-directory: wxl-wrathclassicapi
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $stamped = ([regex]'("version"\s*:\s*")[^"]*(")').Replace((Get-Content -Raw wxl.json), ('${1}' + $ver + '${2}'), 1)
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'wxl.json'), $stamped)
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if (git status --porcelain -- wxl.json) { git commit wxl.json -m "release ${{ github.ref_name }}" }
+          git tag "${{ github.ref_name }}"
+          git push origin HEAD:main
+          git push origin "${{ github.ref_name }}"
+
+      - name: Release WrathClassicAPI.dll (this repo)
         uses: softprops/action-gh-release@v2
         with:
-          files: build/Release/WrathClassicAPI.dll
+          files: WrathClassicAPI/build/Release/WrathClassicAPI.dll
           generate_release_notes: true
+
+      - name: Release wxl-wrathclassicapi.dll (extension repo)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.WRAPPER_REPO_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" "wxl-wrathclassicapi/build/Release/wxl-wrathclassicapi.dll" --repo brues-code/wxl-wrathclassicapi --title "WrathClassicAPI ${{ github.ref_name }}" --generate-notes
