@@ -415,6 +415,28 @@ enum Offsets {
     // bags are TYPEID_CONTAINER but every `C_Item.*` accessor that
     // takes an `itemLocation` should still work on them.
     OBJ_FLAGS_ITEM = 0x02 | 0x04,
+    // TYPEMASK_UNIT — resolves a GUID to its in-world CGUnit (player or creature)
+    // only, or null. Used by UnitNameFromGUID.
+    OBJ_FLAGS_UNIT = 0x08,
+
+    // UnitNameFromGUID (src/unit/NameFromGUID.cpp). Two name sources, mirroring
+    // the engine's own Script_UnitName (FUN_0060E740):
+    //   * in-world CGUnit -> FUN_004FD0E0(unit, &realmOut, 1) -> name (any player
+    //     or creature you can see). `__thiscall`; realmOut receives the realm
+    //     string pointer (null for creatures).
+    //   * player name cache -> FUN_0067D770, a `__thiscall` DBCache::GetRecord on
+    //     the cache object at VAR_PLAYER_NAME_CACHE. Exact call from
+    //     Script_GetPlayerInfoByGUID: `ECX = cache; (guidLo, guidHi, &scratch[2],
+    //     0, 0, 0)`, non-null return = the record; the trailing 0s keep it a pure
+    //     lookup (no name query / side effects). Same store/record that backs
+    //     GetPlayerInfoByGUID, so it covers cached players (group, chat, combat)
+    //     whether or not they're in view. Record holds the name inline at +0x00
+    //     and the realm inline at +0x34.
+    FUN_UNIT_NAME_FROM_OBJECT = 0x004FD0E0,
+    VAR_PLAYER_NAME_CACHE = 0x00C5D938,
+    FUN_PLAYER_NAME_CACHE_GET = 0x0067D770,
+    OFF_PLAYER_NAME_REC_NAME = 0x00,
+    OFF_PLAYER_NAME_REC_REALM = 0x34,
 
     // CGUnit descriptor (updatefields buffer) pointer offset.
     // Verified inside the engine's own `Script_UnitClassBase`

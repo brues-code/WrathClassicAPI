@@ -123,6 +123,7 @@ Conventions:
   - [`UnitHealthMissing(unit)`](#unithealthmissingunit)
   - [`UnitPowerMissing(unit[, powerType])`](#unitpowermissingunit-powertype)
   - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
+  - [`UnitNameFromGUID(guid)`](#unitnamefromguidguid)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1583,6 +1584,23 @@ UnitTokenFromGUID(UnitGUID("target"))   -- "target" (or "party3"/"raid7"/… if 
 GUID that isn't any current unit returns `nil`; a nil or non-string argument
 raises a usage error. It returns whatever token the client currently uses to
 name that unit, so any unit token the client recognizes resolves here.
+
+### `UnitNameFromGUID(guid)`
+
+Returns `(name, realm)` for the unit or player with that GUID, or `nil` if the
+client doesn't know a name for it.
+
+```lua
+UnitNameFromGUID(UnitGUID("player"))   -- "Notfunny"
+UnitNameFromGUID(UnitGUID("target"))   -- the target's name
+```
+
+`guid` is a GUID string (as returned by `UnitGUID`). It resolves any player the
+client has cached a name for — group members, plus anyone seen in chat, the
+combat log, or `/who` — whether or not they're on screen, and any unit or
+creature currently in view. `realm` is `nil` for a same-realm player (so,
+everyone on a single-realm server) and for creatures. A GUID the client has no
+name for returns `nil`.
 
 ---
 

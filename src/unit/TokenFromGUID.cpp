@@ -24,6 +24,7 @@
 // too, so the token returned is exactly what the game would call the unit.
 
 #include "Game.h"
+#include "Guid.h"
 #include "Offsets.h"
 #include "unit/Resolve.h"
 
@@ -33,8 +34,6 @@ namespace Unit::TokenFromGUID {
 
 namespace {
 
-using HexString2Guid_t = uint64_t(__cdecl *)(const char *s);
-
 int __cdecl Script_UnitTokenFromGUID(void *L) {
     // Modern raises on a nil / non-string GUID (e.g. UnitGUID of an absent unit),
     // so match that rather than returning nil. A valid-but-unmapped GUID still
@@ -43,17 +42,10 @@ int __cdecl Script_UnitTokenFromGUID(void *L) {
         Game::Lua::Error(L, "Usage: local unitToken = UnitTokenFromGUID(unitGUID)");
         return 0;
     }
-    const char *guidStr = Game::Lua::ToString(L, 1);
-    if (guidStr == nullptr)
-        return 0;
-
-    const uint64_t guid =
-        reinterpret_cast<HexString2Guid_t>(Offsets::FUN_HEXSTRING_TO_GUID)(guidStr);
-    if (guid == 0)
+    const Guid::Pair g = Guid::Parse(Game::Lua::ToString(L, 1));
+    if (!g.valid())
         return 0; // nil — empty / zero GUID maps to no unit
-
-    const uint32_t pair[2] = {static_cast<uint32_t>(guid),
-                              static_cast<uint32_t>(guid >> 32)};
+    const uint32_t pair[2] = {g.lo, g.hi};
 
     // Authoritative keyword list first (includes injected tokens like
     // "nameplateN"); the single-token resolver as a fallback catches "mouseover".

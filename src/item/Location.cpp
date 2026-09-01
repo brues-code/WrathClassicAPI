@@ -14,6 +14,7 @@
 #include "item/Location.h"
 
 #include "Game.h"
+#include "Guid.h"
 #include "Offsets.h"
 #include "unit/Resolve.h"
 
@@ -36,10 +37,6 @@ using GetItemBySlot_t = void *(__fastcall *)(void *invMgr, void *edx, int slot0B
 // `(**(code **)(*bagItem + 0x28))()`.
 using GetContainer_t = void *(__fastcall *)(void *bagItem, void *edx);
 constexpr int kGetContainerVtableSlot = 10;
-
-// Engine GUID helpers — see the offset comments in `Offsets.h`.
-using HexStringToGuid_t = uint64_t (__cdecl *)(const char *s);
-using ObjectResolveByGuid_t = void *(__cdecl *)(uint32_t lo, uint32_t hi, int flags);
 
 void *ResolvePlayerInvMgr() {
     auto *player = static_cast<uint8_t *>(Unit::ResolveToken("player"));
@@ -154,17 +151,12 @@ bool IsLocationArg(void *L, int idx) {
 }
 
 const uint8_t *ResolveGuidString(const char *guidStr) {
-    if (guidStr == nullptr || guidStr[0] == 0)
+    const Guid::Pair g = Guid::Parse(guidStr);
+    if (!g.valid())
         return nullptr;
-    auto hexToGuid = reinterpret_cast<HexStringToGuid_t>(Offsets::FUN_HEXSTRING_TO_GUID);
-    const uint64_t guid = hexToGuid(guidStr);
-    if (guid == 0)
-        return nullptr;
-    auto resolve = reinterpret_cast<ObjectResolveByGuid_t>(Offsets::FUN_OBJECT_RESOLVE_BY_GUID);
-    return static_cast<const uint8_t *>(resolve(
-        static_cast<uint32_t>(guid),
-        static_cast<uint32_t>(guid >> 32),
-        Offsets::OBJ_FLAGS_ITEM));
+    // ObjectMgr::Get gated on the ITEM type mask, so non-item GUIDs (units,
+    // players, …) return nullptr.
+    return static_cast<const uint8_t *>(Guid::ResolveObject(g, Offsets::OBJ_FLAGS_ITEM));
 }
 
 const uint8_t *Resolve(void *L, int locIdx) {
