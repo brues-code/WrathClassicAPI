@@ -116,6 +116,7 @@ Conventions:
   - [`UnitClassID(unit)`](#unitclassidunit)
   - [`UnitRaceID(unit)`](#unitraceidunit)
   - [`UnitRaceBase(unit)`](#unitracebaseunit)
+  - [`UnitPosition(unit)`](#unitpositionunit)
   - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -1464,6 +1465,33 @@ this is the modern additive form that drops the localized name and pairs
 the file token with the numeric ID. Resolves the race the same way
 `UnitRaceID` does (`"player"` login-session fast path, else the unit
 descriptor), and accepts any standard unit token.
+
+### `UnitPosition(unit)`
+
+Returns `(positionX, positionY, positionZ, mapID)` — the unit's world
+position and current map — or `nil` if the unit has no known position.
+
+```lua
+local x, y, z, mapID = UnitPosition("player")
+```
+
+Coordinate system:
+
+- `positionX` — north/south axis; larger is further **north**.
+- `positionY` — east/west axis; larger is further **west**.
+- `positionZ` — altitude (height above the world floor).
+- `mapID` — the current map ID (e.g. `0` Eastern Kingdoms, `1` Kalimdor,
+  `530` Outland, `571` Northrend). Every unit you can query shares the
+  player's map, so this is the same for all of them.
+
+For flat ground distance use `positionX`/`positionY` and drop
+`positionZ` — or let [`UnitDistanceSquared`](#unitdistancesquaredunit) do
+the full 3D calc for you.
+
+Works for any unit the client can currently see. Returns `nil` when the
+position can't be read: an unresolvable token, or a unit outside your
+sync range (for example a party or raid member elsewhere on the map).
+Accepts any standard unit token.
 
 ### `UnitDistanceSquared(unit)`
 

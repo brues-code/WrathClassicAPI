@@ -270,6 +270,14 @@ enum Offsets {
     // deltas. (The 1.12 sibling uses slot 0x14; the WotLK vtable is wider.)
     OFF_CGOBJECT_VTBL_GET_POSITION = 0x2C,
 
+    // Currently-loaded Map.dbc id (continent / instance) — what modern
+    // `UnitPosition` reports as its `mapID`/`instanceID` return. Every unit the
+    // client can see shares the player's instance, so this one global serves any
+    // resolvable unit. Derived from `Script_GetInstanceInfo` (FUN_0051A8C0):
+    // `DAT_00bd088c` is the id it bounds-checks and indexes Map.dbc with
+    // (`*(Map.dbc.indexTable + (DAT_00bd088c - min)*4)`).
+    VAR_CURRENT_MAP_ID = 0x00BD088C,
+
     // --- Reputation / factions ---------------------------------------------
     // Derived from Script_GetFactionInfo (FUN_005D1150 → worker FUN_005D0DA0),
     // Script_SetWatchedFactionIndex (FUN_005D1420), and Script_GetWatchedFactionInfo

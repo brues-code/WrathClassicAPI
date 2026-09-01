@@ -26,40 +26,13 @@
 // indistinguishable from the miss placeholder by value alone.
 
 #include "Game.h"
-#include "Offsets.h"
+#include "unit/Position.h"
 
 #include <cstdint>
 
 namespace Unit::DistanceSquared {
 
 namespace {
-
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
-using GetPosition_t = float *(__thiscall *)(void *self, float out[3]);
-
-// Resolves `token` to a unit object and reads its world position into `out`.
-// Returns false when the token doesn't resolve or the object yields no position.
-bool ReadUnitPosition(const char *token, float out[3]) {
-    if (token == nullptr)
-        return false;
-    void *obj = reinterpret_cast<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN)(token);
-    if (obj == nullptr)
-        return false;
-    auto **vtable = *reinterpret_cast<void ***>(obj);
-    auto fn = reinterpret_cast<GetPosition_t>(
-        vtable[Offsets::OFF_CGOBJECT_VTBL_GET_POSITION / 4]);
-    // GetPosition returns a float* that may be `out` (it filled the buffer) or a
-    // pointer at an internal cached field — copy from whichever it hands back.
-    float *p = fn(obj, out);
-    if (p == nullptr)
-        return false;
-    if (p != out) {
-        out[0] = p[0];
-        out[1] = p[1];
-        out[2] = p[2];
-    }
-    return true;
-}
 
 int __cdecl Script_UnitDistanceSquared(void *L) {
     if (!Game::Lua::IsString(L, 1)) {
@@ -70,7 +43,8 @@ int __cdecl Script_UnitDistanceSquared(void *L) {
 
     float unitPos[3] = {};
     float playerPos[3] = {};
-    if (!ReadUnitPosition(token, unitPos) || !ReadUnitPosition("player", playerPos)) {
+    if (token == nullptr || !Unit::Position::ReadToken(token, unitPos) ||
+        !Unit::Position::ReadToken("player", playerPos)) {
         Game::Lua::PushNumber(L, 0.0);
         Game::Lua::PushBool(L, false);
         return 2;
