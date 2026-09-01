@@ -119,6 +119,7 @@ Conventions:
   - [`UnitPosition(unit)`](#unitpositionunit)
   - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
   - [`UnitHealthMissing(unit)`](#unithealthmissingunit)
+  - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1539,6 +1540,22 @@ Stays correct for party and raid members even when they aren't near you (out
 of visible range) — it reports the same health your group frames show, so the
 deficit is right whether or not the unit is on screen. Accepts any standard
 unit token.
+
+### `UnitTokenFromGUID(guid)`
+
+Returns the unit token that currently refers to `guid` — `"player"`,
+`"target"`, `"partyN"`, `"raidN"`, `"arenaN"`, `"pet"`, `"focus"`,
+`"mouseover"`, etc. — or `nil` if no live unit token maps to it.
+
+```lua
+UnitTokenFromGUID(UnitGUID("player"))   -- "player"
+UnitTokenFromGUID(UnitGUID("target"))   -- "target" (or "party3"/"raid7"/… if grouped)
+```
+
+`guid` is a GUID string as returned by `UnitGUID` (`"0x…"`). A well-formed
+GUID that isn't any current unit returns `nil`; a nil or non-string argument
+raises a usage error. It returns whatever token the client currently uses to
+name that unit, so any unit token the client recognizes resolves here.
 
 ---
 

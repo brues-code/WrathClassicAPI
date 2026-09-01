@@ -47,6 +47,28 @@ inline const uint8_t *Descriptor(const void *obj) {
         static_cast<const uint8_t *>(obj) + Offsets::OFF_UNIT_DESCRIPTOR);
 }
 
+// Resolve a raw {lo, hi} GUID pair to the unit token that currently refers to it
+// ("player", "target", "partyN", "raidN", "arenaN", "pet", "vehicle", "focus",
+// "mouseover", "npc", …), or nullptr if no live token maps to it. For
+// party/raid/arena tokens the result is a shared engine scratch buffer — copy it
+// (e.g. push straight to Lua) before the next engine call. Single-token resolver
+// — does NOT see custom tokens other mods inject; use GuidToTokens for those.
+inline const char *GuidToToken(const uint32_t guid[2]) {
+    using Fn = const char *(__cdecl *)(const uint32_t *guidPair);
+    return reinterpret_cast<Fn>(Offsets::FUN_GUID_TO_UNIT_TOKEN)(guid);
+}
+
+// All unit-token keywords currently naming `guid`, written into a shared static
+// buffer; sets *outCount and returns the token array (or nullptr if the local
+// player isn't in world). This is the engine's authoritative list — the same one
+// it walks to name a unit when firing UNIT_* events — so custom tokens other
+// loaded mods hook in (e.g. awesome_wotlk's "nameplateN") appear here too. Copy
+// any entry (push to Lua) before the next engine call.
+inline const char *const *GuidToTokens(const uint32_t guid[2], int *outCount) {
+    using Fn = const char *const *(__cdecl *)(const uint32_t *guidPair, int *count);
+    return reinterpret_cast<Fn>(Offsets::FUN_GUID_TO_UNIT_KEYWORDS)(guid, outCount);
+}
+
 // Where a unit's synced stats come from. `Object` = the live in-world object
 // (read via its descriptor); `Party`/`Raid` = the group-roster stat cache for a
 // member outside the client's object-sync range; `None` = unresolvable.

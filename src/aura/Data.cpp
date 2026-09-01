@@ -17,6 +17,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 #include <cstring>
@@ -42,20 +43,17 @@ struct SpellRecordBuffer {
 
 using DBCCopyRecord_t = int(__thiscall *)(void *desc, int id, void *outBuffer);
 using DBCGetRecordPtr_t = uintptr_t(__thiscall *)(void *anchor, int id);
-using GuidToToken_t = const char *(__cdecl *)(const uint32_t *guidPair);
 using IsAuraStealable_t = bool(__cdecl *)(const uint8_t *targetUnit,
                                           const uint8_t *auraEntry,
                                           const uint8_t *spellRecord);
 
-// Resolve caster-GUID-pair → unit token via the engine helper. The
-// engine writes party/raid/arena formatted tokens into a shared
-// static buffer at 0x00C25B7C and returns its address — the result
-// is only safe to read until the next call into the engine, so
-// callers push immediately to Lua (which copies).
+// Resolve an aura's caster to a unit token. The caster GUID pair sits at the
+// start of the entry (OFF_AURA_CASTER_GUID_LO); Unit::GuidToToken wraps the
+// engine resolver, whose party/raid/arena result lives in a shared buffer valid
+// only until the next engine call — so callers push it to Lua immediately.
 const char *ResolveCasterToken(const uint8_t *auraEntry) {
-    auto fn = reinterpret_cast<GuidToToken_t>(
-        static_cast<uintptr_t>(Offsets::FUN_AURA_GUID_TO_TOKEN));
-    return fn(reinterpret_cast<const uint32_t *>(auraEntry + Offsets::OFF_AURA_CASTER_GUID_LO));
+    return Unit::GuidToToken(
+        reinterpret_cast<const uint32_t *>(auraEntry + Offsets::OFF_AURA_CASTER_GUID_LO));
 }
 
 // Copy the Spell.dbc record for `spellID` into `buffer`. Returns

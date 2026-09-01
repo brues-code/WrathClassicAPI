@@ -841,13 +841,28 @@ enum Offsets {
     // not always-false like in 1.12 (where it was added later).
     FUN_AURA_IS_STEALABLE              = 0x0053D680,
 
-    // Caster GUID → unit-token resolver. `__cdecl(uint *guidPair)` →
-    // "player" | "target" | "partyN" | "raidN" | "pet" | "partypetN" |
-    // "raidpetN" | "arenaN" | "vehicle" | "focus" | "mouseover" |
-    // "npc" | NULL. Writes party/raid/arena formats into a shared
-    // static buffer at 0x00C25B7C — caller must consume (e.g. push to
-    // Lua, which copies into Lua heap) before the next call.
-    FUN_AURA_GUID_TO_TOKEN             = 0x0060B420,
+    // GUID → single unit-token resolver. `__cdecl(uint *guidPair)` → "player" |
+    // "target" | "partyN" | "raidN" | "pet" | "partypetN" | "raidpetN" |
+    // "arenaN" | "vehicle" | "focus" | "mouseover" | "npc" | NULL (no live token
+    // maps to the GUID). Writes party/raid/arena formats into a shared static
+    // buffer at 0x00C25B7C — caller must consume (e.g. push to Lua, which copies
+    // into the Lua heap) before the next call. Wrapped by Unit::GuidToToken.
+    // Used for aura casters (matching the engine's own UnitAura) and as
+    // UnitTokenFromGUID's "mouseover" fallback. NOTE: this resolver is NOT the
+    // one client mods hook to inject custom tokens — see FUN_GUID_TO_UNIT_KEYWORDS.
+    FUN_GUID_TO_UNIT_TOKEN             = 0x0060B420,
+
+    // GUID → all current unit-token keywords. `__cdecl(const uint *guidPair,
+    // int *outCount) -> char **tokens` (NULL if the local player isn't in
+    // world). Fills a shared static buffer (0x00AD2780) with every token naming
+    // the GUID right now — "player", "pet", "partyN", "raidN", "arenaN",
+    // "bossN", "target", "focus", "npc" (no "mouseover") — and sets *outCount.
+    // This is the engine's own chokepoint for naming a unit when it dispatches
+    // UNIT_* events (FUN_0060BF10 fires each event once per keyword), so tokens
+    // other loaded client mods inject by hooking it — e.g. awesome_wotlk's
+    // "nameplateN" — appear here too. Wrapped by Unit::GuidToTokens. Consume the
+    // strings before the next engine call.
+    FUN_GUID_TO_UNIT_KEYWORDS          = 0x0060BB70,
 
     // Spell.dbc record-copy helper. `__thiscall(this, id, *out)` →
     // copies the 680-byte (0x2A8) record into *out, returns 1 on hit
