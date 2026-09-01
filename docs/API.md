@@ -118,6 +118,7 @@ Conventions:
   - [`UnitRaceBase(unit)`](#unitracebaseunit)
   - [`UnitPosition(unit)`](#unitpositionunit)
   - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
+  - [`UnitHealthMissing(unit)`](#unithealthmissingunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1519,6 +1520,25 @@ indistinguishable by value from the miss placeholder. A bad token returns
 
 Accepts any standard unit token (`"player"`, `"target"`, `"partyN"`,
 `"mouseover"`, etc.).
+
+### `UnitHealthMissing(unit)`
+
+Returns the unit's missing health — `UnitHealthMax(unit) - UnitHealth(unit)` —
+as a number, never negative. `0` at full health, and also `0` for a unit
+that can't be read (no such unit, empty-target token).
+
+```lua
+UnitHealthMissing("player")   -- 0 at full; e.g. 35 after taking 35 damage
+UnitHealthMissing("target")
+```
+
+A convenience for healing addons (overheal checks, "missing health" bars) so
+you don't call both functions and subtract every frame.
+
+Stays correct for party and raid members even when they aren't near you (out
+of visible range) — it reports the same health your group frames show, so the
+deficit is right whether or not the unit is on screen. Accepts any standard
+unit token.
 
 ---
 

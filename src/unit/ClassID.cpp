@@ -13,6 +13,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 #include <cstring>
@@ -41,8 +42,6 @@ namespace Unit::ClassID {
 
 namespace {
 
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
-
 int __cdecl Script_UnitClassID(void *L) {
     if (!Game::Lua::IsString(L, 1))
         return Game::Lua::Error(L, "Usage: UnitClassID(\"unit\")");
@@ -70,14 +69,7 @@ int __cdecl Script_UnitClassID(void *L) {
         return 1;
     }
 
-    auto resolve = reinterpret_cast<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN);
-    auto *unit = static_cast<const uint8_t *>(resolve(token));
-    if (unit == nullptr) {
-        Game::Lua::PushNil(L);
-        return 1;
-    }
-    auto *desc = *reinterpret_cast<const uint8_t *const *>(
-        unit + Offsets::OFF_UNIT_DESCRIPTOR);
+    const uint8_t *desc = Unit::Descriptor(Unit::ResolveToken(token));
     if (desc == nullptr) {
         Game::Lua::PushNil(L);
         return 1;

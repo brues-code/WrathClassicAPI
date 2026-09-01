@@ -31,6 +31,7 @@
 #include "Game.h"
 #include "Offsets.h"
 #include "ui/ColorData.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 #include <cstring>
@@ -39,14 +40,8 @@ namespace Aura::Api {
 
 namespace {
 
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
-
 const uint8_t *ResolveUnit(const char *token) {
-    if (token == nullptr)
-        return nullptr;
-    auto fn = reinterpret_cast<ResolveUnitToken_t>(
-        static_cast<uintptr_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN));
-    return static_cast<const uint8_t *>(fn(token));
+    return static_cast<const uint8_t *>(Unit::ResolveToken(token));
 }
 
 // Case-sensitive substring match for the modern filter tokens.

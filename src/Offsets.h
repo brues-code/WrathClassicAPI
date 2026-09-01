@@ -406,6 +406,34 @@ enum Offsets {
     // units — the exact sibling of the class read at +0x45.
     OFF_UNIT_DESCRIPTOR_RACE_BYTE = 0x44,
 
+    // UNIT_FIELD_HEALTH / UNIT_FIELD_MAXHEALTH within the unit descriptor
+    // (`unit + OFF_UNIT_DESCRIPTOR`). Both uint32, stored at face value (no
+    // display divisor). Verified in Script_UnitHealthMax (FUN_0060EC60 reads
+    // maxhealth at `*(*(unit+0xD0) + 0x68)`) and the health getter FUN_0071C2C0
+    // that Script_UnitHealth calls (`*(*(unit+0xD0) + 0x48)` in the normal case).
+    OFF_UNIT_FIELD_HEALTH = 0x48,
+    OFF_UNIT_FIELD_MAXHEALTH = 0x68,
+
+    // Group-roster fallback for a party/raid member outside the client's
+    // object-sync range (no live object to read a descriptor from). The
+    // token -> GUID -> party -> raid resolution is wrapped by Unit::ResolveMember
+    // (unit/Resolve.h) — the same fallthrough Script_UnitHealth / UnitHealthMax
+    // take when their object lookup misses. All __cdecl internal primitives, no
+    // Lua surface:
+    //   token -> GUID:  FUN_0060ABF0(const char *token, uint32 out[2], char flag)
+    //                   (flag 0; writes {lo, hi}, returns bool success)
+    //   party by GUID:  FUN_00513C30(const uint32 guid[2]) -> record* | null
+    //   raid  by GUID:  FUN_00513CB0(const uint32 guid[2]) -> record* | null
+    // Record fields are per-stat; the health fields (uint32) are party health
+    // @+0x0C, max @+0x10; raid health @+0x5C, max @+0x60.
+    FUN_TOKEN_TO_GUID = 0x0060ABF0,
+    FUN_PARTY_ROSTER_BY_GUID = 0x00513C30,
+    FUN_RAID_ROSTER_BY_GUID = 0x00513CB0,
+    OFF_PARTY_MEMBER_HEALTH = 0x0C,
+    OFF_PARTY_MEMBER_MAXHEALTH = 0x10,
+    OFF_RAID_MEMBER_HEALTH = 0x5C,
+    OFF_RAID_MEMBER_MAXHEALTH = 0x60,
+
     // Local player class byte global. Populated by the engine during
     // login session setup — well before the unit descriptor at
     // `unit + OFF_UNIT_DESCRIPTOR` is ready. Both `Script_UnitClass`

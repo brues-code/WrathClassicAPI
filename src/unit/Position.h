@@ -14,6 +14,7 @@
 #pragma once
 
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 
@@ -25,17 +26,7 @@
 
 namespace Unit::Position {
 
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
 using GetPosition_t = float *(__thiscall *)(void *self, float out[3]);
-
-// Resolves a unit token ("player", "target", "partyN", "mouseover", …) to its
-// object. Returns nullptr for an unresolvable / absent token (the engine's
-// resolver returns null rather than raising, so a bad token degrades cleanly).
-inline void *ResolveToken(const char *token) {
-    if (token == nullptr)
-        return nullptr;
-    return reinterpret_cast<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN)(token);
-}
 
 // Reads `obj`'s world position into `out[3]` — engine C3Vector order
 // {x = north, y = west, z = up}. Calls `obj->vtable[slot](out)`; the returned
@@ -61,7 +52,7 @@ inline bool Read(void *obj, float out[3]) {
 
 // Convenience: resolve a token and read its position in one step.
 inline bool ReadToken(const char *token, float out[3]) {
-    return Read(ResolveToken(token), out);
+    return Read(Unit::ResolveToken(token), out);
 }
 
 } // namespace Unit::Position

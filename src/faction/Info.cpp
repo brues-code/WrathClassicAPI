@@ -23,6 +23,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 
@@ -31,7 +32,6 @@ namespace Faction::Info {
 namespace {
 
 // --- engine helpers (all __cdecl; see Offsets.h) ------------------------------
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
 using GetBand_t = unsigned char(__cdecl *)(int factionID);
 using GetStanding_t = int(__cdecl *)(int factionID);
 using GetBool_t = unsigned char(__cdecl *)(int factionID); // at-war / peace / watched / child
@@ -74,8 +74,7 @@ int ResolveIndex(int idx0) {
 
 // Player's watched rep-slot index, or -1 if unresolvable / nothing watched.
 int WatchedRepIndex() {
-    auto resolve = At<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN);
-    auto *player = static_cast<const uint8_t *>(resolve("player"));
+    auto *player = static_cast<const uint8_t *>(Unit::ResolveToken("player"));
     if (player == nullptr)
         return -1;
     auto *info = *reinterpret_cast<const uint8_t *const *>(

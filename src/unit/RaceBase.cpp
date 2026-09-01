@@ -24,6 +24,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 #include <cstring>
@@ -31,8 +32,6 @@
 namespace Unit::RaceBase {
 
 namespace {
-
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
 
 // UNIT_FIELD_BYTES_0 race byte for `token` (0 when unresolvable / not yet
 // synced). Mirrors Script_UnitRaceID: the "player" token reads the login-session
@@ -42,11 +41,7 @@ uint8_t RaceByte(const char *token) {
     if (std::strcmp(token, "player") == 0)
         return *reinterpret_cast<const uint8_t *>(Offsets::VAR_LOCAL_PLAYER_RACE_BYTE);
 
-    auto resolve = reinterpret_cast<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN);
-    auto *unit = static_cast<const uint8_t *>(resolve(token));
-    if (unit == nullptr)
-        return 0;
-    auto *desc = *reinterpret_cast<const uint8_t *const *>(unit + Offsets::OFF_UNIT_DESCRIPTOR);
+    const uint8_t *desc = Unit::Descriptor(Unit::ResolveToken(token));
     if (desc == nullptr)
         return 0;
     return *(desc + Offsets::OFF_UNIT_DESCRIPTOR_RACE_BYTE);

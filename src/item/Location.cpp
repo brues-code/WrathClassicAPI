@@ -15,6 +15,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "unit/Resolve.h"
 
 #include <cstdint>
 
@@ -28,7 +29,6 @@ namespace {
 // `__fastcall` with a dummy EDX: same register layout (ECX = this,
 // EDX unused, remaining args on the stack). Same pattern we use for
 // other engine class methods.
-using ResolveUnitToken_t = void *(__cdecl *)(const char *token);
 using GetItemBySlot_t = void *(__fastcall *)(void *invMgr, void *edx, int slot0Based);
 // `CGItem::GetContainer` — vtable slot 10 (byte offset 0x28). Returns
 // the item's CGContainer if it's a bag, else NULL. Called by the
@@ -42,8 +42,7 @@ using HexStringToGuid_t = uint64_t (__cdecl *)(const char *s);
 using ObjectResolveByGuid_t = void *(__cdecl *)(uint32_t lo, uint32_t hi, int flags);
 
 void *ResolvePlayerInvMgr() {
-    auto fn = reinterpret_cast<ResolveUnitToken_t>(Offsets::FUN_RESOLVE_UNIT_TOKEN);
-    auto *player = static_cast<uint8_t *>(fn("player"));
+    auto *player = static_cast<uint8_t *>(Unit::ResolveToken("player"));
     if (player == nullptr)
         return nullptr;
     return player + Offsets::OFF_PLAYER_INVENTORY_MANAGER;
