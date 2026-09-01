@@ -23,6 +23,12 @@ Conventions:
   - [`C_AddOns.GetAddOnLocalTable(addOnName)`](#c_addonsgetaddonlocaltableaddonname)
 - [Chat Bubbles](#chat-bubbles)
   - [`C_ChatBubbles.GetAllChatBubbles([includeForbidden])`](#c_chatbubblesgetallchatbubblesincludeforbidden)
+- [Color](#color)
+  - [`C_ColorUtil.ConvertRGBToHSV` / `ConvertHSVToRGB`](#c_colorutilconvertrgbtohsv--converthsvtorgb)
+  - [`C_ColorUtil.ConvertHSVToHSL` / `ConvertHSLToHSV`](#c_colorutilconverthsvtohsl--converthsltohsv)
+  - [`C_ColorUtil.ConvertHSLToRGB`](#c_colorutilconverthsltorgb)
+  - [`C_ColorUtil.GenerateTextColorCode(color)`](#c_colorutilgeneratetextcolorcodecolor)
+  - [`C_ColorUtil.WrapTextInColor` / `WrapTextInColorCode`](#c_colorutilwraptextincolor--wraptextincolorcode)
 - [Console](#console)
   - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
   - [`ExportDBCFiles`](#exportdbcfiles)
@@ -66,6 +72,9 @@ Conventions:
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
   - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
   - [`C_Item.GetItemSpell(item)`](#c_itemgetitemspellitem)
+- [Mixins](#mixins)
+  - [`Mixin(object, ...)` / `CreateFromMixins(...)`](#mixinobject--createfrommixins)
+  - [`CreateAndInitFromMixin(mixin, ...)`](#createandinitfrommixinmixin-)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`](#c_questloggetquestidforlogindexquestlogindex)
   - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
@@ -202,6 +211,67 @@ so fields you set on a bubble persist across calls.
 
 `includeForbidden` is accepted for signature compatibility and ignored —
 every active bubble is returned.
+
+---
+
+## Color
+
+`C_ColorUtil` — color-space conversions and text-color-code helpers. The
+`ColorMixin` from [`CreateColor`](../AddOns/!!!WrathClassicAPI/Util/Color.lua) uses
+these for its `:GenerateHexColor`, `:GetHSL`, and `:WrapTextInColorCode` methods.
+
+Conventions: hue is in **degrees** `[0, 360)`; saturation / value / lightness are
+`[0, 1]`. An achromatic (gray) input yields hue `-1` — a sentinel the inverse
+conversions accept as "no hue".
+
+### `C_ColorUtil.ConvertRGBToHSV` / `ConvertHSVToRGB`
+
+`ConvertRGBToHSV(r, g, b)` returns `h, s, v`; `ConvertHSVToRGB(h, s, v)` is the
+inverse, returning `r, g, b`. RGB components are `[0, 1]`.
+
+```lua
+C_ColorUtil.ConvertRGBToHSV(1, 0, 0)       -- 0, 1, 1        (red)
+C_ColorUtil.ConvertHSVToRGB(0, 1, 1)       -- 1, 0, 0
+C_ColorUtil.ConvertRGBToHSV(0.5, 0.5, 0.5) -- -1, 0, 0.5     (gray -> hue -1)
+```
+
+### `C_ColorUtil.ConvertHSVToHSL` / `ConvertHSLToHSV`
+
+Convert between the two cylindrical models. `ConvertHSVToHSL(h, s, v)` returns
+`h, s, l`; `ConvertHSLToHSV(h, s, l)` returns `h, s, v`. Hue passes through
+unchanged (including the `-1` sentinel).
+
+```lua
+local h, s, l = C_ColorUtil.ConvertHSVToHSL(C_ColorUtil.ConvertRGBToHSV(1, 0, 0))
+-- 0, 1, 0.5   (the ColorMixin:GetHSL path)
+```
+
+### `C_ColorUtil.ConvertHSLToRGB`
+
+`ConvertHSLToRGB(h, s, l)` returns `r, g, b`. There is no direct RGB→HSL call —
+chain `ConvertHSVToHSL(ConvertRGBToHSV(...))`, as `ColorMixin:GetHSL` does.
+
+### `C_ColorUtil.GenerateTextColorCode(color)`
+
+Returns the bare 8-digit `"AARRGGBB"` hex string for a `color` table (any
+`{ r, g, b [, a] }` shape, e.g. a `ColorMixin`). Alpha defaults to `ff` when
+absent.
+
+```lua
+C_ColorUtil.GenerateTextColorCode({ r = 1, g = 0, b = 0 })  -- "ffff0000"
+CreateColor(1, 0, 0):GenerateHexColor()                     -- "ffff0000"
+```
+
+### `C_ColorUtil.WrapTextInColor` / `WrapTextInColorCode`
+
+`WrapTextInColor(text, color)` wraps `text` using a color table;
+`WrapTextInColorCode(text, colorCode)` wraps using an existing `"AARRGGBB"`
+string. Both return `"|c<code><text>|r"`.
+
+```lua
+C_ColorUtil.WrapTextInColor("Hi", { r = 1, g = 0, b = 0 })  -- "|cffff0000Hi|r"
+C_ColorUtil.WrapTextInColorCode("Hi", "ffff0000")           -- "|cffff0000Hi|r"
+```
 
 ---
 
@@ -716,6 +786,37 @@ Returns `false` for empty slots, malformed `itemLocation`, and
 items whose stats record isn't cached yet (pair with
 `C_Item.RequestLoadItemData(itemLocation)` if you're querying a
 recently-seen item that might not be loaded).
+
+---
+
+## Mixins
+
+The table-mixin primitives — global functions for composing a table from
+reusable sets of methods and fields.
+
+### `Mixin(object, ...)` / `CreateFromMixins(...)`
+
+`Mixin(object, ...)` shallow-copies every key/value from each following table
+argument onto `object` and returns `object`; non-table arguments are skipped.
+`CreateFromMixins(...)` is `Mixin({}, ...)` — it returns a fresh table with the
+mixins applied.
+
+```lua
+local o = Mixin({ x = 1 }, { y = 2 }, { z = 3 })
+-- o = { x = 1, y = 2, z = 3 }
+
+local color = CreateFromMixins(ColorMixin)  -- fresh object carrying the mixin's methods
+```
+
+### `CreateAndInitFromMixin(mixin, ...)`
+
+Creates an object from a single `mixin` (via `CreateFromMixins`), calls its
+`:Init(...)` method with the trailing arguments, and returns the object.
+
+```lua
+local obj = CreateAndInitFromMixin(SomeMixin, arg1, arg2)
+-- local o = CreateFromMixins(SomeMixin); o:Init(arg1, arg2); return o
+```
 
 ---
 
