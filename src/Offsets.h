@@ -418,6 +418,19 @@ enum Offsets {
     // descriptor is populated.
     VAR_LOCAL_PLAYER_RACE_BYTE = 0x00C79E88,
 
+    // ChrRaces.dbc client store — `[min, max]`-bounded index table, same
+    // struct layout as the Faction.dbc store above (max, min = max+4,
+    // index-table = min+0x10). record = (*(void***)INDEX_TABLE)[raceID - *MIN],
+    // valid when *MIN <= raceID <= *MAX. Verified in `Script_UnitRace`
+    // (FUN_0060FD40): `iVar7 = *(int*)(DAT_00ad3448 + (raceID - DAT_00ad3438)*4)`.
+    VAR_CHRRACES_DBC_MAX_INDEX = 0x00AD3434,
+    VAR_CHRRACES_DBC_MIN_INDEX = 0x00AD3438,
+    VAR_CHRRACES_DBC_INDEX_TABLE = 0x00AD3448, // ptr to array of record ptrs
+    // Filename (clientFileString) column — a single locale-independent char*
+    // ("Human", "NightElf", "Scourge", …), distinct from the localized Name.
+    // `Script_UnitRace` returns it as its second value: `*(char**)(record+0x2C)`.
+    OFF_CHRRACES_CLIENT_FILE_STRING = 0x2C,
+
     // Per-player inventory manager. Offset INTO the CGPlayer
     // returned by ResolveUnitToken("player"), pointing to the
     // CInventoryMgr the engine uses for slot lookups. Found by

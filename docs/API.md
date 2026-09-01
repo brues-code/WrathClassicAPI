@@ -115,6 +115,7 @@ Conventions:
 - [Unit](#unit)
   - [`UnitClassID(unit)`](#unitclassidunit)
   - [`UnitRaceID(unit)`](#unitraceidunit)
+  - [`UnitRaceBase(unit)`](#unitracebaseunit)
   - [`UnitDistanceSquared(unit)`](#unitdistancesquaredunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -1441,6 +1442,28 @@ Reads the same `UNIT_FIELD_BYTES_0` field as `UnitClassID`, one byte
 over (race instead of class), and takes the same `"player"` login-session
 fast path — so it too resolves at the first-login window before the unit
 descriptor is populated. Accepts any standard unit token.
+
+### `UnitRaceBase(unit)`
+
+Returns `(raceFile, raceID)` — the locale-independent race token and the
+numeric race ID — or `(nil, nil)` if the unit can't be resolved.
+
+```lua
+UnitRaceBase("player")   -- e.g. "Orc", 2
+UnitRaceBase("target")   -- "Scourge", 5  (undead's file token, not "Undead")
+```
+
+`raceFile` is the `ChrRaces.dbc` client-filename token — `"Human"`,
+`"Orc"`, `"Dwarf"`, `"NightElf"`, `"Scourge"`, `"Tauren"`, `"Gnome"`,
+`"Troll"`, `"BloodElf"`, `"Draenei"` — the same string `UnitRace` returns
+as its second value, but locale-independent so it's safe as a table key.
+`raceID` matches `UnitRaceID`.
+
+3.3.5's `UnitRace(unit)` returns `(localizedName, raceFile)` with no ID;
+this is the modern additive form that drops the localized name and pairs
+the file token with the numeric ID. Resolves the race the same way
+`UnitRaceID` does (`"player"` login-session fast path, else the unit
+descriptor), and accepts any standard unit token.
 
 ### `UnitDistanceSquared(unit)`
 
