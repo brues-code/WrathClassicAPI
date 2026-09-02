@@ -98,6 +98,7 @@ Conventions:
   - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
   - [`C_Spell.GetSpellLink(spellIdentifier)`](#c_spellgetspelllinkspellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
+  - [`C_Spell.GetSpellPowerCost(spellIdentifier)`](#c_spellgetspellpowercostspellidentifier)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
@@ -1231,6 +1232,35 @@ your (or your pet's) spellbook — with no subtext it picks the highest
 rank you know; a `(Rank N)` subtext pins that exact rank. Reads
 `Spell.dbc` → `SpellIcon.dbc` entirely from client data, so it never
 issues a server query and never returns a placeholder while loading.
+
+### `C_Spell.GetSpellPowerCost(spellIdentifier)`
+
+Returns an array of the spell's power costs (one entry per power type), or
+`nil` if the identifier resolves to no spell. A spell with no cost returns an
+empty array. Same `spellIdentifier` forms as `GetSpellInfo`.
+
+```lua
+local costs = C_Spell.GetSpellPowerCost(133)   -- Fireball
+-- costs[1] = {
+--   type            = 0,        -- Enum.PowerType (0 = mana, 1 = rage, 3 = energy, …)
+--   name            = "MANA",
+--   cost            = 662,      -- resolved for the local player
+--   minCost         = 662,
+--   costPercent     = 19,       -- % of base mana (0 for flat-cost spells)
+--   costPerSec      = 0,        -- per-second cost (channels)
+--   requiredAuraID  = 0,
+--   hasRequiredAura = false,
+-- }
+```
+
+The `cost` is resolved for the **local player** through the engine's own
+calculators (base + per-skill scaling + the percentage of base mana + talent
+and aura modifiers) — so WotLK's percentage-of-base-mana spells report their
+true cost, not the flat `0` stored in `Spell.dbc`. `costPerSec` carries the
+per-second cost of mana-channel spells. 3.3.5's `Spell.dbc` has a single power
+type per spell, so the array holds at most one entry; `minCost` equals `cost`
+(costs are fixed), and `requiredAuraID` / `hasRequiredAura` have no 3.3.5
+source.
 
 ---
 

@@ -1029,6 +1029,30 @@ enum Offsets {
     OFF_SPELL_POWER_TYPE               = 0xA4,
     OFF_SPELL_RANGE_INDEX              = 0xB8,
     SPELL_ATTR_EX2_HEALTH_FUNNEL       = 0x800,
+    // PowerCostPercentage (cost as a % of the caster's base mana) — the field
+    // that makes most WotLK caster spells' flat ManaCost 0. Surfaced by
+    // C_Spell.GetSpellPowerCost as `costPercent`.
+    OFF_SPELL_POWER_COST_PERCENT       = 0x230,
+
+    // Spell power-cost calculators, both `int __cdecl(record, casterObj)` taking
+    // the copied Spell.dbc record and a CGUnit. These resolve the true cost for
+    // a given caster (base + per-skill scaling + %-of-base-mana + talent/aura
+    // mods) — the same pair the native Script_GetSpellInfo uses:
+    //   FUN_008012f0  upfront cost      → C_Spell.GetSpellPowerCost `cost`
+    //   FUN_007ff100  per-second cost   → `costPerSec` (mana-per-second channels)
+    // Both return a raw value that still needs the power display divisor applied
+    // (rage / runic power are stored x10). Return 0 for a null caster (well,
+    // FUN_008012f0 returns -1 — callers must pass a valid CGUnit).
+    FUN_SPELL_POWER_COST               = 0x008012F0,
+    FUN_SPELL_COST_PER_SEC             = 0x007FF100,
+
+    // `uint64 __cdecl(void)` — the local player's GUID, read from the thread-local
+    // ObjectMgr slot (so main-thread only). Feed to FUN_OBJECT_RESOLVE_BY_GUID
+    // with OBJ_FLAGS_PLAYER to get the CGPlayer the cost calculators need. Same
+    // acquisition the native Script_GetSpellInfo does.
+    FUN_LOCAL_PLAYER_GUID              = 0x004D3790,
+    // TYPEMASK_PLAYER for FUN_OBJECT_RESOLVE_BY_GUID (1 << TYPEID_PLAYER).
+    OBJ_FLAGS_PLAYER                   = 0x10,
 
     // SpellCastTimes.dbc — pointer-anchored store (read via FUN_DBC_GET_RECORD_PTR,
     // same shape as the SpellIcon / SpellDispel anchors). Base cast time in ms at
