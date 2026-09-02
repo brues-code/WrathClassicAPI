@@ -59,6 +59,8 @@ Conventions:
   - [`C_FriendList.GetNumFriends()` / `GetNumOnlineFriends()`](#c_friendlistgetnumfriends--getnumonlinefriends)
   - [`C_FriendList.GetFriendInfo(name)`](#c_friendlistgetfriendinfoname)
   - [`C_FriendList.GetFriendInfoByIndex(index)`](#c_friendlistgetfriendinfobyindexindex)
+  - [`C_FriendList.SetFriendNotes(name, notes)`](#c_friendlistsetfriendnotesname-notes)
+  - [`C_FriendList.SetFriendNotesByIndex(index, notes)`](#c_friendlistsetfriendnotesbyindexindex-notes)
   - [`C_FriendList.IsFriend(token)`](#c_friendlistisfriendtoken)
   - [`C_FriendList.IsIgnored(token)`](#c_friendlistisignoredtoken)
   - [`C_FriendList.IsIgnoredByGuid(guid)`](#c_friendlistisignoredbyguidguid)
@@ -675,7 +677,8 @@ Table fields:
 - `area` — localized zone name, or `nil` when unknown. A friend inside a
   sub-area reports the zone it belongs to.
 - `guid` — the friend's GUID string.
-- `notes` — your note for this friend, or `nil` if none.
+- `notes` — your note for this friend, or `nil` if none. Set it with
+  [`SetFriendNotes`](#c_friendlistsetfriendnotesname-notes).
 - `afk` / `dnd` — the friend's status flags.
 - `referAFriend` — `true` when you and this friend are linked through
   Recruit-A-Friend.
@@ -700,6 +703,33 @@ end
 
 See [`C_FriendList.GetFriendInfo`](#c_friendlistgetfriendinfoname) for the
 field list.
+
+### `C_FriendList.SetFriendNotes(name, notes)`
+
+Sets your note for the friend with the given character name. Pass an
+empty string to clear it. Returns `true` if the friend was found and the
+note applied, `false` if that name is not on your list.
+
+```lua
+C_FriendList.SetFriendNotes("Sarahnity", "raid healer")
+C_FriendList.SetFriendNotes("Sarahnity", "")   -- clears the note
+```
+
+The note is saved with your friends list and read back through the
+`notes` field of [`GetFriendInfo`](#c_friendlistgetfriendinfoname).
+`FRIENDLIST_UPDATE` fires when it changes, so the friends UI and
+note-aware addons refresh.
+
+### `C_FriendList.SetFriendNotesByIndex(index, notes)`
+
+The same as
+[`SetFriendNotes`](#c_friendlistsetfriendnotesname-notes), addressed by a
+1-based list index instead of a name. Returns `false` for an index below 1
+or above [`GetNumFriends`](#c_friendlistgetnumfriends--getnumonlinefriends).
+
+```lua
+C_FriendList.SetFriendNotesByIndex(1, "tank")
+```
 
 ### `C_FriendList.IsFriend(token)`
 

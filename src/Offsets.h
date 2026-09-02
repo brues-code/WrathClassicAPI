@@ -1962,6 +1962,15 @@ enum Offsets {
     // and Script_IsIgnored (FUN_006B6C60).
     VAR_SOCIAL_SYSTEM = 0x00C79F98,
 
+    // Set a friend's note — `void __thiscall(social, uint32_t guidLo, uint32_t
+    // guidHi, const char *notes)`. Finds the entry by GUID (no-op when absent),
+    // SStrCopy's `notes` into its inline note buffer (0x200 cap), fires the
+    // friends-list-changed event (0x156), then sends CMSG_SET_CONTACT_NOTES
+    // (opcode 0x6B: guid, note). What Script_SetFriendNotes (FUN_006B7C90) calls
+    // for its index form; its name form (FUN_006B6F70) is a name walk into the
+    // same call plus an error toast on a miss. `notes` must be non-null.
+    FUN_SOCIAL_SET_FRIEND_NOTES = 0x006B5540,
+
     // Name -> GUID resolver Script_IsIgnored uses: `bool __cdecl(const char *s,
     // uint32_t out[2])` (result in AL). Looks `s` up by name in the player name
     // cache (VAR_PLAYER_NAME_CACHE), else resolves it as a unit token ("target",
