@@ -1091,6 +1091,23 @@ enum Offsets {
     // C_Spell.GetSpellPowerCost as `costPercent`.
     OFF_SPELL_POWER_COST_PERCENT       = 0x230,
 
+    // Locale-resolved description text (char*) in the copied Spell.dbc record —
+    // the raw "$s1"-tokenized string. Sits right after name (+0x220) and rank
+    // (+0x224), verified at the description block of the spell tooltip builder
+    // (FUN_006238A0 reads `local_264` = record+0x228 and hands the record to the
+    // formatter below when it's non-empty).
+    OFF_SPELL_DESCRIPTION              = 0x228,
+
+    // Spell text formatter — `void __cdecl(record, char *out, uint outSize,
+    // int isPet, float scale, const char *varsOverride, int useTooltipText,
+    // int p8, int p9)`. Expands the "$"-macro tokens ($s1 / $d / $o1 /
+    // conditionals / SpellDescriptionVariables at record+0x2A0) into final
+    // display text: formats the record's ToolTip text when `useTooltipText`
+    // is non-zero and it's non-empty, else the Description (+0x228). The
+    // tooltip builder calls it `(record, buf, 0x800, isPet, scale, 0, 0, 1, 0)`
+    // — C_Spell.GetSpellDescription mirrors that call with no pet context.
+    FUN_SPELL_FORMAT_TEXT              = 0x0057ABC0,
+
     // Spell intent classifier — `int __cdecl(record)` on the
     // FUN_DBC_COPY_RECORD output buffer. Returns 2 (harmful) when the record's
     // Targets cast-flags dword (+0x40) carries TARGET_FLAG_UNIT_ENEMY (0x80)

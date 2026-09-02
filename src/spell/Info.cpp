@@ -165,6 +165,42 @@ int __cdecl Script_C_Spell_GetSpellSubtext(void *L) {
     return 1;
 }
 
+// `C_Spell.GetSpellDescription(spellIdentifier) -> description` — the spell's
+// description with all "$"-macro tokens ($s1 damage values, $d durations,
+// conditionals, description variables) expanded to final display text — the
+// same line the spell tooltip shows. Empty string for spells with no
+// description; nil if the identifier resolves to no spell. Formatted through
+// the engine's own spell-text formatter (see FUN_SPELL_FORMAT_TEXT), so values
+// match the tooltip exactly. Always available immediately (no deferred-load
+// nil).
+using FormatSpellText_t = void(__cdecl *)(const uint8_t *record, char *out,
+                                          uint32_t outSize, int isPet, float scale,
+                                          const char *varsOverride, int useTooltipText,
+                                          int p8, int p9);
+
+int __cdecl Script_C_Spell_GetSpellDescription(void *L) {
+    const int spellID = Spell::Arg::ResolveSpellID(L, 1);
+    if (spellID <= 0)
+        return 0;
+    uint8_t buf[Offsets::SPELL_DBC_RECORD_SIZE];
+    if (!Spell::Lookup::CopyRecord(static_cast<uint32_t>(spellID), buf))
+        return 0;
+    const char *raw =
+        *reinterpret_cast<const char *const *>(buf + Offsets::OFF_SPELL_DESCRIPTION);
+    if (raw == nullptr || *raw == '\0') {
+        // No description — mirror the tooltip builder, which skips the
+        // formatter entirely for an empty source string.
+        Game::Lua::PushString(L, "");
+        return 1;
+    }
+    char text[0x800];
+    reinterpret_cast<FormatSpellText_t>(
+        static_cast<uintptr_t>(Offsets::FUN_SPELL_FORMAT_TEXT))(
+        buf, text, sizeof(text), 0, 0.0f, nullptr, 0, 1, 0);
+    Game::Lua::PushString(L, text);
+    return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::Lua::RegisterTableFunction("C_Spell", "GetSpellInfo",
                                      &Script_C_Spell_GetSpellInfo);
@@ -174,6 +210,8 @@ void RegisterLuaFunctions() {
                                      &Script_C_Spell_GetSpellLink);
     Game::Lua::RegisterTableFunction("C_Spell", "GetSpellSubtext",
                                      &Script_C_Spell_GetSpellSubtext);
+    Game::Lua::RegisterTableFunction("C_Spell", "GetSpellDescription",
+                                     &Script_C_Spell_GetSpellDescription);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

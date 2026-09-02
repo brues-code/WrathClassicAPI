@@ -103,6 +103,7 @@ Conventions:
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
   - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
   - [`C_Spell.GetSpellSubtext(spellIdentifier)`](#c_spellgetspellsubtextspellidentifier)
+  - [`C_Spell.GetSpellDescription(spellIdentifier)`](#c_spellgetspelldescriptionspellidentifier)
   - [`C_Spell.GetSpellLink(spellIdentifier)`](#c_spellgetspelllinkspellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
   - [`C_Spell.GetSpellPowerCost(spellIdentifier)`](#c_spellgetspellpowercostspellidentifier)
@@ -1341,6 +1342,20 @@ Same `spellIdentifier` forms as `GetSpellInfo`. Always available immediately
 C_Spell.GetSpellSubtext(133)         -- "Rank 1"
 C_Spell.GetSpellSubtext("Fireball")  -- subtext of the highest rank you know
 C_Spell.GetSpellSubtext(12051)       -- "" (Evocation has no rank)
+```
+
+### `C_Spell.GetSpellDescription(spellIdentifier)`
+
+Returns the spell's description — the same text the spell tooltip shows, with
+all substitution tokens (damage values, durations, percentages, conditionals)
+expanded to their final numbers. Empty string for spells with no description;
+`nil` if the identifier resolves to no spell. Same `spellIdentifier` forms as
+`GetSpellInfo`. Always available immediately (no deferred-load `nil`).
+
+```lua
+C_Spell.GetSpellDescription(133)
+-- "Hurls a fiery ball that causes 16 to 25 Fire damage and an additional
+--  2 Fire damage over 4 sec."
 ```
 
 ### `C_Spell.GetSpellLink(spellIdentifier)`
