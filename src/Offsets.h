@@ -741,6 +741,18 @@ enum Offsets {
     // so the address holds the value itself.
     VAR_MAX_SPELL_ID = 0x00AD49DC,
 
+    // Dual-wield capability latch — the spellID of the spell that granted the
+    // player dual wield, 0 when the player can't dual wield. The engine's
+    // learn-spell processor (FUN_006E7B00) sets it when a learned spell's
+    // Effect[0] is SPELL_EFFECT_DUAL_WIELD (40) — covering the trained 674
+    // passive AND the shaman Enhancement talent with no spell-ID list — and
+    // the remove-spell processor (FUN_006E71D0) zeroes it when that spell is
+    // unlearned (talent reset / spec switch). Exactly mirrors the server's
+    // capability flag, which flips on the same effect. The engine's own
+    // accessor is FUN_006CEB00 (`return DAT_00C9EAC8 != 0`); we read the
+    // global directly. Backs `CanDualWield()`.
+    VAR_DUAL_WIELD_GRANT_SPELL_ID = 0x00C9EAC8,
+
     // Macro icon catalogues. The loader (FUN_00565840, "UIMacros.cpp") scans the
     // icon files and — via its three scan callbacks — splits them into TWO
     // pre-classified lists by basename prefix:

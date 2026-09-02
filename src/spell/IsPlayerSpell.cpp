@@ -36,34 +36,45 @@ namespace Spell::IsPlayerSpell {
 
 namespace {
 
+bool PlayerKnowsSpell(int spellID) {
+    if (spellID < 1)
+        return false;
+    const uint32_t maxSpellID =
+        *reinterpret_cast<const uint32_t *>(Offsets::VAR_MAX_SPELL_ID);
+    if (static_cast<uint32_t>(spellID) > maxSpellID)
+        return false;
+    auto *bitmap = *reinterpret_cast<const uint32_t *const *>(
+        Offsets::VAR_PLAYER_SPELL_BITMAP);
+    if (bitmap == nullptr)
+        return false;
+    const uint32_t bit = 1u << (static_cast<uint32_t>(spellID) & 31);
+    return (bitmap[spellID >> 5] & bit) != 0;
+}
+
 int __cdecl Script_IsPlayerSpell(void *L) {
     if (!Game::Lua::IsNumber(L, 1))
         return Game::Lua::Error(L, "Usage: IsPlayerSpell(spellID)");
     const int spellID = static_cast<int>(Game::Lua::ToNumber(L, 1));
-    if (spellID < 1) {
-        Game::Lua::PushBool(L, false);
-        return 1;
-    }
-    const uint32_t maxSpellID =
-        *reinterpret_cast<const uint32_t *>(Offsets::VAR_MAX_SPELL_ID);
-    if (static_cast<uint32_t>(spellID) > maxSpellID) {
-        Game::Lua::PushBool(L, false);
-        return 1;
-    }
-    auto *bitmap = *reinterpret_cast<const uint32_t *const *>(
-        Offsets::VAR_PLAYER_SPELL_BITMAP);
-    if (bitmap == nullptr) {
-        Game::Lua::PushBool(L, false);
-        return 1;
-    }
-    const uint32_t bit = 1u << (static_cast<uint32_t>(spellID) & 31);
-    const bool known = (bitmap[spellID >> 5] & bit) != 0;
-    Game::Lua::PushBool(L, known);
+    Game::Lua::PushBool(L, PlayerKnowsSpell(spellID));
+    return 1;
+}
+
+// `CanDualWield()` — true if the local player can equip a weapon in the off
+// hand. Reads the engine's dual-wield latch (see Offsets.h): the spellID of
+// the granting spell, set on learning any spell whose first effect is
+// SPELL_EFFECT_DUAL_WIELD and cleared when that spell is unlearned — so a
+// shaman leaving Enhancement drops it, matching the server's capability flag
+// exactly.
+int __cdecl Script_CanDualWield(void *L) {
+    const uint32_t grantSpellID = *reinterpret_cast<const uint32_t *>(
+        static_cast<uintptr_t>(Offsets::VAR_DUAL_WIELD_GRANT_SPELL_ID));
+    Game::Lua::PushBool(L, grantSpellID != 0);
     return 1;
 }
 
 void RegisterLuaFunctions() {
     Game::Lua::RegisterGlobalFunction("IsPlayerSpell", &Script_IsPlayerSpell);
+    Game::Lua::RegisterGlobalFunction("CanDualWield", &Script_CanDualWield);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

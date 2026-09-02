@@ -109,6 +109,7 @@ Conventions:
   - [`C_Spell.GetSpellPowerCost(spellIdentifier)`](#c_spellgetspellpowercostspellidentifier)
   - [`C_Spell.IsSpellHarmful` / `IsSpellHelpful`](#c_spellisspellharmfulspellidentifier--isspellhelpfulspellidentifier)
   - [`C_Spell.IsSelfBuff(spellIdentifier)`](#c_spellisselfbuffspellidentifier)
+  - [`CanDualWield()`](#candualwield)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
@@ -1448,6 +1449,17 @@ spell.
 ```lua
 C_Spell.IsSelfBuff(168)     -- Frost Armor → true
 C_Spell.IsSelfBuff(1459)    -- Arcane Intellect → false (castable on others)
+```
+
+### `CanDualWield()`
+
+Returns true if the player can equip a weapon in the off hand. Tracks the
+ability live: learning any dual-wield-granting spell (the trained passive, or
+the shaman Enhancement talent) turns it on, and unlearning it — talent reset,
+spec switch — turns it off.
+
+```lua
+CanDualWield()   -- true on a rogue; false on a mage
 ```
 
 ---

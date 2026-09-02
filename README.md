@@ -47,7 +47,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Player Info | `C_PlayerInfo.CanUseItem` |
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
-| Spell     | `IsPlayerSpell`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
+| Spell     | `IsPlayerSpell`, `CanDualWield`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
 | Time      | `GetServerTime`, `C_DateAndTime.AdjustTimeByDays`, `C_DateAndTime.AdjustTimeByMinutes`, `C_DateAndTime.CompareCalendarTime`, `C_DateAndTime.GetCalendarTimeFromEpoch`, `C_DateAndTime.GetCurrentCalendarTime`, `C_DateAndTime.GetSecondsUntilDailyReset`, `C_DateAndTime.GetServerTimeLocal` |
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |
