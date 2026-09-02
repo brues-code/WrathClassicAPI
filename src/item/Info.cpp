@@ -49,7 +49,8 @@ using GetItemRecord_t = const uint8_t *(__thiscall *)(void *cache, uint32_t item
                                                       void *userData, int unused);
 
 using IconBasenameByDisplayID_t = const char *(__cdecl *)(uint32_t displayInfoID);
-using ItemLinkFormatter_t = const char *(__cdecl *)(uint32_t itemID);
+using BuildNameFromID_t = const char *(__cdecl *)(char *out, int outSize,
+                                                  uint32_t itemID, int suffixID);
 
 const char *EmptyIfNull(const char *s) {
     return (s != nullptr) ? s : "";
@@ -276,6 +277,48 @@ int PushIconFromRecord(void *L, const uint8_t *record) {
     return 1;
 }
 
+// Standard ITEM_QUALITY_COLORS hex, indexed by quality 0..7. Used to build item
+// links without the engine's link formatter (FUN_0061E290 reads extra hidden
+// stack args and isn't safe to call as a plain `(itemID)` function).
+const char *QualityColorHex(uint32_t quality) {
+    static const char *const kColors[] = {
+        "9d9d9d", // 0 Poor
+        "ffffff", // 1 Common
+        "1eff00", // 2 Uncommon
+        "0070dd", // 3 Rare
+        "a335ee", // 4 Epic
+        "ff8000", // 5 Legendary
+        "e6cc80", // 6 Artifact
+        "e6cc80", // 7 Heirloom (WotLK shares the artifact gold tone)
+    };
+    if (quality > 7)
+        quality = 1;
+    return kColors[quality];
+}
+
+// Builds a quality-colored item hyperlink
+// "|cff<color>|Hitem:<id>:0:0:0:0:0:<suffix>:<seed>:0|h[<name>]|h|r". The suffix
+// and seed sit in the same fields the client encodes them in, so a random-enchant
+// item round-trips (0/0 collapses to a plain link). `name` may be null (rendered
+// as an empty label).
+void BuildItemLink(uint32_t itemID, uint32_t quality, const char *name,
+                   int suffix, int seed, char *out, size_t outSize) {
+    std::snprintf(out, outSize, "|cff%s|Hitem:%u:0:0:0:0:0:%d:%d:0|h[%s]|h|r",
+                  QualityColorHex(quality), itemID, suffix, seed, EmptyIfNull(name));
+}
+
+// Engine item-name builder (FUN_00706D70): writes the display name for
+// (itemID, suffixID) into `out` — plain for suffixID 0, "… of the Bear" for a
+// random suffix. Returns false if the engine wrote nothing.
+bool NameWithSuffix(uint32_t itemID, int suffixID, char *out, size_t outSize) {
+    if (out == nullptr || outSize == 0)
+        return false;
+    out[0] = '\0';
+    auto fn = reinterpret_cast<BuildNameFromID_t>(Offsets::FUN_ITEM_BUILD_NAME_FROM_ID);
+    fn(out, static_cast<int>(outSize), itemID, suffixID);
+    return out[0] != '\0';
+}
+
 int PushNameFromRecord(void *L, const uint8_t *record) {
     const char *name = *reinterpret_cast<const char *const *>(
         record + Offsets::OFF_ITEMSTATS_NAME);
@@ -396,11 +439,10 @@ int __cdecl Script_C_Item_GetItemName(void *L) {
 // -----------------------------------------------------------------------------
 // Item link (full "|cff…|Hitem:…|h[Name]|h|r" string)
 //
-// Modern WoW's `C_Item.GetItemLink` takes an itemLocation. We delegate
-// to the engine's link formatter at `FUN_ITEM_LINK_FORMATTER`, which
-// already builds the colored hyperlink string with the local player's
-// level baked into the link's level field — exactly what stock
-// `GetItemInfo` produces as its second return value.
+// Modern WoW's `C_Item.GetItemLink` takes an itemLocation. We resolve it to the
+// held item's cache record and build the quality-colored hyperlink ourselves
+// (see BuildItemLink) rather than call the engine's formatter, which reads
+// hidden stack args and isn't safe to invoke as a plain function.
 
 int __cdecl Script_C_Item_GetItemLink(void *L) {
     if (!Item::Location::IsLocationArg(L, 1))
@@ -408,12 +450,110 @@ int __cdecl Script_C_Item_GetItemLink(void *L) {
     const int itemID = Item::ID::FromCGItem(Item::Location::Resolve(L, 1));
     if (itemID <= 0)
         return 0;
-    auto fn = reinterpret_cast<ItemLinkFormatter_t>(Offsets::FUN_ITEM_LINK_FORMATTER);
-    const char *link = fn(static_cast<uint32_t>(itemID));
-    if (link == nullptr)
+    const uint8_t *record = FetchItemRecord(static_cast<uint32_t>(itemID));
+    if (record == nullptr)
         return 0;
+    const uint32_t quality =
+        *reinterpret_cast<const uint32_t *>(record + Offsets::OFF_ITEMSTATS_QUALITY);
+    const char *name = *reinterpret_cast<const char *const *>(
+        record + Offsets::OFF_ITEMSTATS_NAME);
+    char link[320];
+    BuildItemLink(static_cast<uint32_t>(itemID), quality, name, 0, 0, link, sizeof(link));
     Game::Lua::PushString(L, link);
     return 1;
+}
+
+// -----------------------------------------------------------------------------
+// Full item info tuple
+//
+// `C_Item.GetItemInfo(itemInfo)` — the modern 18-value info tuple, sourced from
+// the server-populated item-stats cache record (+ the class/subclass/invtype
+// DBC name lookups this file already does for GetItemInfoInstant). Accepts the
+// same item-arg forms as the rest of C_Item (itemID, "item:N…" / full link,
+// item GUID, or item name).
+//
+// Returns:
+//   itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType,
+//   itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice,
+//   classID, subclassID, bindType, expansionID, setID, isCraftingReagent,
+//   itemDescription
+//
+// `itemTexture` is the icon PATH string (3.3.5 has no fileID system — same as
+// the other C_Item icon accessors, feed straight to texture:SetTexture).
+// `expansionID` is 254 (the Classic sentinel), `isCraftingReagent` is always
+// false (no such flag in 3.3.5's item data), and `setID` is nil for an item in
+// no set. On a cache miss it warms the cache and returns nil this call — the
+// value lands on a retry after GET_ITEM_INFO_RECEIVED, matching the modern
+// async contract.
+int __cdecl Script_C_Item_GetItemInfo(void *L) {
+    const Item::Arg::Resolved arg = Item::Arg::Resolve(L, 1);
+    const int itemID = arg.itemID;
+    if (itemID <= 0)
+        return 0;
+    const uint8_t *record = FetchItemRecord(static_cast<uint32_t>(itemID));
+    if (record == nullptr) {
+        Item::Data::WarmCache(static_cast<uint32_t>(itemID));
+        return 0; // nil this call; GET_ITEM_INFO_RECEIVED fires when ready
+    }
+
+    auto u32 = [record](int off) {
+        return *reinterpret_cast<const uint32_t *>(record + off);
+    };
+    const uint32_t quality = u32(Offsets::OFF_ITEMSTATS_QUALITY);
+    const uint32_t itemLevel = u32(Offsets::OFF_ITEMSTATS_ITEM_LEVEL);
+    const uint32_t minLevel = u32(Offsets::OFF_ITEMSTATS_REQUIRED_LEVEL);
+    const uint32_t classID = u32(Offsets::OFF_ITEMSTATS_CLASS);
+    const uint32_t subClassID = u32(Offsets::OFF_ITEMSTATS_SUBCLASS);
+    const uint32_t stackCount = u32(Offsets::OFF_ITEMSTATS_STACK_COUNT);
+    const uint32_t invType = u32(Offsets::OFF_ITEMSTATS_INVENTORY_TYPE);
+    const uint32_t displayInfoID = u32(Offsets::OFF_ITEMSTATS_DISPLAY_INFO_ID);
+    const uint32_t sellPrice = u32(Offsets::OFF_ITEMSTATS_SELL_PRICE);
+    const uint32_t bindType = u32(Offsets::OFF_ITEMSTATS_BONDING);
+    const uint32_t setID = u32(Offsets::OFF_ITEMSTATS_ITEM_SET);
+    const char *baseName = *reinterpret_cast<const char *const *>(
+        record + Offsets::OFF_ITEMSTATS_NAME);
+    const char *description = *reinterpret_cast<const char *const *>(
+        record + Offsets::OFF_ITEMSTATS_DESCRIPTION);
+
+    // A random-enchant link carries a suffix — apply it to both the display name
+    // ("… of the Bear") and the reconstructed link. With no suffix these reduce
+    // to the base name and a plain link.
+    char suffixedName[128];
+    const char *name = baseName;
+    if (arg.suffix != 0 &&
+        NameWithSuffix(static_cast<uint32_t>(itemID), arg.suffix, suffixedName,
+                       sizeof(suffixedName)))
+        name = suffixedName;
+
+    char iconPath[260] = {0};
+    BuildIconPath(displayInfoID, iconPath, sizeof(iconPath));
+
+    char link[320];
+    BuildItemLink(static_cast<uint32_t>(itemID), quality, name, arg.suffix, arg.seed,
+                  link, sizeof(link));
+
+    Game::Lua::PushString(L, EmptyIfNull(name));                         // 1  itemName
+    Game::Lua::PushString(L, link);                                      // 2  itemLink
+    Game::Lua::PushNumber(L, static_cast<double>(quality));              // 3  itemQuality
+    Game::Lua::PushNumber(L, static_cast<double>(itemLevel));            // 4  itemLevel
+    Game::Lua::PushNumber(L, static_cast<double>(minLevel));             // 5  itemMinLevel
+    Game::Lua::PushString(L, LookupItemClassName(classID));              // 6  itemType
+    Game::Lua::PushString(L, LookupItemSubClassName(classID, subClassID)); // 7 itemSubType
+    Game::Lua::PushNumber(L, static_cast<double>(stackCount));           // 8  itemStackCount
+    Game::Lua::PushString(L, LookupInvType(invType));                    // 9  itemEquipLoc
+    Game::Lua::PushString(L, iconPath);                                  // 10 itemTexture (path)
+    Game::Lua::PushNumber(L, static_cast<double>(sellPrice));            // 11 sellPrice
+    Game::Lua::PushNumber(L, static_cast<double>(classID));              // 12 classID
+    Game::Lua::PushNumber(L, static_cast<double>(subClassID));           // 13 subclassID
+    Game::Lua::PushNumber(L, static_cast<double>(bindType));             // 14 bindType
+    Game::Lua::PushNumber(L, 254.0);                                     // 15 expansionID (Classic)
+    if (setID != 0)
+        Game::Lua::PushNumber(L, static_cast<double>(setID));           // 16 setID
+    else
+        Game::Lua::PushNil(L);
+    Game::Lua::PushBool(L, false);                                       // 17 isCraftingReagent
+    Game::Lua::PushString(L, EmptyIfNull(description));                  // 18 itemDescription
+    return 18;
 }
 
 // -----------------------------------------------------------------------------
@@ -434,6 +574,8 @@ int __cdecl Script_C_Item_IsLocked(void *L) {
 }
 
 void RegisterLuaFunctions() {
+    Game::Lua::RegisterTableFunction("C_Item", "GetItemInfo",
+                                     &Script_C_Item_GetItemInfo);
     Game::Lua::RegisterTableFunction("C_Item", "GetItemInfoInstant",
                                      &Script_C_Item_GetItemInfoInstant);
 

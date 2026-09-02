@@ -61,6 +61,7 @@ Conventions:
 - [Item](#item)
   - [`C_Item.GetItemID(itemLocation)` / `GetItemGUID`](#c_itemgetitemiditemlocation)
   - [`C_Item.GetItemLocation(itemGUID)`](#c_itemgetitemlocationitemguid)
+  - [`C_Item.GetItemInfo(item)`](#c_itemgetiteminfoitem)
   - [`C_Item.GetItemInfoInstant(item)`](#c_itemgetiteminfoinstantitem)
   - [`C_Item.DoesItemExist[ByID]`](#c_itemdoesitemexistitemlocation--doesitemexistbyiditem)
   - [`C_Item.GetItemQuality[ByID]`](#c_itemgetitemqualityitemlocation--getitemqualitybyiditem)
@@ -662,6 +663,48 @@ only supports table-shape locations, so we resolve the GUID to a
 concrete `(bagID, slotIndex)` or `equipmentSlotIndex` at call
 time. Keyring / bank / mail / void-storage slots aren't covered
 (those use different inventory managers in 3.3.5).
+
+### `C_Item.GetItemInfo(item)`
+
+Returns the full 18-value item info tuple, or `nil` if the item isn't cached
+yet or doesn't exist:
+
+```lua
+local itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType,
+      itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice,
+      classID, subclassID, bindType, expansionID, setID, isCraftingReagent,
+      itemDescription = C_Item.GetItemInfo(item)
+```
+
+`item` accepts any of retail's forms — item ID, item link, item name (of a
+cached item), or an item GUID string.
+
+```lua
+C_Item.GetItemInfo(6948)
+-- "Hearthstone", "|cffffffff|Hitem:6948:0:...|h[Hearthstone]|h|r", 1, 1, 1,
+--  "Miscellaneous", "Junk", 1, "", "Interface\\Icons\\INV_Misc_Rune_01", 0,
+--  15, 0, 0, 254, nil, false, ""
+```
+
+Notes on the 3.3.5 mapping:
+
+- `itemTexture` is the icon **path** string (`"Interface\\Icons\\…"`), not a
+  numeric fileID — same as the other `C_Item` icon accessors, so it feeds
+  straight into `texture:SetTexture`.
+- `bindType` is `0` none, `1` Bind on Pickup, `2` Bind on Equip, `3` Bind on
+  Use, `4` Quest.
+- `expansionID` is `254` (the Classic sentinel), and `isCraftingReagent` is
+  always `false` — 3.3.5's item data has no such flag.
+- `setID` is `nil` for an item that belongs to no set.
+- A **random-enchant** link (e.g. `"… of the Bear"`) resolves its suffix: the
+  returned `itemName` and the `[bracketed]` label carry the suffix, and the
+  returned `itemLink` keeps the suffix field. A bare item ID has no suffix.
+
+Sourced from the server-populated item-stats cache (the same record the stock
+`GetItemInfo` reads). On a cache miss it starts a background query and returns
+`nil` this call, so a follow-up after `GET_ITEM_INFO_RECEIVED` returns the data
+— the modern async contract. For the fields available with no server round-trip,
+use `GetItemInfoInstant`.
 
 ### `C_Item.GetItemInfoInstant(item)`
 

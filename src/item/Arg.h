@@ -21,8 +21,14 @@ namespace Item::Arg {
 // only want the itemID can ignore `name` and treat `itemID == 0` as
 // "no usable input".
 struct Resolved {
-    int itemID;
-    const char *name;
+    int itemID = 0;
+    const char *name = nullptr;
+    // Random-enchant fields parsed from an item link: `suffix` is the
+    // random-property/suffix ID (link field 6, negative for a random suffix like
+    // "… of the Bear", positive for a random property), `seed` the random seed
+    // (field 7). Both 0 for a bare itemID / name / non-random link.
+    int suffix = 0;
+    int seed = 0;
 };
 
 // Resolves a Lua arg at 1-based stack `idx` to an item reference, matching

@@ -44,7 +44,7 @@ int GuidStringToItemID(void *L, int idx) {
 } // namespace
 
 Resolved Resolve(void *L, int idx) {
-    Resolved out{0, nullptr};
+    Resolved out{};
     // Key on the concrete Lua type, NOT lua_isnumber: in Lua 5.1 a hex string
     // (an item GUID, "0x...") coerces to a number, so IsNumber would swallow a
     // GUID arg here and truncate it. A genuine number is an itemID; every string
@@ -67,9 +67,26 @@ Resolved Resolve(void *L, int idx) {
         return out;
     }
 
-    // Item link / bare "item:N..." — parse the itemID after "item:".
+    // Item link / bare "item:N..." — parse the itemID after "item:", plus the
+    // random-enchant fields. 3.3.5 item string is
+    //   item:id:enchant:gem1:gem2:gem3:gem4:suffix:seed[:level]
+    // so `suffix` is the 6th colon-separated field after the id and `seed` the
+    // 7th; a bare "item:N" leaves both 0.
     if (const char *m = std::strstr(s, "item:")) {
-        out.itemID = std::atoi(m + 5);
+        m += 5;
+        out.itemID = std::atoi(m);
+        int colons = 0;
+        for (const char *p = m; *p != '\0' && *p != '|'; ++p) {
+            if (*p != ':')
+                continue;
+            ++colons;
+            if (colons == 6) {
+                out.suffix = std::atoi(p + 1);
+            } else if (colons == 7) {
+                out.seed = std::atoi(p + 1);
+                break;
+            }
+        }
         return out;
     }
 

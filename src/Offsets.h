@@ -180,6 +180,24 @@ enum Offsets {
     OFF_ITEMSTATS_ITEM_LEVEL = 0x34,
     OFF_ITEMSTATS_STACK_COUNT = 0x5C,
     OFF_ITEMSTATS_NAME = 0x1F4,
+    // Vendor sell price (copper) and required level — the remaining fields the
+    // full C_Item.GetItemInfo tuple needs. Both verified positionally in
+    // Script_GetItemInfo (FUN_00516C60): sellPrice = puVar4[9] (+0x24),
+    // requiredLevel = puVar4[0xE] (+0x38).
+    OFF_ITEMSTATS_SELL_PRICE = 0x24,
+    OFF_ITEMSTATS_REQUIRED_LEVEL = 0x38,
+    // Bind type, flavor description, and item-set ID. Verified in the tooltip
+    // builder (FUN_006277F0) and cross-checked in the item-text search
+    // (FUN_005DC110):
+    //   +0x178  bonding (0 = none, 1 = BoP, 2 = BoE, 3 = BoU, 4 = Quest) — the
+    //           switch feeding the ITEM_BIND_ON_* tooltip strings.
+    //   +0x17C  description (char*, immediately after bonding — matches the
+    //           SMSG_ITEM_QUERY wire order; `local_14[0x5f]` in FUN_005DC110).
+    //   +0x1DC  itemSet ID — indexed into ItemSet.dbc to gate the ITEM_SET_NAME
+    //           tooltip section; 0 for items in no set.
+    OFF_ITEMSTATS_BONDING = 0x178,
+    OFF_ITEMSTATS_DESCRIPTION = 0x17C,
+    OFF_ITEMSTATS_ITEM_SET = 0x1DC,
 
     // Client-side Item.dbc store (distinct from the server-populated item-stats
     // cache above). A WowClientDB<CItemRec> static object loaded from
@@ -266,19 +284,14 @@ enum Offsets {
     // a snprintf at the call site).
     FUN_ICON_BASENAME_BY_DISPLAY_ID = 0x0070A910,
 
-    // `FUN_0061E290(itemID) -> const char *` — engine helper that
-    // builds a full colored item link
-    //   "|cff…|Hitem:ID:0:0:0:0:0:0:0:level|h[Name]|h|r"
-    // and returns a pointer into a static 1 KiB global buffer at
-    // 0x00C5CF50. Buffer is overwritten on every call; we strdup-
-    // equivalent by letting `lua_pushstring` make its own copy
-    // before the next call.
-    //
-    // Internally reads the local player's level from the descriptor
-    // (player+0xD0 → +0xC0) so the link's level field matches
-    // whatever stock GetItemInfo would have produced. No work needed
-    // on our side beyond pushing the result.
-    FUN_ITEM_LINK_FORMATTER = 0x0061E290,
+    // `FUN_00706D70(char *out, int outSize, uint itemID, int suffixID)` — the
+    // engine's item-name builder. Writes the item's display name into `out`:
+    // the plain name for suffixID 0, or the random-suffix/property name
+    // ("… of the Bear") for a non-zero suffixID (positive → ItemRandomProperties,
+    // negative → ItemRandomSuffix), formatted through ITEM_SUFFIX_TEMPLATE.
+    // Clean __cdecl with all args explicit — unlike the link formatter, safe to
+    // call directly. Same helper the native GetItemInfo uses for its name.
+    FUN_ITEM_BUILD_NAME_FROM_ID = 0x00706D70,
 
     // `Game::ResolveUnitToken("player"|"target"|"partyN"|...)` →
     // CGUnit_C *. Plain `__cdecl(const char *token)` — verified at
