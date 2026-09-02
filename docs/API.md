@@ -47,6 +47,10 @@ Conventions:
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
   - [`ITEM_DATA_LOAD_RESULT` event](#item_data_load_result-event)
   - [`QUEST_DATA_LOAD_RESULT` event](#quest_data_load_result-event)
+  - [`QUEST_TURNED_IN` event](#quest_turned_in-event)
+  - [`QUEST_REMOVED` event](#quest_removed-event)
+  - [`BAG_UPDATE_DELAYED` event](#bag_update_delayed-event)
+  - [`FACTION_STANDING_CHANGED` event](#faction_standing_changed-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -551,6 +555,44 @@ abandoned, or auto-failed. Derived by diffing the quest log across the
 engine's log rebuild, so it's independent of *why* the quest left. On a
 turn-in you'll see both `QUEST_TURNED_IN` (at the send) and
 `QUEST_REMOVED` (when the log updates), matching modern ordering.
+
+### `BAG_UPDATE_DELAYED` event
+
+Payload: *(none)*
+
+Fires once at the end of any frame in which one or more `BAG_UPDATE` events
+fired. Register for this instead of `BAG_UPDATE` and rescan bags a single time
+per frame, no matter how many slots changed.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("BAG_UPDATE_DELAYED")
+f:SetScript("OnEvent", function() RescanBags() end)   -- runs at most once per frame
+```
+
+During a loading screen the event holds; the first in-world frame fires it once
+for the settled inventory. Same coalescing behavior as modern WoW.
+
+### `FACTION_STANDING_CHANGED` event
+
+Payload: `factionID, newStanding, repGained`
+
+Fires once per reputation change, alongside the "+N reputation" message.
+`newStanding` is the faction's new total standing; `repGained` is the signed
+delta (positive on a gain, negative on a loss).
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("FACTION_STANDING_CHANGED")
+f:SetScript("OnEvent", function(self, event, factionID, newStanding, repGained)
+    print(("%+d rep with faction %d (now %d)"):format(repGained, factionID, newStanding))
+end)
+```
+
+Does not fire for the initial faction sync at login — only for actual, visible
+standing changes. `repGained` is a WrathClassicAPI extra: the modern event
+delivers only `(factionID, newStanding)`, but the delta is on hand, so it's
+passed through to save addons re-deriving it from the chat string.
 
 ---
 
