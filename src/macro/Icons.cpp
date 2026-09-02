@@ -69,6 +69,23 @@ void PrepareTable(void *L) {
     }
 }
 
+// Both native lists are seeded with the "INV_Misc_QuestionMark" placeholder at
+// index 0. Modern base icon lists exclude it (the icon picker supplies its own
+// leading "?"), so we skip it — case-insensitive, since it's the only entry we
+// filter.
+bool IsQuestionMark(const char *bn) {
+    const char *q = "INV_Misc_QuestionMark";
+    for (int i = 0;; ++i) {
+        char a = bn[i], b = q[i];
+        if (b == '\0')
+            return a == '\0';
+        if (a >= 'A' && a <= 'Z') a = static_cast<char>(a + 32);
+        if (b >= 'A' && b <= 'Z') b = static_cast<char>(b + 32);
+        if (a != b)
+            return false;
+    }
+}
+
 // First empty (nil) 1-based slot of the table at index 1 — where appending
 // starts, so successive calls into the same table accumulate.
 int FirstEmptyIndex(void *L) {
@@ -93,7 +110,7 @@ int AppendList(void *L, uintptr_t arrayVar, uintptr_t countVar) {
         int idx = FirstEmptyIndex(L);
         for (int i = 0; i < count; ++i) {
             const char *bn = arr[i];
-            if (bn == nullptr || *bn == '\0')
+            if (bn == nullptr || *bn == '\0' || IsQuestionMark(bn))
                 continue;
             char path[260];
             std::snprintf(path, sizeof(path), "Interface\\Icons\\%s", bn);

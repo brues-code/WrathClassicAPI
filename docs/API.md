@@ -889,9 +889,9 @@ GetMacroItemIcons(icons)  -- item icons appended after them
   duplicate-free.
 
 Entries are full `Interface\Icons\<Name>` **path strings** (3.3.5 has no fileID
-system), usable directly with `texture:SetTexture`. Both lists start with
-`INV_Misc_QuestionMark` (the no-icon placeholder), matching the game's own macro
-icon list.
+system), usable directly with `texture:SetTexture`. The `INV_Misc_QuestionMark`
+placeholder that the engine seeds each list with is filtered out, so an icon
+picker can supply its own leading "?" without it appearing twice.
 
 ---
 

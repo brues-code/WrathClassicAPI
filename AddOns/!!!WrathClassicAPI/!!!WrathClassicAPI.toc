@@ -25,3 +25,4 @@ Util\PlayerUtil.lua
 Util\EnumUtil.lua
 Util\LinkUtil.lua
 Util\TextureUtil.lua
+Util\IconDataProvider.lua
