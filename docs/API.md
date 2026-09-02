@@ -141,6 +141,7 @@ Conventions:
   - [`UnitPowerMissing(unit[, powerType])`](#unitpowermissingunit-powertype)
   - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
   - [`UnitNameFromGUID(guid)`](#unitnamefromguidguid)
+  - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
@@ -1966,6 +1967,22 @@ combat log, or `/who` — whether or not they're on screen, and any unit or
 creature currently in view. `realm` is `nil` for a same-realm player (so,
 everyone on a single-realm server) and for creatures. A GUID the client has no
 name for returns `nil`.
+
+### `UnitCreatedBySpell(unit)`
+
+Returns the spellID of the spell that summoned this unit — the totem-drop
+spell for a totem, the summon spell for a pet, guardian, or wild summon — or
+`nil` for anything not summoned by a spell (players, world creatures) and for
+an unresolved unit token.
+
+```lua
+UnitCreatedBySpell("target")                          -- 8071 (Stoneskin Totem)
+C_Spell.GetSpellName(UnitCreatedBySpell("target"))    -- "Stoneskin Totem"
+```
+
+Works for any unit in range — anyone's summons, not just your own. Note this
+is the *summoning* spell; the spells a totem casts are server-side and never
+reach the client.
 
 ---
 

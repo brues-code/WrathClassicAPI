@@ -530,6 +530,18 @@ enum Offsets {
     // before returning. `FUN_007FDE00(t)` is just `t < 0 ? 1 : table[t]`.
     VAR_POWER_DISPLAY_DIVISOR_TABLE = 0x00AF5220,
 
+    // UNIT_CREATED_BY_SPELL — the spellID of the spell that summoned this
+    // unit (totem-drop spell for a totem, summon spell for a pet/guardian/
+    // wild summon), 0 for anything not spell-summoned. A broadcast descriptor
+    // field, readable for any unit in range. Verified in the unit-title
+    // builder (FUN_0061E830, the "%s's Pet/Guardian/…" formatter): it copies
+    // the Spell.dbc record for `*(desc + 0x12C)`, scans for Effect == 0x1C
+    // (SPELL_EFFECT_SUMMON), and maps EffectMiscValueB through
+    // SummonProperties.dbc to pick the UNITNAME_SUMMON_TITLE%d string. The
+    // same function anchors the owner-GUID pair the title names: CHARMEDBY
+    // at desc+0x18, falling back to CREATEDBY at desc+0x28.
+    OFF_UNIT_FIELD_CREATED_BY_SPELL = 0x12C,
+
     // Group-roster fallback for a party/raid member outside the client's
     // object-sync range (no live object to read a descriptor from). The
     // token -> GUID -> party -> raid resolution is wrapped by Unit::ResolveMember
