@@ -7,7 +7,8 @@ name: Release
 #
 # Requires one secret: WRAPPER_REPO_TOKEN — a fine-grained PAT scoped to
 # brues-code/wxl-wrathclassicapi with Contents: Read and write. It clones the
-# private wrapper, pushes the stamped wxl.json + tag, and creates its release.
+# wrapper, pushes the stamped wxl.json, the synced docs/API.md and the tag, and
+# creates its release.
 
 on:
   push:
@@ -37,7 +38,7 @@ jobs:
           repository: WarcraftXL/wxl-core
           path: wxl-core
 
-      - name: Checkout wxl-wrathclassicapi (private, writable)
+      - name: Checkout wxl-wrathclassicapi (writable)
         uses: actions/checkout@v4
         with:
           repository: brues-code/wxl-wrathclassicapi
@@ -55,16 +56,27 @@ jobs:
           cmake -S wxl-wrathclassicapi -B wxl-wrathclassicapi/build -A Win32 "-DWRATHCLASSICAPI_TAG=${{ github.ref_name }}" "-DWRATHCLASSICAPI_DIR=${{ github.workspace }}/WrathClassicAPI" "-DWXL_CORE_DIR=${{ github.workspace }}/wxl-core"
           cmake --build wxl-wrathclassicapi/build --config Release
 
-      - name: Stamp wxl.json + tag the wrapper repo
+      - name: Stamp wxl.json, sync docs/API.md + tag the wrapper repo
         shell: pwsh
         working-directory: wxl-wrathclassicapi
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
           $stamped = ([regex]'("version"\s*:\s*")[^"]*(")').Replace((Get-Content -Raw wxl.json), ('${1}' + $ver + '${2}'), 1)
           [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'wxl.json'), $stamped)
+          # The wrapper ships the per-function reference next to the DLL: docs/API.md
+          # is a copy of the core's, refreshed on every release so it matches the
+          # shipped build. The header marks it as synced so nobody edits the copy, and
+          # the core's repo-relative links (../README.md, ../src/...) are pointed at
+          # the core repository at this tag, since those files are not in the wrapper.
+          New-Item -ItemType Directory -Force docs | Out-Null
+          $core = "https://github.com/brues-code/WrathClassicAPI/blob/${{ github.ref_name }}/"
+          $header = "<!-- Synced from ${core}docs/API.md by the WrathClassicAPI release workflow. Edit it there, not here. -->`n`n"
+          $api = [System.IO.File]::ReadAllText("${{ github.workspace }}/WrathClassicAPI/docs/API.md") -replace '\]\(\.\./', ('](' + $core)
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'docs/API.md'), $header + $api, [System.Text.UTF8Encoding]::new($false))
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if (git status --porcelain -- wxl.json) { git commit wxl.json -m "release ${{ github.ref_name }}" }
+          git add wxl.json docs/API.md
+          if (git status --porcelain -- wxl.json docs/API.md) { git commit -m "release ${{ github.ref_name }}" }
           git tag "${{ github.ref_name }}"
           git push origin HEAD:main
           git push origin "${{ github.ref_name }}"
