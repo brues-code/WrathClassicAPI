@@ -93,6 +93,7 @@ Conventions:
   - [`FactionData` table shape](#factiondata-table-shape)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
+  - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
@@ -1096,6 +1097,29 @@ engine's native `IsSpellKnown`** — that one walks the displayable
 spellbook arrays, which famously don't include profession recipes
 in 3.3.5 (per Wowhead: "as of 3.0.8, does not work for profession
 spells"). `IsPlayerSpell` closes that gap.
+
+### `C_Spell.GetSpellTexture(spellIdentifier)`
+
+Returns the icon texture path for a spell, or `nil` if the identifier
+resolves to no spell (or the spell has no icon). `spellIdentifier` is a
+spell ID, name, `name(subtext)`, or spell link:
+
+```lua
+C_Spell.GetSpellTexture(133)                 -- by ID → "Interface\\Icons\\Spell_Fire_FlameBolt"
+C_Spell.GetSpellTexture("Fireball")          -- by name (highest rank you know)
+C_Spell.GetSpellTexture("Fireball(Rank 4)")  -- by name + rank subtext
+C_Spell.GetSpellTexture(GetSpellLink(133))   -- by link
+```
+
+The result is a texture path string, ready to hand straight to
+`texture:SetTexture(...)`.
+
+A **numeric** identifier resolves any spell in the client's `Spell.dbc`,
+whether or not you know it. A **name** resolves only when the spell is in
+your (or your pet's) spellbook — with no subtext it picks the highest
+rank you know; a `(Rank N)` subtext pins that exact rank. Reads
+`Spell.dbc` → `SpellIcon.dbc` entirely from client data, so it never
+issues a server query and never returns a placeholder while loading.
 
 ---
 

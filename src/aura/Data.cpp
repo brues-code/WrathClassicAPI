@@ -17,6 +17,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "spell/Lookup.h"
 #include "unit/Resolve.h"
 
 #include <cstdint>
@@ -41,8 +42,6 @@ struct SpellRecordBuffer {
     uint8_t bytes[Offsets::SPELL_DBC_RECORD_SIZE];
 };
 
-using DBCCopyRecord_t = int(__thiscall *)(void *desc, int id, void *outBuffer);
-using DBCGetRecordPtr_t = uintptr_t(__thiscall *)(void *anchor, int id);
 using IsAuraStealable_t = bool(__cdecl *)(const uint8_t *targetUnit,
                                           const uint8_t *auraEntry,
                                           const uint8_t *spellRecord);
@@ -54,56 +53,6 @@ using IsAuraStealable_t = bool(__cdecl *)(const uint8_t *targetUnit,
 const char *ResolveCasterToken(const uint8_t *auraEntry) {
     return Unit::GuidToToken(
         reinterpret_cast<const uint32_t *>(auraEntry + Offsets::OFF_AURA_CASTER_GUID_LO));
-}
-
-// Copy the Spell.dbc record for `spellID` into `buffer`. Returns
-// true on hit. We always go through the record-copy helper rather
-// than reading the raw record array directly: the engine has two
-// "shapes" for the record (locale-aware split-string layout vs
-// pre-resolved single-string layout) and FUN_DBC_COPY_RECORD
-// normalizes both into the buffer-layout our offsets target.
-bool CopySpellRecord(uint32_t spellID, SpellRecordBuffer *buffer) {
-    if (spellID == 0)
-        return false;
-    auto desc = reinterpret_cast<void *>(
-        static_cast<uintptr_t>(Offsets::VAR_SPELL_DBC_DESC));
-    auto fn = reinterpret_cast<DBCCopyRecord_t>(
-        static_cast<uintptr_t>(Offsets::FUN_DBC_COPY_RECORD));
-    return fn(desc, static_cast<int>(spellID), buffer) != 0;
-}
-
-// Look up a record pointer in a pointer-anchored DBC (SpellIcon,
-// SpellDispelType). Returns nullptr on out-of-range or null slot.
-const uint8_t *DBCGetByAnchor(uintptr_t anchor, int id) {
-    if (id <= 0)
-        return nullptr;
-    auto fn = reinterpret_cast<DBCGetRecordPtr_t>(
-        static_cast<uintptr_t>(Offsets::FUN_DBC_GET_RECORD_PTR));
-    return reinterpret_cast<const uint8_t *>(
-        fn(reinterpret_cast<void *>(anchor), id));
-}
-
-const char *SpellIconPath(uint32_t iconID) {
-    const uint8_t *record = DBCGetByAnchor(Offsets::VAR_SPELLICON_DBC_ANCHOR,
-                                           static_cast<int>(iconID));
-    if (record == nullptr)
-        return nullptr;
-    return *reinterpret_cast<const char *const *>(
-        record + Offsets::OFF_SPELLICON_PATH);
-}
-
-const char *DispelTypeName(uint32_t dispelID) {
-    if (dispelID == 0)
-        return nullptr;
-    const uint8_t *record = DBCGetByAnchor(Offsets::VAR_SPELLDISPEL_DBC_ANCHOR,
-                                           static_cast<int>(dispelID));
-    if (record == nullptr)
-        return nullptr;
-    if (*reinterpret_cast<const int *>(
-            record + Offsets::OFF_SPELLDISPEL_HAS_NAME) == 0)
-        return nullptr;
-    return *reinterpret_cast<const char *const *>(
-        record + Offsets::OFF_SPELLDISPEL_NAME);
 }
 
 // Convert engine's `expiration_ms` field (u32) to a double in
@@ -233,7 +182,7 @@ void Push(void *L, const uint8_t *unit, int slot) {
     const bool helpful = IsHelpful(entry);
 
     SpellRecordBuffer record{};
-    const bool haveSpell = CopySpellRecord(spellID, &record);
+    const bool haveSpell = ::Spell::Lookup::CopyRecord(spellID, record.bytes);
 
     const char *name = nullptr;
     const char *icon = nullptr;
@@ -243,10 +192,10 @@ void Push(void *L, const uint8_t *unit, int slot) {
             record.bytes + Offsets::OFF_SPELL_NAME);
         const uint32_t iconID = *reinterpret_cast<const uint32_t *>(
             record.bytes + Offsets::OFF_SPELL_ICON_DBC_ID);
-        icon = SpellIconPath(iconID);
+        icon = ::Spell::Lookup::IconPath(iconID);
         const uint32_t dispelID = *reinterpret_cast<const uint32_t *>(
             record.bytes + Offsets::OFF_SPELL_DISPEL_TYPE_ID);
-        dispel = DispelTypeName(dispelID);
+        dispel = ::Spell::Lookup::DispelTypeName(dispelID);
     }
 
     const int applications = (entry != nullptr) ? ReadStacksFromEntry(entry) : 0;

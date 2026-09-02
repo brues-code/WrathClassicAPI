@@ -989,6 +989,19 @@ enum Offsets {
     // verbatim and modern callers consume it as-is.
     OFF_SPELLICON_PATH                 = 0x04,
 
+    // Spellbook name → spellID resolver. `int __cdecl(const char *name,
+    // int *outBookType)`. Looks `name` up in the engine's spellbook name index
+    // (`DAT_00be8e64`) and returns the matching spellID, writing the book (0 =
+    // player, 1 = pet) to `*outBookType`. Honors a trailing "(subtext)" as a
+    // rank selector ("Fireball(Rank 4)"); with no subtext, returns the highest
+    // known rank. Returns 0 for a name the player's/pet's spellbook doesn't
+    // contain — the same spellbook scoping the native GetSpellTexture/GetSpellInfo
+    // name path uses. Verified via Script_GetSpellTexture (FUN_00540d70 →
+    // resolver FUN_00540670 → FUN_00540200 → FUN_0053f5e0). The '(' split and
+    // leading '!' strip are done inside this function, so callers pass the raw
+    // identifier string.
+    FUN_SPELL_NAME_TO_ID               = 0x00540200,
+
     // Quest static-info cache (`DBCache<QuestCache, int, HASHKEY_INT>`)
     // — same generic shape as the item cache (`FUN_DBCACHE_ITEMSTATS_GET_RECORD`).
     // `__thiscall(this, questID, *outBuf, callback, userData, char unused)`
