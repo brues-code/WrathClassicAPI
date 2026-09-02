@@ -44,7 +44,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Mixins    | `Mixin`, `CreateFromMixins`, `CreateAndInitFromMixin` |
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
-| Spell     | `IsPlayerSpell`, `C_Spell.GetSpellTexture` |
+| Spell     | `IsPlayerSpell`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellTexture` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
 | Time      | `GetServerTime`, `C_DateAndTime.AdjustTimeByDays`, `C_DateAndTime.AdjustTimeByMinutes`, `C_DateAndTime.CompareCalendarTime`, `C_DateAndTime.GetCalendarTimeFromEpoch`, `C_DateAndTime.GetCurrentCalendarTime`, `C_DateAndTime.GetSecondsUntilDailyReset`, `C_DateAndTime.GetServerTimeLocal` |
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |

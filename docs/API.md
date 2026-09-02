@@ -93,6 +93,7 @@ Conventions:
   - [`FactionData` table shape](#factiondata-table-shape)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
+  - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
@@ -1097,6 +1098,51 @@ engine's native `IsSpellKnown`** — that one walks the displayable
 spellbook arrays, which famously don't include profession recipes
 in 3.3.5 (per Wowhead: "as of 3.0.8, does not work for profession
 spells"). `IsPlayerSpell` closes that gap.
+
+### `C_Spell.GetSpellInfo(spellIdentifier)`
+
+Returns a table describing a spell, or `nil` if the identifier resolves
+to no spell. `spellIdentifier` is a spell ID, name, `name(subtext)`, or
+spell link (same forms as `C_Spell.GetSpellTexture`, below) — a localized
+name resolves only when the spell is in your (or your pet's) spellbook.
+
+```lua
+local info = C_Spell.GetSpellInfo(133)      -- Fireball
+-- info.name           = "Fireball"
+-- info.iconID         = "Interface\\Icons\\Spell_Fire_FlameBolt"
+-- info.originalIconID = "Interface\\Icons\\Spell_Fire_FlameBolt"
+-- info.castTime       = 3500   -- ms (0 for instant spells)
+-- info.minRange       = 0
+-- info.maxRange       = 35
+-- info.spellID        = 133
+-- info.rank           = "Rank 1"
+-- info.powerType      = 0      -- 0 = mana, 1 = rage, 3 = energy, -2 = health, …
+-- info.isFunnel       = false
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Localized spell name |
+| `iconID` | string | Icon texture path — feed to `texture:SetTexture` |
+| `originalIconID` | string | Same path as `iconID` |
+| `castTime` | number | Cast time in milliseconds, `0` for instant spells |
+| `minRange` | number | Minimum range in yards, `0` if not applicable |
+| `maxRange` | number | Maximum range in yards, `0` if not applicable |
+| `spellID` | number | The resolved spell ID |
+| `rank` | string | Rank text (`"Rank N"`), or `""` |
+| `powerType` | number | Power type the spell is cast from (`0` = mana, `1` = rage, `3` = energy, `-2` = health, …) |
+| `isFunnel` | boolean | True for health-funnel spells |
+
+`iconID` / `originalIconID` are texture **path strings** rather than
+numeric fileIDs — 3.3.5 has no fileID system, and there is no
+spell-override system, so the two are identical. `rank`, `powerType`,
+and `isFunnel` are extras beyond the modern signature, carried from the
+same `Spell.dbc` record. There is no `cost` field: WotLK pays most caster
+spells as a percentage of the caster's base mana rather than the flat
+`Spell.dbc` cost, so a static per-spell value would read `0` or mislead
+(use the cast-time UI or a cost API for live costs). All fields come from
+client data (`Spell.dbc` and its `SpellIcon` / `SpellCastTimes` /
+`SpellRange` sub-tables) — no server query.
 
 ### `C_Spell.GetSpellTexture(spellIdentifier)`
 

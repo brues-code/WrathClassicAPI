@@ -38,6 +38,16 @@ const char *IconPath(uint32_t iconID);
 // carries no displayable name (the engine's +0x0C "has name" sentinel is 0).
 const char *DispelTypeName(uint32_t dispelID);
 
+// SpellCastTimes.dbc base cast time (ms) for a casting-time index — the flat
+// base, ignoring per-skill scaling. 0 for an out-of-range index (and for the
+// instant-cast row).
+int CastTimeMs(uint32_t castTimeIndex);
+
+// SpellRange.dbc min/max range (yards) for a range index. Writes the pair via
+// the out-params and returns true on hit; writes 0/0 and returns false for an
+// out-of-range index.
+bool Range(uint32_t rangeIndex, float *minRange, float *maxRange);
+
 // Convenience: localized name for a spellID, or nullptr if the spell is unknown
 // or has no name in the current locale.
 const char *NameForSpell(uint32_t spellID);

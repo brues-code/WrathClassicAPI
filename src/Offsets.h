@@ -1002,6 +1002,36 @@ enum Offsets {
     // identifier string.
     FUN_SPELL_NAME_TO_ID               = 0x00540200,
 
+    // Additional Spell.dbc record fields within the FUN_DBC_COPY_RECORD output
+    // buffer (the same buffer OFF_SPELL_NAME / OFF_SPELL_ICON_DBC_ID target),
+    // used to assemble C_Spell.GetSpellInfo. Verified against the native
+    // Script_GetSpellInfo (FUN_00540a30) and the cost/casttime/range helpers it
+    // calls (FUN_008012f0 / FUN_007ff180 / FUN_007ff480):
+    //   +0x18  AttributesEx2  (bit 0x800 = SPELL_ATTR_EX2_HEALTH_FUNNEL)
+    //   +0x70  CastingTimeIndex → SpellCastTimes.dbc
+    //   +0xA4  powerType (0 = mana, 1 = rage, 2 = focus, 3 = energy, -2 = health, …)
+    //   +0xB8  RangeIndex → SpellRange.dbc
+    OFF_SPELL_ATTRIBUTES_EX2           = 0x18,
+    OFF_SPELL_CASTING_TIME_INDEX       = 0x70,
+    OFF_SPELL_POWER_TYPE               = 0xA4,
+    OFF_SPELL_RANGE_INDEX              = 0xB8,
+    SPELL_ATTR_EX2_HEALTH_FUNNEL       = 0x800,
+
+    // SpellCastTimes.dbc — pointer-anchored store (read via FUN_DBC_GET_RECORD_PTR,
+    // same shape as the SpellIcon / SpellDispel anchors). Base cast time in ms at
+    // record+4. From FUN_007ff180: castRec[1]=base, castRec[2]=per-skill scale,
+    // castRec[3]=min clamp — the flat base is castRec[1] (0 for instant spells).
+    VAR_SPELLCASTTIMES_DBC_ANCHOR      = 0x00AD4760,
+    OFF_SPELLCASTTIMES_BASE_MS         = 0x04,
+
+    // SpellRange.dbc — pointer-anchored store. minRange float at record+4,
+    // maxRange float at record+0xC (the default/hostile range set; the
+    // friend-range set is the parallel pair at +8 / +0x10). From FUN_007ff480:
+    // min = rangeRec[1 + set], max = rangeRec[3 + set], with set = 0 here.
+    VAR_SPELLRANGE_DBC_ANCHOR          = 0x00AD49A0,
+    OFF_SPELLRANGE_MIN                 = 0x04,
+    OFF_SPELLRANGE_MAX                 = 0x0C,
+
     // Quest static-info cache (`DBCache<QuestCache, int, HASHKEY_INT>`)
     // — same generic shape as the item cache (`FUN_DBCACHE_ITEMSTATS_GET_RECORD`).
     // `__thiscall(this, questID, *outBuf, callback, userData, char unused)`

@@ -64,6 +64,26 @@ const char *DispelTypeName(uint32_t dispelID) {
     return *reinterpret_cast<const char *const *>(record + Offsets::OFF_SPELLDISPEL_NAME);
 }
 
+int CastTimeMs(uint32_t castTimeIndex) {
+    const uint8_t *record =
+        ByAnchor(Offsets::VAR_SPELLCASTTIMES_DBC_ANCHOR, static_cast<int>(castTimeIndex));
+    if (record == nullptr)
+        return 0;
+    return *reinterpret_cast<const int *>(record + Offsets::OFF_SPELLCASTTIMES_BASE_MS);
+}
+
+bool Range(uint32_t rangeIndex, float *minRange, float *maxRange) {
+    *minRange = 0.0f;
+    *maxRange = 0.0f;
+    const uint8_t *record =
+        ByAnchor(Offsets::VAR_SPELLRANGE_DBC_ANCHOR, static_cast<int>(rangeIndex));
+    if (record == nullptr)
+        return false;
+    *minRange = *reinterpret_cast<const float *>(record + Offsets::OFF_SPELLRANGE_MIN);
+    *maxRange = *reinterpret_cast<const float *>(record + Offsets::OFF_SPELLRANGE_MAX);
+    return true;
+}
+
 const char *NameForSpell(uint32_t spellID) {
     uint8_t buf[Offsets::SPELL_DBC_RECORD_SIZE];
     if (!CopyRecord(spellID, buf))
