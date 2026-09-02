@@ -39,6 +39,15 @@ UIBindingsInit_t UIBindingsInit_o = nullptr;
 using FrameScriptShutdown_t = void(__cdecl *)();
 FrameScriptShutdown_t FrameScriptShutdown_o = nullptr;
 
+// `CGlueMgr::Initialize()` — see `Offsets::FUN_CGLUEMGR_INITIALIZE`. Hooked POST
+// as the login-screen (glue) registration signal: the console registry is up and
+// glue is ready, so this fires `RunGlueModuleRegistrations()` (console commands).
+// Latched inside that call, so re-firing on each return to the login screen is a
+// no-op — and so it coexists with the LichLoader front-end's explicit
+// `Load`-time call (whichever runs first wins; the other no-ops).
+using GlueMgrInit_t = void(__cdecl *)();
+GlueMgrInit_t GlueMgrInit_o = nullptr;
+
 // Open the engine's "valid Lua-C function pointer" range wide enough to accept
 // any user-mode pointer. The check function at `FUN_0086B5A0` reads these
 // globals on every closure dispatch and errors if the pointer falls outside
@@ -78,6 +87,14 @@ void __cdecl FrameScriptShutdown_h() {
     FrameScriptShutdown_o();
 }
 
+void __cdecl GlueMgrInit_h() {
+    GlueMgrInit_o();
+    // Glue Lua state + developer-console registry are up now (same point
+    // LichCore calls our Load export). Fire the login-screen registration chain;
+    // it self-latches, so this is a no-op after the first glue init.
+    RunGlueModuleRegistrations();
+}
+
 } // namespace
 
 bool InstallCoreHooks(IHookHost &host) {
@@ -99,6 +116,17 @@ bool InstallCoreHooks(IHookHost &host) {
     if (!host.Install(Offsets::FUN_FRAMESCRIPT_SHUTDOWN,
                       reinterpret_cast<void *>(&FrameScriptShutdown_h),
                       reinterpret_cast<void **>(&FrameScriptShutdown_o)))
+        return false;
+
+    // Glue hook: fires login-screen registrations (console commands) once the
+    // glue state is ready — the front-end-agnostic trigger for glue-only APIs
+    // (see GlueMgrInit_h). The LichLoader front-end ALSO fires these from its
+    // Load export for the first-boot case where this hook installs too late to
+    // catch the initial glue init; the registration chain is latched, so the two
+    // triggers don't double-register.
+    if (!host.Install(Offsets::FUN_CGLUEMGR_INITIALIZE,
+                      reinterpret_cast<void *>(&GlueMgrInit_h),
+                      reinterpret_cast<void **>(&GlueMgrInit_o)))
         return false;
 
     return true;

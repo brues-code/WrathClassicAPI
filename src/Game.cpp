@@ -159,6 +159,16 @@ GlueModuleAutoRegister::GlueModuleAutoRegister(Fn f) : fn(f), next(g_glueHead) {
 }
 
 void RunGlueModuleRegistrations() {
+    // Login-screen registrations are process-global (console commands live in the
+    // engine's command registry for the process lifetime), so run the chain at
+    // most once. Multiple triggers converge here — the CGlueMgr::Initialize hook
+    // (every front-end) and the LichLoader front-end's Load export — and glue
+    // init itself re-runs on each return to the login screen; the latch makes all
+    // but the first a no-op. Main-thread only, so a plain flag suffices.
+    static bool done = false;
+    if (done)
+        return;
+    done = true;
     for (auto *node = g_glueHead; node != nullptr; node = node->next)
         node->fn();
 }

@@ -84,6 +84,21 @@ enum Offsets {
     // path is a follow-up.
     FUN_UIBINDINGS_INIT = 0x005620F0,
 
+    // CGlueMgr::Initialize — the login-screen (glue) state setup, the glue
+    // sibling of the in-game GameUIInit. Allocates the CGlueMgr (".\CGlueMgr.cpp"),
+    // populates the glue Lua state's event table (FrameScript_FillEvents with the
+    // ~41-entry glue list), and loads Interface\GlueXML\GlueXML.toc.
+    // `void __cdecl(void)`.
+    //
+    // Hooked POST as the login-screen registration signal: at this point the
+    // developer-console registry is up and glue is ready — the same timing
+    // LichCore uses to call our `Load` export. The detour fires
+    // `RunGlueModuleRegistrations()` (latched, once per process) so glue-only
+    // APIs (console commands) register in EVERY front-end, not just the
+    // LichLoader `Load` path. Called again on each return to the login screen
+    // (logout / disconnect); the latch makes those firings no-ops.
+    FUN_CGLUEMGR_INITIALIZE = 0x004DA5F0,
+
     // The event-name → Event* output array maintained by
     // FrameScript_FillEvents. `vFireEvent` indexes by integer event
     // ID into this array. Reading [base + id*4] gives the Event*
