@@ -69,9 +69,6 @@ Per-function reference with shape, semantics, and edge cases is in
 | `QUEST_TURNED_IN` | `questID, xpReward, moneyReward` | When the server confirms a quest turn-in. `xpReward` / `moneyReward` are the amounts actually granted, with the server's XP/money rates applied (copper for money; `xpReward` is 0 at max level) |
 | `QUEST_REMOVED` | `questID` | When a quest leaves the quest log for any reason — turned in, abandoned, or auto-failed |
 
-A given cache fill fires exactly one of these — never both — depending
-on what initiated the request. Same split as modern WoW.
-
 ### Client extensions
 
 | Feature | Change |
