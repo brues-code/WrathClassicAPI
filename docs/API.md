@@ -75,6 +75,8 @@ Conventions:
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
   - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
   - [`C_Item.GetItemSpell(item)`](#c_itemgetitemspellitem)
+- [Macro](#macro)
+  - [`GetMacroIcons` / `GetMacroItemIcons` / `GetLooseMacroIcons` / `GetLooseMacroItemIcons`](#getmacroicons--getmacroitemicons--getloosemacroicons--getloosemacroitemicons)
 - [Mixins](#mixins)
   - [`Mixin(object, ...)` / `CreateFromMixins(...)`](#mixinobject--createfrommixins)
   - [`CreateAndInitFromMixin(mixin, ...)`](#createandinitfrommixinmixin-)
@@ -742,8 +744,10 @@ populated inventory slot on the active player. Empty slots and
 invalid tables return `false` without raising.
 
 `DoesItemExistByID` returns `true` iff the cache currently has data
-for the itemID. Cache-miss returns `false` but kicks off the network
-query so a follow-up call lands the value.
+for the item. `item` accepts any of retail's forms — item ID, item
+GUID string, item link, or item name (of a cached item). Cache-miss
+returns `false` but kicks off the network query so a follow-up call
+lands the value.
 
 ### `C_Item.GetItemQuality(itemLocation)` / `GetItemQualityByID(item)`
 
@@ -857,6 +861,37 @@ Returns `false` for empty slots, malformed `itemLocation`, and
 items whose stats record isn't cached yet (pair with
 `C_Item.RequestLoadItemData(itemLocation)` if you're querying a
 recently-seen item that might not be loaded).
+
+---
+
+## Macro
+
+### `GetMacroIcons` / `GetMacroItemIcons` / `GetLooseMacroIcons` / `GetLooseMacroItemIcons`
+
+The macro icon–picker enumeration surface. Each fills its table argument (or a
+fresh table when the arg is omitted) with icon texture paths and returns it, so
+you can accumulate multiple calls into one table:
+
+```lua
+local icons = {}
+GetMacroIcons(icons)      -- spell / ability icons
+GetMacroItemIcons(icons)  -- item icons appended after them
+-- icons[1] = "Interface\\Icons\\INV_Misc_QuestionMark"
+-- ...      = "Interface\\Icons\\Ability_...", "Interface\\Icons\\Spell_...", "Interface\\Icons\\INV_..."
+```
+
+- `GetMacroIcons` returns the spell/ability icons (~1100).
+- `GetMacroItemIcons` returns the item icons (`INV_*`, several thousand).
+- `GetLooseMacroIcons` / `GetLooseMacroItemIcons` return the table unchanged.
+  3.3.5 keeps a single spell list and a single item list — user-dropped
+  ("loose") disk icons are already folded into those two — so there's no
+  separate loose set to add, and appending nothing keeps a combined list
+  duplicate-free.
+
+Entries are full `Interface\Icons\<Name>` **path strings** (3.3.5 has no fileID
+system), usable directly with `texture:SetTexture`. Both lists start with
+`INV_Misc_QuestionMark` (the no-icon placeholder), matching the game's own macro
+icon list.
 
 ---
 

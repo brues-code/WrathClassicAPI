@@ -55,8 +55,9 @@ int __cdecl Script_C_Item_DoesItemExist(void *L) {
 // false, but we kick off the network query so a subsequent call after
 // `GET_ITEM_INFO_RECEIVED` will succeed.
 //
-// Accepts numeric itemID or `"item:NNN..."` string (including full
-// chat links). Returns false for any input we can't resolve to an
+// Accepts any of retail's item-arg forms via the shared resolver — item
+// ID, item GUID string, item link (or bare "item:NNN"), or an item name
+// (of a cached item). Returns false for any input we can't resolve to an
 // itemID; never raises.
 int __cdecl Script_C_Item_DoesItemExistByID(void *L) {
     const int itemID = Item::Arg::ResolveItemID(L, 1);

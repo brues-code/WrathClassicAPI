@@ -704,6 +704,26 @@ enum Offsets {
     // so the address holds the value itself.
     VAR_MAX_SPELL_ID = 0x00AD49DC,
 
+    // Macro icon catalogues. The loader (FUN_00565840, "UIMacros.cpp") scans the
+    // icon files and — via its three scan callbacks — splits them into TWO
+    // pre-classified lists by basename prefix:
+    //   list A (spell): FUN_00565550 appends Ability_* / Spell_* icons
+    //   list B (item):  FUN_005655c0 appends INV_* icons
+    // Each is `{ char **array, int count }`, both seeded with "INV_Misc_QuestionMark"
+    // at index 0, then sorted + deduped. Entries are bare basenames; the native
+    // GetMacroIconInfo prepends "Interface\\Icons\\". Loose (user-dropped) disk
+    // icons are folded into these same two lists — there's no separate loose list.
+    //   list A backs GetMacroIcons; verified in Script_GetNumMacroIcons
+    //   (FUN_00566490) / Script_GetMacroIconInfo (FUN_00564e90).
+    //   list B backs GetMacroItemIcons.
+    // The loader builds both in one call, so checking list A's count is enough to
+    // know both are loaded.
+    VAR_MACRO_ICON_COUNT = 0x00BEAF94,
+    VAR_MACRO_ICON_ARRAY = 0x00BEAF98,
+    VAR_MACRO_ITEM_ICON_COUNT = 0x00BEAFA4,
+    VAR_MACRO_ITEM_ICON_ARRAY = 0x00BEAFA8,
+    FUN_LOAD_MACRO_ICONS = 0x00565840,
+
     // Gate function for `GameTooltip:SetSpellByID` — `bool __cdecl
     // (uint spellID, int isPet)`. Called from exactly one site:
     // `Script_GameTooltip_SetSpellByID` (FUN_00625B90) before
