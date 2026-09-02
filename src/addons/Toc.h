@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstring>
 
 namespace Addons::Toc {
 
@@ -30,6 +31,37 @@ inline bool EqCI(const char *s, size_t n, const char *lit) {
         if (lit[i] == '\0' || Lower(s[i]) != Lower(lit[i]))
             return false;
     return lit[n] == '\0';
+}
+
+// Scans an in-memory TOC buffer for `directive` (the full line prefix, e.g.
+// "## SavedVariables:") at a line start, case-insensitively, and returns the
+// value that follows via out-params: [*valStart, *valStart + *valLen), trimmed
+// of leading and trailing spaces/tabs and excluding the CR/LF/EOF terminator.
+// Returns false (out-params untouched) when the directive is absent. Pure — the
+// caller owns the buffer (via FUN_FILE_READ, or an embedded copy).
+inline bool FindValue(const char *buf, size_t size, const char *directive,
+                      const char **valStart, size_t *valLen) {
+    const size_t dlen = std::strlen(directive);
+    if (dlen == 0)
+        return false;
+    for (size_t i = 0; i + dlen <= size; ++i) {
+        const bool atLineStart = (i == 0) || buf[i - 1] == '\n';
+        if (!atLineStart || _strnicmp(buf + i, directive, dlen) != 0)
+            continue;
+        const char *p = buf + i + dlen;
+        const char *end = buf + size;
+        while (p < end && (*p == ' ' || *p == '\t'))
+            ++p;
+        const char *v = p;
+        while (p < end && *p != '\r' && *p != '\n')
+            ++p;
+        while (p > v && (p[-1] == ' ' || p[-1] == '\t'))
+            --p;
+        *valStart = v;
+        *valLen = static_cast<size_t>(p - v);
+        return true;
+    }
+    return false;
 }
 
 } // namespace Addons::Toc

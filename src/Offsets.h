@@ -1540,6 +1540,50 @@ enum Offsets {
     // whose client version isn't first is otherwise seen as out of date.
     CLIENT_INTERFACE_VERSION = 30300,
 
+    // --- LoadSavedVariablesFirst support (src/addons/SavedVarsFirst.cpp) -------
+    //
+    // The engine runs a whole addon in one function (FUN_ADDON_LOADADDON,
+    // 0x005F80B0, already hooked in Embedded.cpp): it runs the addon's files,
+    // THEN loads the account then per-character SavedVariables — so file-scope
+    // Lua sees SavedVariables still nil. To honor the modern
+    // `## LoadSavedVariablesFirst: 1` directive we load the SavedVariables
+    // before the file-list loader runs, then suppress the engine's own later
+    // (re)load of those exact paths so file-scope writes survive. All of these
+    // were read straight out of FUN_005F80B0's own SavedVariables step.
+    //
+    // TOC file-list loader — `uint32 __cdecl(char *tocPath, char *name,
+    // int *a3, void **ctx)`. Reads `tocPath` and runs each referenced file;
+    // FUN_005F80B0 calls it once per addon. It also loads GlueXML/FrameXML
+    // (FUN_004DA5F0), so gate on the path being an addon `.toc`. Hooked PRE to
+    // load SavedVariables early for a flagged addon.
+    FUN_ADDON_LOAD_FILES = 0x00814340,
+
+    // Read + run a Lua file — `uint32 __cdecl(const char *path, void *ctx)`.
+    // Reads via FUN_FILE_READ, compiles, pcalls; `ctx` (a load/error context) is
+    // null-safe — every use is guarded, so callers may pass nullptr. How the
+    // engine loads each SavedVariables `.lua`. Hooked to suppress the engine's
+    // redundant re-load of a path we pre-loaded. Verified at FUN_00818C40.
+    FUN_LUA_LOAD_FILE = 0x00818C40,
+
+    // File-exists probe — `int __stdcall(const char *path, int mode)`
+    // (callee-cleaned, RET 8); nonzero when the file exists, `mode = 1` on the
+    // SavedVariables paths. Sibling of FUN_FILE_READ; the callee-clean call sites
+    // in FUN_005F80B0 confirm the __stdcall convention.
+    FUN_FILE_EXISTS = 0x00424B10,
+
+    // SavedVariables path components, read exactly as FUN_005F80B0 builds them:
+    //   VAR_ACCOUNT_NAME — inline char buffer for the `WTF\Account\<name>`
+    //     segment (pushed directly as the snprintf `%s`); empty until logged in.
+    //   FUN_GET_REALM_NAME — `const char * __cdecl(void)`, the `realmName` cvar
+    //     value, lazily registered (FUN_006B0DC0).
+    //   FUN_GET_LOGIN_ACCOUNT_NAME — `const char * __cdecl(void)`, the character
+    //     name buffer, or NULL if no character is logged in yet (FUN_006B1060).
+    // The engine loads only the account file and the realm-scoped per-character
+    // file (no realm-less per-char fallback), so we mirror exactly that pair.
+    VAR_ACCOUNT_NAME = 0x00C24418,
+    FUN_GET_REALM_NAME = 0x006B0DC0,
+    FUN_GET_LOGIN_ACCOUNT_NAME = 0x006B1060,
+
     // Addon-subsystem init: `void __cdecl AddonInit(char *basePath)`.
     // Runs registry setup, then the disk scan FUN_ADDON_DISK_SCAN, then sets
     // the "addons initialized" flag `DAT_00C24918 = 1` (VAR_ADDON_INITIALIZED).

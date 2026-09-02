@@ -37,4 +37,8 @@ using SMemAllocFn = void *(__stdcall *)(size_t size, const char *file, int line,
 using SMemFreeFn = int(__stdcall *)(void *buf, const char *file, int line,
                                     int flags);
 
+// FUN_FILE_EXISTS (0x00424B10) — __stdcall, callee cleans 8 bytes (RET 8).
+// Nonzero when `path` exists; `mode` is 1 on the addon / SavedVariables paths.
+using FileExistsFn = int(__stdcall *)(const char *path, int mode);
+
 } // namespace Addons::EngineIO
