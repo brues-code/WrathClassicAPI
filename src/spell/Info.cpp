@@ -44,6 +44,7 @@
 #include "spell/Lookup.h"
 
 #include <cstdint>
+#include <cstdio>
 
 namespace Spell::Info {
 
@@ -115,9 +116,44 @@ int __cdecl Script_C_Spell_GetSpellInfo(void *L) {
     return 1;
 }
 
+// `C_Spell.GetSpellName(spellIdentifier) -> name` — the localized spell name, or
+// nil if the identifier resolves to no spell. Same identifier forms as
+// GetSpellInfo/GetSpellTexture.
+int __cdecl Script_C_Spell_GetSpellName(void *L) {
+    const int spellID = Spell::Arg::ResolveSpellID(L, 1);
+    if (spellID <= 0)
+        return 0;
+    const char *name = Spell::Lookup::NameForSpell(static_cast<uint32_t>(spellID));
+    if (name == nullptr || *name == '\0')
+        return 0;
+    Game::Lua::PushString(L, name);
+    return 1;
+}
+
+// `C_Spell.GetSpellLink(spellIdentifier) -> link` — the spell hyperlink string
+// "|cff71d5ff|Hspell:<id>|h[<name>]|h|r", or nil if the identifier resolves to no
+// spell. Built directly (matching the engine's own link format) with the
+// standard spell-link color; spellID and name come from the resolved spell.
+int __cdecl Script_C_Spell_GetSpellLink(void *L) {
+    const int spellID = Spell::Arg::ResolveSpellID(L, 1);
+    if (spellID <= 0)
+        return 0;
+    const char *name = Spell::Lookup::NameForSpell(static_cast<uint32_t>(spellID));
+    if (name == nullptr || *name == '\0')
+        return 0;
+    char link[256];
+    std::snprintf(link, sizeof(link), "|cff71d5ff|Hspell:%d|h[%s]|h|r", spellID, name);
+    Game::Lua::PushString(L, link);
+    return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::Lua::RegisterTableFunction("C_Spell", "GetSpellInfo",
                                      &Script_C_Spell_GetSpellInfo);
+    Game::Lua::RegisterTableFunction("C_Spell", "GetSpellName",
+                                     &Script_C_Spell_GetSpellName);
+    Game::Lua::RegisterTableFunction("C_Spell", "GetSpellLink",
+                                     &Script_C_Spell_GetSpellLink);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

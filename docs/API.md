@@ -95,6 +95,8 @@ Conventions:
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
+  - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
+  - [`C_Spell.GetSpellLink(spellIdentifier)`](#c_spellgetspelllinkspellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
@@ -1186,6 +1188,26 @@ spells as a percentage of the caster's base mana rather than the flat
 (use the cast-time UI or a cost API for live costs). All fields come from
 client data (`Spell.dbc` and its `SpellIcon` / `SpellCastTimes` /
 `SpellRange` sub-tables) — no server query.
+
+### `C_Spell.GetSpellName(spellIdentifier)`
+
+Returns the localized spell name, or `nil` if the identifier resolves to no
+spell. `spellIdentifier` takes the same forms as `GetSpellInfo` (spell ID,
+name, `name(subtext)`, or link).
+
+```lua
+C_Spell.GetSpellName(133)   -- "Fireball"
+```
+
+### `C_Spell.GetSpellLink(spellIdentifier)`
+
+Returns the spell hyperlink `|cff71d5ff|Hspell:<id>|h[<name>]|h|r`, or `nil` if
+the identifier resolves to no spell. Same `spellIdentifier` forms as
+`GetSpellInfo`. The result is a clickable chat link.
+
+```lua
+C_Spell.GetSpellLink(133)   -- "|cff71d5ff|Hspell:133|h[Fireball]|h|r"
+```
 
 ### `C_Spell.GetSpellTexture(spellIdentifier)`
 
