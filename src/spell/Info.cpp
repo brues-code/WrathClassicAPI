@@ -147,6 +147,24 @@ int __cdecl Script_C_Spell_GetSpellLink(void *L) {
     return 1;
 }
 
+// `C_Spell.GetSpellSubtext(spellIdentifier) -> subtext` — the spell's subtext
+// line: the rank text ("Rank 4") for ranked spells, an empty string for spells
+// with none, or nil if the identifier resolves to no spell. Read from the same
+// Spell.dbc record as GetSpellInfo's `rank` field — client data, so it's always
+// available immediately (no deferred-load nil).
+int __cdecl Script_C_Spell_GetSpellSubtext(void *L) {
+    const int spellID = Spell::Arg::ResolveSpellID(L, 1);
+    if (spellID <= 0)
+        return 0;
+    uint8_t buf[Offsets::SPELL_DBC_RECORD_SIZE];
+    if (!Spell::Lookup::CopyRecord(static_cast<uint32_t>(spellID), buf))
+        return 0;
+    const char *rank =
+        *reinterpret_cast<const char *const *>(buf + Offsets::OFF_SPELL_RANK);
+    Game::Lua::PushString(L, rank != nullptr ? rank : "");
+    return 1;
+}
+
 void RegisterLuaFunctions() {
     Game::Lua::RegisterTableFunction("C_Spell", "GetSpellInfo",
                                      &Script_C_Spell_GetSpellInfo);
@@ -154,6 +172,8 @@ void RegisterLuaFunctions() {
                                      &Script_C_Spell_GetSpellName);
     Game::Lua::RegisterTableFunction("C_Spell", "GetSpellLink",
                                      &Script_C_Spell_GetSpellLink);
+    Game::Lua::RegisterTableFunction("C_Spell", "GetSpellSubtext",
+                                     &Script_C_Spell_GetSpellSubtext);
 }
 
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};

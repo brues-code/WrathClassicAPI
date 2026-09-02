@@ -102,6 +102,7 @@ Conventions:
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
   - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
+  - [`C_Spell.GetSpellSubtext(spellIdentifier)`](#c_spellgetspellsubtextspellidentifier)
   - [`C_Spell.GetSpellLink(spellIdentifier)`](#c_spellgetspelllinkspellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
   - [`C_Spell.GetSpellPowerCost(spellIdentifier)`](#c_spellgetspellpowercostspellidentifier)
@@ -1327,6 +1328,19 @@ name, `name(subtext)`, or link).
 
 ```lua
 C_Spell.GetSpellName(133)   -- "Fireball"
+```
+
+### `C_Spell.GetSpellSubtext(spellIdentifier)`
+
+Returns the spell's subtext line — the rank text for ranked spells, an empty
+string for spells with none — or `nil` if the identifier resolves to no spell.
+Same `spellIdentifier` forms as `GetSpellInfo`. Always available immediately
+(no deferred-load `nil`).
+
+```lua
+C_Spell.GetSpellSubtext(133)         -- "Rank 1"
+C_Spell.GetSpellSubtext("Fireball")  -- subtext of the highest rank you know
+C_Spell.GetSpellSubtext(12051)       -- "" (Evocation has no rank)
 ```
 
 ### `C_Spell.GetSpellLink(spellIdentifier)`
