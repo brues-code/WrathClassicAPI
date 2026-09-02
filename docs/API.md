@@ -491,6 +491,31 @@ including for quests that were already cached when the request was
 made (we synthesize the event so addons get a uniform notification
 regardless of cache state).
 
+### `QUEST_TURNED_IN` event
+
+Payload: `questID`
+
+Fires when the player completes (turns in) a quest — hooked at the
+"Complete Quest" reward-choice send. The 3.3.5 client checks reward-item
+bag space before sending and blocks the turn-in with a UI error
+otherwise, so a dispatched turn-in reliably succeeds; firing here rather
+than on the server's completion packet is accurate in practice.
+
+Payload is `questID` only. The modern event's `xpReward` / `moneyReward`
+aren't included — the client hasn't been told the reward amounts at
+turn-in time (they arrive in the server's completion packet, which 3.3.5
+doesn't surface as an event).
+
+### `QUEST_REMOVED` event
+
+Payload: `questID`
+
+Fires when a quest leaves the quest log for any reason — turned in,
+abandoned, or auto-failed. Derived by diffing the quest log across the
+engine's log rebuild, so it's independent of *why* the quest left. On a
+turn-in you'll see both `QUEST_TURNED_IN` (at the send) and
+`QUEST_REMOVED` (when the log updates), matching modern ordering.
+
 ---
 
 ## Expansion

@@ -1152,6 +1152,31 @@ enum Offsets {
     // (1.12's analog is at +0x9C — the layout drifted between builds.)
     OFF_QUEST_TITLE                    = 0xB4,
 
+    // QUEST_TURNED_IN event hook. FUN_0058CFA0 sends CMSG_QUESTGIVER_CHOOSE_REWARD
+    // — the "Complete Quest" turn-in action, `__cdecl(uint rewardChoice)`. It's
+    // gated on the reward panel being open (state at 0x00C0D658 == 3) and flips
+    // the in-flight flag VAR_QUESTGIVER_REQUEST_PENDING to 1 on a successful send.
+    // The quest being turned in is VAR_QUESTGIVER_ACTIVE_QUEST_ID (the questID it
+    // passes to the packet builder). Called from Script_GetQuestReward.
+    FUN_QUESTGIVER_SEND_CHOOSE_REWARD  = 0x0058CFA0,
+    VAR_QUESTGIVER_ACTIVE_QUEST_ID     = 0x00C0D65C,
+    VAR_QUESTGIVER_REQUEST_PENDING     = 0x00C0D6AC,
+
+    // QUEST_REMOVED event hook. FUN_005E6940 rebuilds the quest-log display array
+    // on every quest-log change (and fires QUEST_LOG_UPDATE at the end);
+    // `__cdecl(uint)`. The array holds `{ questID, logIndex, isHeader, _ }` entries
+    // (stride 0x10) at VAR_QUESTLOG_ENTRIES, with the live count at
+    // VAR_QUESTLOG_ENTRY_COUNT — headers carry isHeader = 1, quests 0. Diffing a
+    // snapshot across a rebuild surfaces every removed quest regardless of cause
+    // (turn-in, abandon, auto-fail). Verified in Script_GetNumQuestLogEntries
+    // (FUN_005DF010) and the rebuild's own array writes.
+    FUN_QUESTLOG_REBUILD               = 0x005E6940,
+    VAR_QUESTLOG_ENTRIES               = 0x00C237B0,
+    VAR_QUESTLOG_ENTRY_COUNT           = 0x00C23AD0,
+    QUESTLOG_ENTRY_STRIDE              = 0x10,
+    OFF_QUESTLOG_ENTRY_QUEST_ID        = 0x00,
+    OFF_QUESTLOG_ENTRY_IS_HEADER       = 0x08,
+
     // Gossip-state arrays. Populated by `SMSG_GOSSIP_MESSAGE`'s handler
     // and read by the engine's `Script_GetGossip*` Lua functions. We
     // walk the same arrays directly to produce modern `C_GossipInfo.*`
