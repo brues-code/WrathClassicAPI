@@ -15,12 +15,15 @@
 
 #include "Offsets.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
 
-// Shared GUID primitives — parsing a hex GUID string and resolving a GUID to an
-// in-world object. Anything that takes a GUID string (UnitNameFromGUID,
-// UnitTokenFromGUID, C_Item's GUID form, …) funnels through here instead of
-// re-declaring the engine's HexString2Guid / ObjectMgr::Get thunks.
+// Shared GUID primitives — parsing / formatting a hex GUID string and resolving
+// a GUID to an in-world object. Anything that takes a GUID string
+// (UnitNameFromGUID, UnitTokenFromGUID, C_Item's GUID form, C_FriendList, …)
+// funnels through here instead of re-declaring the engine's HexString2Guid /
+// ObjectMgr::Get thunks.
 
 namespace Guid {
 
@@ -30,7 +33,31 @@ struct Pair {
     uint32_t lo = 0;
     uint32_t hi = 0;
     bool valid() const { return lo != 0 || hi != 0; }
+    uint64_t value() const { return (static_cast<uint64_t>(hi) << 32) | lo; }
 };
+
+inline Pair Split(uint64_t g) {
+    return {static_cast<uint32_t>(g), static_cast<uint32_t>(g >> 32)};
+}
+
+// True when `s` carries the `"0x"` prefix of a GUID string (the form UnitGUID
+// returns). The gate for APIs that accept either a GUID string or a character
+// name: the engine's hex parser happily reads a name made of hex letters
+// ("Abe", "Dad") as a number, so the prefix — not parse success — decides.
+inline bool IsGuidString(const char *s) {
+    return s != nullptr && s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
+}
+
+// Minimum buffer size for `Format`'s output — "0x" + 16 hex digits + NUL.
+constexpr size_t STRING_SIZE = 19;
+
+// Formats `guid` as "0xHHHHHHHHLLLLLLLL" (high dword then low, upper-case hex) —
+// the form UnitGUID returns and Parse accepts. `cap` must be at least
+// STRING_SIZE. Returns `buf` for chaining into PushString.
+inline const char *Format(Pair guid, char *buf, size_t cap) {
+    std::snprintf(buf, cap, "0x%08X%08X", guid.hi, guid.lo);
+    return buf;
+}
 
 // Parse a hex GUID string ("0xHHHHHHHHLLLLLLLL", or bare hex) via the engine's
 // HexString2Guid. Returns {0, 0} for null / empty / non-hex input.

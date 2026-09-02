@@ -27,6 +27,7 @@
 #include "Game.h"
 #include "Guid.h"
 #include "Offsets.h"
+#include "unit/NameCache.h"
 
 #include <cstdint>
 
@@ -36,17 +37,10 @@ namespace {
 
 using UnitNameFromObject_t = const char *(__thiscall *)(void *unit, const char **realmOut,
                                                         int flag);
-using PlayerNameCacheGet_t = const uint8_t *(__thiscall *)(void *cache, uint32_t guidLo,
-                                                           uint32_t guidHi, uint32_t *scratch,
-                                                           uint32_t a5, uint32_t a6, char a7);
 
-// Cached player (in view or not). Pure lookup — null callback / flags, so a miss
-// has no side effects. Record: name inline @+0x00, realm inline @+0x34.
+// Cached player (in view or not). Record: name inline @+0x00, realm inline @+0x34.
 bool ReadPlayerCache(uint32_t lo, uint32_t hi, const char **name, const char **realm) {
-    uint32_t scratch[2] = {0, 0};
-    auto *cache = reinterpret_cast<void *>(Offsets::VAR_PLAYER_NAME_CACHE);
-    const uint8_t *rec = reinterpret_cast<PlayerNameCacheGet_t>(
-        Offsets::FUN_PLAYER_NAME_CACHE_GET)(cache, lo, hi, scratch, 0, 0, 0);
+    const uint8_t *rec = Unit::NameCache::Record(lo, hi);
     if (rec == nullptr)
         return false;
     *name = reinterpret_cast<const char *>(rec + Offsets::OFF_PLAYER_NAME_REC_NAME);

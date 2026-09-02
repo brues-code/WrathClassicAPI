@@ -1948,4 +1948,57 @@ enum Offsets {
     // layout as the __thiscall (verified at the call site: `MOV ECX,[entry];
     // PUSH L; CALL`, callee-cleaned).
     FUN_CLEU_BUILD_ARGS = 0x0074E290,
+
+    // --- Friend / ignore list (src/friendlist/) --------------------------------
+    //
+    // The contact-list singleton (`DAT_00c79f98`), null before login. Friends
+    // are inline entries from offset 0 (stride 0x220, 100 slots); the ignore
+    // list is a GUID array at +0xD490 (stride 0x10, 50 slots). Both lists are
+    // contiguous and end at the first zero GUID — the engine's own counters
+    // (FUN_006B34A0 friends, FUN_006B3630 ignores) walk to the first zero GUID
+    // and cap at the slot count. Entry layout lives in src/friendlist/FriendList.h;
+    // all of it read out of Script_GetFriendInfo (FUN_006B4130),
+    // Script_GetNumFriends (FUN_006B4060), Script_GetIgnoreName (FUN_006B4620)
+    // and Script_IsIgnored (FUN_006B6C60).
+    VAR_SOCIAL_SYSTEM = 0x00C79F98,
+
+    // Name -> GUID resolver Script_IsIgnored uses: `bool __cdecl(const char *s,
+    // uint32_t out[2])` (result in AL). Looks `s` up by name in the player name
+    // cache (VAR_PLAYER_NAME_CACHE), else resolves it as a unit token ("target",
+    // "party1", …). Returns false when neither matches — a player the client has
+    // never seen resolves to nothing. FUN_004FB580.
+    FUN_NAME_TO_GUID = 0x004FB580,
+
+    // Player name cache record (FUN_PLAYER_NAME_CACHE_GET), beyond the name /
+    // realm offsets above: gender (0 male, 1 female) and class ID, as read by the
+    // engine's gendered class-name picker FUN_0071A590 (`*(rec+0x144)`,
+    // `*(rec+0x148)`).
+    OFF_PLAYER_NAME_REC_GENDER = 0x144,
+    OFF_PLAYER_NAME_REC_CLASS = 0x148,
+
+    // ChrClasses.dbc client store — same `[min, max]`-bounded index-table shape
+    // as the ChrRaces store above (max, min = max+4, index-table = min+0x10).
+    // Verified in Script_UnitClassBase (FUN_00610040): `classID in
+    // [DAT_00ad3414, DAT_00ad3410]`, record = `*(DAT_00ad3424 + (classID-min)*4)`,
+    // and it returns `*(rec+0x10)` (Name) then `*(rec+0x1C)` (Filename). The
+    // gendered variants: FUN_007159E0 picks NameMale `+0x18` for gender 0 and
+    // NameFemale `+0x14` for gender 1, falling back to the other, then to Name.
+    VAR_CHRCLASSES_DBC_MAX_INDEX = 0x00AD3410,
+    VAR_CHRCLASSES_DBC_MIN_INDEX = 0x00AD3414,
+    VAR_CHRCLASSES_DBC_INDEX_TABLE = 0x00AD3424, // ptr to array of record ptrs
+    OFF_CHRCLASSES_NAME = 0x10,
+    OFF_CHRCLASSES_NAME_FEMALE = 0x14,
+    OFF_CHRCLASSES_NAME_MALE = 0x18,
+    OFF_CHRCLASSES_FILENAME = 0x1C,
+
+    // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:
+    // `areaID in [DAT_00ad3144, DAT_00ad3140]`, record = `*(DAT_00ad3154 +
+    // (areaID-min)*4)`; it hops once to the parent area (`*(rec+0x08)`, when
+    // that ID resolves) and pushes `*(rec+0x2C)` (AreaName), so a sub-area
+    // reports its zone.
+    VAR_AREATABLE_DBC_MAX_INDEX = 0x00AD3140,
+    VAR_AREATABLE_DBC_MIN_INDEX = 0x00AD3144,
+    VAR_AREATABLE_DBC_INDEX_TABLE = 0x00AD3154, // ptr to array of record ptrs
+    OFF_AREATABLE_PARENT_AREA_ID = 0x08,
+    OFF_AREATABLE_NAME = 0x2C,
 };

@@ -55,6 +55,13 @@ Conventions:
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
   - [`ClassicExpansionAtMost(level)`](#classicexpansionatmostlevel)
+- [Friend List](#friend-list)
+  - [`C_FriendList.GetNumFriends()` / `GetNumOnlineFriends()`](#c_friendlistgetnumfriends--getnumonlinefriends)
+  - [`C_FriendList.GetFriendInfo(name)`](#c_friendlistgetfriendinfoname)
+  - [`C_FriendList.GetFriendInfoByIndex(index)`](#c_friendlistgetfriendinfobyindexindex)
+  - [`C_FriendList.IsFriend(token)`](#c_friendlistisfriendtoken)
+  - [`C_FriendList.IsIgnored(token)`](#c_friendlistisignoredtoken)
+  - [`C_FriendList.IsIgnoredByGuid(guid)`](#c_friendlistisignoredbyguidguid)
 - [Gossip](#gossip)
   - [`C_GossipInfo.GetText()`](#c_gossipinfogettext)
   - [`C_GossipInfo.GetOptions()`](#c_gossipinfogetoptions)
@@ -622,6 +629,121 @@ end
 
 Returns `true` iff `level >= GetClassicExpansionLevel()`. Mirror of
 `ClassicExpansionAtLeast` for upper-bound checks.
+
+---
+
+## Friend List
+
+### `C_FriendList.GetNumFriends()` / `GetNumOnlineFriends()`
+
+`GetNumFriends` returns how many players are on your friends list, online
+and offline together. `GetNumOnlineFriends` returns how many of them are
+online right now.
+
+```lua
+C_FriendList.GetNumFriends()         -- e.g. 12
+C_FriendList.GetNumOnlineFriends()   -- e.g. 3
+```
+
+### `C_FriendList.GetFriendInfo(name)`
+
+Returns a `FriendInfo` table for the friend with the given character name,
+or `nil` if that name is not on your list. The name match is
+case-insensitive.
+
+```lua
+local info = C_FriendList.GetFriendInfo("Sarahnity")
+-- {
+--   name = "Sarahnity", connected = true, level = 80,
+--   className = "Druid", classFilename = "DRUID", area = "Dalaran",
+--   guid = "0x000000000000ABCD", notes = "raid healer",
+--   afk = false, dnd = false,
+--   mobile = false, referAFriend = false, rafLinkType = 0,
+-- }
+```
+
+Table fields:
+
+- `name` — the friend's character name.
+- `connected` — `true` when the friend is online.
+- `level` — the friend's level, or `0` when unknown.
+- `className` — localized class name, or `nil` when unknown.
+- `classFilename` — locale-independent class token (`"WARRIOR"`,
+  `"MAGE"`, …), or `nil` when unknown. Present whenever `className` is.
+  This is the key for `RAID_CLASS_COLORS` and other class tables, so you
+  can color a friend's name without matching the localized class name.
+- `area` — localized zone name, or `nil` when unknown. A friend inside a
+  sub-area reports the zone it belongs to.
+- `guid` — the friend's GUID string.
+- `notes` — your note for this friend, or `nil` if none.
+- `afk` / `dnd` — the friend's status flags.
+- `referAFriend` — `true` when you and this friend are linked through
+  Recruit-A-Friend.
+- `mobile` / `rafLinkType` — always `false` / `0`.
+
+Level, class, and area are only known for friends who are online. An
+offline friend reports `level = 0` and no `className`, `classFilename`, or
+`area`.
+
+### `C_FriendList.GetFriendInfoByIndex(index)`
+
+The same `FriendInfo` table, addressed by a 1-based list index instead of
+a name. Returns `nil` for an index below 1 or above
+[`GetNumFriends`](#c_friendlistgetnumfriends--getnumonlinefriends).
+
+```lua
+for i = 1, C_FriendList.GetNumFriends() do
+    local info = C_FriendList.GetFriendInfoByIndex(i)
+    print(info.name, info.connected, info.className, info.area)
+end
+```
+
+See [`C_FriendList.GetFriendInfo`](#c_friendlistgetfriendinfoname) for the
+field list.
+
+### `C_FriendList.IsFriend(token)`
+
+Returns `true` if the player is on your friends list, `false` if not.
+
+```lua
+C_FriendList.IsFriend(UnitGUID("target"))    -- true if the target is a friend
+C_FriendList.IsFriend("0x000000000000ABCD")
+C_FriendList.IsFriend("Sarahnity")
+C_FriendList.IsFriend("target")
+```
+
+`token` is a GUID string — the `"0x…"` form that `UnitGUID` returns. You
+can also pass a character name or a unit token such as `"target"`. A GUID
+or a name matches any friend, online or offline.
+
+### `C_FriendList.IsIgnored(token)`
+
+Returns `true` if the player is on your ignore list, `false` if not.
+
+```lua
+C_FriendList.IsIgnored("Bob")
+C_FriendList.IsIgnored("0x000000000000ABCD")
+C_FriendList.IsIgnored("target")
+```
+
+`token` is a GUID string, a character name, or a unit token such as
+`"target"`. The ignore list stores GUIDs, not names. A GUID always
+matches. A name matches only a player the client has seen this session —
+the same players `GetIgnoreName` can name.
+
+### `C_FriendList.IsIgnoredByGuid(guid)`
+
+Returns `true` if the player with the given GUID is on your ignore list,
+`false` if not.
+
+```lua
+C_FriendList.IsIgnoredByGuid(UnitGUID("target"))
+C_FriendList.IsIgnoredByGuid("0x000000000000ABCD")
+```
+
+`guid` is a GUID string — the `"0x…"` form that `UnitGUID` returns. This
+is the exact key the ignore list uses, so it works for every ignored
+player.
 
 ---
 
