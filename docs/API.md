@@ -80,6 +80,8 @@ Conventions:
 - [Mixins](#mixins)
   - [`Mixin(object, ...)` / `CreateFromMixins(...)`](#mixinobject--createfrommixins)
   - [`CreateAndInitFromMixin(mixin, ...)`](#createandinitfrommixinmixin-)
+- [Player Info](#player-info)
+  - [`C_PlayerInfo.CanUseItem(item)`](#c_playerinfocanuseitemitem)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`](#c_questloggetquestidforlogindexquestlogindex)
   - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
@@ -923,6 +925,41 @@ Creates an object from a single `mixin` (via `CreateFromMixins`), calls its
 local obj = CreateAndInitFromMixin(SomeMixin, arg1, arg2)
 -- local o = CreateFromMixins(SomeMixin); o:Init(arg1, arg2); return o
 ```
+
+---
+
+## Player Info
+
+### `C_PlayerInfo.CanUseItem(item)`
+
+Returns `true` iff the local player meets the item's use/equip requirements — the
+"is the item red in the tooltip" gate. This is distinct from `IsUsableItem`
+(whether the item's on-use ability is castable right now). `item` accepts any of
+retail's item-arg forms (ID / GUID / link / name).
+
+```lua
+C_PlayerInfo.CanUseItem(6948)    -- Hearthstone → true (no requirements)
+C_PlayerInfo.CanUseItem(12640)   -- Lionheart Helm (plate) → true on a Warrior, false on a Mage
+C_PlayerInfo.CanUseItem(49623)   -- Shadowmourne → false below level 80 / without the weapon skill
+```
+
+All of these must pass:
+
+- **Proficiency** — the player is trained in the item's weapon/armor subclass
+  (the plate-on-a-Mage gate).
+- **Required level** — `RequiredLevel <= player level`.
+- **Class / race** — the item's allowable-class and allowable-race masks include
+  the player.
+- **Required skill** — the player has the item's skill line at rank ≥ required
+  (e.g. a mount "Requires Riding (150)").
+- **Required spell** — the player knows the item's prerequisite spell (e.g. a
+  crafting specialization "Requires Armorsmith").
+- **Required reputation** — the player's standing with the item's faction reaches
+  the required reaction band.
+
+Reads the item-stats cache; on a cache miss it returns `false` synchronously
+without firing a load (query the item first with `GetItemInfo` if needed). WotLK
+dropped the old PvP-rank item gates, so those aren't checked.
 
 ---
 

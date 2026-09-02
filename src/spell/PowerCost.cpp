@@ -29,10 +29,10 @@
 // returns an empty array.
 
 #include "Game.h"
-#include "Guid.h"
 #include "Offsets.h"
 #include "spell/Arg.h"
 #include "spell/Lookup.h"
+#include "unit/Player.h"
 
 #include <cstdint>
 
@@ -41,18 +41,6 @@ namespace Spell::PowerCost {
 namespace {
 
 using CostFn_t = int(__cdecl *)(const void *record, void *casterObj);
-using GetPlayerGuid_t = uint64_t(__cdecl *)();
-
-// Resolve the local player's CGPlayer — the caster the cost calculators need.
-// Null before entering the world (callers then return an empty cost list).
-void *LocalPlayerObject() {
-    const uint64_t g =
-        reinterpret_cast<GetPlayerGuid_t>(Offsets::FUN_LOCAL_PLAYER_GUID)();
-    Guid::Pair guid{static_cast<uint32_t>(g), static_cast<uint32_t>(g >> 32)};
-    if (!guid.valid())
-        return nullptr;
-    return Guid::ResolveObject(guid, Offsets::OBJ_FLAGS_PLAYER);
-}
 
 int CallCost(uintptr_t fn, const void *record, void *caster) {
     return reinterpret_cast<CostFn_t>(fn)(record, caster);
@@ -93,7 +81,7 @@ int __cdecl Script_C_Spell_GetSpellPowerCost(void *L) {
 
     Game::Lua::NewTable(L); // the costs array (returned; empty when there's no cost)
 
-    void *caster = LocalPlayerObject();
+    void *caster = Unit::LocalPlayer();
     if (caster == nullptr)
         return 1; // no player yet — empty array
 

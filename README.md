@@ -43,6 +43,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemGUID`, `C_Item.GetItemID`, `C_Item.GetItemInfo`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemLocation`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.GetItemSpell`, `C_Item.IsBound`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | Macro     | `GetMacroIcons`, `GetMacroItemIcons`, `GetLooseMacroIcons`, `GetLooseMacroItemIcons` |
 | Mixins    | `Mixin`, `CreateFromMixins`, `CreateAndInitFromMixin` |
+| Player Info | `C_PlayerInfo.CanUseItem` |
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
 | Spell     | `IsPlayerSpell`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost` |

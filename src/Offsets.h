@@ -198,6 +198,43 @@ enum Offsets {
     OFF_ITEMSTATS_BONDING = 0x178,
     OFF_ITEMSTATS_DESCRIPTION = 0x17C,
     OFF_ITEMSTATS_ITEM_SET = 0x1DC,
+    // Item use/equip requirement fields — a contiguous wire-order block in the
+    // record running invType(0x28) → allowableClass → allowableRace →
+    // itemLevel(0x34) → requiredLevel(0x38) → requiredSkill → requiredSkillRank →
+    // requiredSpell → requiredHonorRank → requiredCityRank → requiredReputation-
+    // Faction → requiredReputationRank → maxCount → stackable(0x5C). The four
+    // known anchors (invType/itemLevel/requiredLevel/stackable) bracket the block
+    // exactly, pinning the rest. Consumed by C_PlayerInfo.CanUseItem.
+    OFF_ITEMSTATS_ALLOWABLE_CLASS = 0x2C,
+    OFF_ITEMSTATS_ALLOWABLE_RACE = 0x30,
+    OFF_ITEMSTATS_REQUIRED_SKILL = 0x3C,
+    OFF_ITEMSTATS_REQUIRED_SKILL_RANK = 0x40,
+    OFF_ITEMSTATS_REQUIRED_SPELL = 0x44,
+    OFF_ITEMSTATS_REQUIRED_FACTION = 0x50,
+    OFF_ITEMSTATS_REQUIRED_FACTION_RANK = 0x54,
+
+    // Weapon/armor proficiency bitmask table for CanUseItem, indexed by item
+    // class; each entry is the allowed-subclass bitmask (0 = the class has no
+    // proficiency concept, e.g. consumables → unrestricted). Written by the
+    // SMSG_SET_PROFICIENCY handler (FUN_006cdeb0: `table[class] = mask`, logging
+    // "Proficiency in item class %d set to %08x"). This is the plate-on-a-Mage
+    // gate: `mask & (1 << subClass)`.
+    VAR_PROFICIENCY_TABLE = 0x00C9D4F0,
+
+    // Skill helpers for the CanUseItem RequiredSkill gate, both
+    // `__thiscall(player, arg)` — lifted from Script_GetSkillLineInfo
+    // (FUN_005cde20):
+    //   FUN_SKILL_LINE_TO_SLOT(player, skillLineID) -> skill slot, -1 if the
+    //     player doesn't have the line (walks player info +0x1008, skill records
+    //     at +0x7A0, stride 0xC, skillLineID at +0).
+    //   FUN_SKILL_RANK_BY_SLOT(player, slot)        -> current skill rank.
+    FUN_SKILL_LINE_TO_SLOT = 0x006DC1C0,
+    FUN_SKILL_RANK_BY_SLOT = 0x0051A250,
+
+    // UNIT_FIELD_LEVEL within the unit descriptor (player/unit level). Verified
+    // in the item link formatter (FUN_0061e290 reads `*(desc + 0xC0)` for the
+    // link's level field) and Script_GetSkillLineInfo's descriptor reads.
+    OFF_UNIT_FIELD_LEVEL = 0xC0,
 
     // Client-side Item.dbc store (distinct from the server-populated item-stats
     // cache above). A WowClientDB<CItemRec> static object loaded from
