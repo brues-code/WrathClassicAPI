@@ -84,10 +84,10 @@ on what initiated the request. Same split as modern WoW.
 
 | Feature | Change |
 |---------|--------|
+| Retail-like `/reload` (hot reload) | On `/reload`, a new addon folder loads as a normal addon. New files in an existing addon load. A first-time SavedVariables file survives. Edits to `##` lines apply (for example `## SavedVariables:` and `## Dependencies:`). The DLL removes a deleted addon folder from the addon list. |
 | `GetItemInfo(itemID\|"item:N..."\|"name")` | A cache miss sends `SMSG_ITEM_QUERY_SINGLE` to the server. The first call still returns nil. Later calls return the item data, and `GET_ITEM_INFO_RECEIVED` fires when the response arrives. |
 | `GameTooltip:SetSpellByID(spellID)` | The call accepts any non-zero spellID, not only spells in the spellbook or on the pet bar (profession recipes, item-granted spells). |
 | Embedded `!!!WrathClassicAPI` addon | The DLL contains a Lua utility addon (`Mixin`, `EventRegistry` + `CallbackRegistryMixin`, `ColorMixin`/`ColorUtil`, `ItemUtil`/`ItemLocation`, `EnumUtil`, `TableUtil`, `MathUtil`, `Pools`, `EventUtil`, `FunctionUtil`, `LinkUtil`, `PlayerUtil`, `EquipmentManager`, timed callbacks, frame watching) and registers it at login. You do not install it on disk. It loads before all other addons. It does not show in the AddOns list. You cannot disable it. It loads as Blizzard-secure code, so its closures do not taint protected paths. If the disk copy at `Interface\AddOns\!!!WrathClassicAPI` is newer, the DLL uses the disk copy. Release DLLs write the git tag into the embedded `## Version:`. When a disk copy exists, a local `DEV` build always uses it. A `.wrathclassicapi-dev` marker file in the folder also forces the disk copy. |
-| Retail-like `/reload` (hot reload) | On `/reload`, a new addon folder loads as a normal addon. New files in an existing addon load. A first-time SavedVariables file survives. Edits to `##` lines apply (for example `## SavedVariables:` and `## Dependencies:`). The DLL removes a deleted addon folder from the addon list. |
 
 ### Console commands
 
