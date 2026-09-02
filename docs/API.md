@@ -105,6 +105,8 @@ Conventions:
   - [`C_Spell.GetSpellLink(spellIdentifier)`](#c_spellgetspelllinkspellidentifier)
   - [`C_Spell.GetSpellTexture(spellIdentifier)`](#c_spellgetspelltexturespellidentifier)
   - [`C_Spell.GetSpellPowerCost(spellIdentifier)`](#c_spellgetspellpowercostspellidentifier)
+  - [`C_Spell.IsSpellHarmful` / `IsSpellHelpful`](#c_spellisspellharmfulspellidentifier--isspellhelpfulspellidentifier)
+  - [`C_Spell.IsSelfBuff(spellIdentifier)`](#c_spellisselfbuffspellidentifier)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
@@ -1388,6 +1390,36 @@ per-second cost of mana-channel spells. 3.3.5's `Spell.dbc` has a single power
 type per spell, so the array holds at most one entry; `minCost` equals `cost`
 (costs are fixed), and `requiredAuraID` / `hasRequiredAura` have no 3.3.5
 source.
+
+### `C_Spell.IsSpellHarmful(spellIdentifier)` / `IsSpellHelpful(spellIdentifier)`
+
+`IsSpellHarmful` returns true when the spell is cast at enemies;
+`IsSpellHelpful` returns true when it's cast at allies. Same
+`spellIdentifier` forms as `GetSpellInfo`; false for an identifier that
+resolves to no spell.
+
+```lua
+C_Spell.IsSpellHarmful(133)    -- Fireball → true
+C_Spell.IsSpellHelpful(133)    -- → false
+C_Spell.IsSpellHelpful(1459)   -- Arcane Intellect → true
+```
+
+Unlike the spellbook-slot `IsHarmfulSpell` / `IsHelpfulSpell` globals,
+these classify **any** spellID, whether or not you know the spell. The
+two aren't strict inverses: utility and geometry-targeted spells (totem
+placement, teleports, script effects) can return false for both.
+
+### `C_Spell.IsSelfBuff(spellIdentifier)`
+
+Returns true if the spell can only be cast on the player themselves —
+every effect targets the caster and nothing else. Same `spellIdentifier`
+forms as `GetSpellInfo`; false for an identifier that resolves to no
+spell.
+
+```lua
+C_Spell.IsSelfBuff(168)     -- Frost Armor → true
+C_Spell.IsSelfBuff(1459)    -- Arcane Intellect → false (castable on others)
+```
 
 ---
 

@@ -1091,6 +1091,26 @@ enum Offsets {
     // C_Spell.GetSpellPowerCost as `costPercent`.
     OFF_SPELL_POWER_COST_PERCENT       = 0x230,
 
+    // Spell intent classifier — `int __cdecl(record)` on the
+    // FUN_DBC_COPY_RECORD output buffer. Returns 2 (harmful) when the record's
+    // Targets cast-flags dword (+0x40) carries TARGET_FLAG_UNIT_ENEMY (0x80)
+    // or any effect's implicit target is a hostile-target type; 1 (helpful)
+    // for TARGET_FLAG_UNIT_ALLY (0x100), friendly implicit targets, or a
+    // self-targeted non-dummy aura; 0 when neither. This is the primitive the
+    // native spellbook-slot scripts call — IsHarmfulSpell (FUN_005418F0)
+    // tests `== 2`, IsHelpfulSpell (FUN_00541800) tests `== 1` — reused by
+    // C_Spell.IsSpellHarmful / IsSpellHelpful with a spellID front door.
+    FUN_SPELL_CLASSIFY_INTENT          = 0x007FE1B0,
+
+    // Spell.dbc per-effect arrays (int32[3] each) in the copied record,
+    // walked by C_Spell.IsSelfBuff. Effect verified at FUN_0053D580 (feeds
+    // +0x11C/+0x120/+0x124 through a per-effect predicate); the implicit-
+    // target pair verified inside the classifier (TargetA[i] read as
+    // `puVar1[-3]` relative to the TargetB cursor at +0x164).
+    OFF_SPELL_EFFECT                     = 0x11C,
+    OFF_SPELL_EFFECT_IMPLICIT_TARGET_A   = 0x158,
+    OFF_SPELL_EFFECT_IMPLICIT_TARGET_B   = 0x164,
+
     // Spell power-cost calculators, both `int __cdecl(record, casterObj)` taking
     // the copied Spell.dbc record and a CGUnit. These resolve the true cost for
     // a given caster (base + per-skill scaling + %-of-base-mana + talent/aura
