@@ -57,14 +57,6 @@ Per-function reference with shape, semantics, and edge cases is in
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
 | XML       | `C_XMLUtil.DoesTemplateExist`, `C_XMLUtil.GetTemplateInfo`, `C_XMLUtil.GetTemplates` |
 
-### Globals
-
-| Group | Constants |
-|-------|-----------|
-| Version | `WRATH_CLASSIC_API_VERSION` |
-| Expansion | `LE_EXPANSION_LEVEL_CURRENT`, `LE_EXPANSION_CLASSIC` … `LE_EXPANSION_MIDNIGHT` |
-| Enum | `Enum.Base64Variant`, `Enum.CompressionMethod` |
-
 ### Events
 
 | Event | Payload | When it fires |
@@ -105,6 +97,14 @@ working directory, and prints a `wrote N file(s)` line.
 `ExportInterfaceFiles` includes Blizzard's own bundled UI addons (they live in
 the archives); your loose on-disk addons aren't in any listfile, so they're
 never touched. `ExportDBCFiles` also captures DBCs the listfile doesn't index.
+
+### Globals
+
+| Group | Constants |
+|-------|-----------|
+| Version | `WRATH_CLASSIC_API_VERSION` |
+| Expansion | `LE_EXPANSION_LEVEL_CURRENT`, `LE_EXPANSION_CLASSIC` … `LE_EXPANSION_MIDNIGHT` |
+| Enum | `Enum.Base64Variant`, `Enum.CompressionMethod` |
 
 ## Building
 
