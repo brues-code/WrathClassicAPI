@@ -52,6 +52,7 @@
 #include "Game.h"
 #include "Offsets.h"
 #include "addons/EngineIO.h"
+#include "addons/TocRewrite.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -256,8 +257,15 @@ int __stdcall FileRead_h(int unused, const char *path, void **outBuf,
                          int flag2) {
     const char *suffix = StripAddonPrefix(path);
     if (suffix == nullptr) {
-        // Not our addon — passthrough.
-        return FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
+        // Not our addon — normal read, then apply modern-TOC rewriting so a
+        // multi-flavor `## Interface:` list and `[...]` file-line directives load
+        // on this client. Transform self-gates on the path (an addon `.toc`) and
+        // content, so every other read is a cheap no-op.
+        const int result =
+            FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
+        if (result != 0)
+            Addons::TocRewrite::Transform(path, outBuf, outSize);
+        return result;
     }
 
     DecideSource();

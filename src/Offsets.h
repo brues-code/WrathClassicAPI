@@ -1519,6 +1519,27 @@ enum Offsets {
     FUN_STORM_SMEM_ALLOC = 0x0076E540,
     FUN_STORM_SMEM_FREE = 0x0076E5A0,
 
+    // --- Modern-TOC rewrite support (src/addons/TocRewrite.cpp) ----------------
+    //
+    // Client locale, the source behind Lua `GetLocale()`. Verified in
+    // Script_GetLocale (FUN_004DBFD0), a one-liner:
+    //   lua_pushstring(L, ((const char **)VAR_LOCALE_NAME_TABLE)[VAR_LOCALE_INDEX])
+    // VAR_LOCALE_NAME_TABLE is an array of locale-code strings ("enUS", "deDE",
+    // …); VAR_LOCALE_INDEX is the live index into it. Read exactly as the engine
+    // does — the engine trusts the index, so a null-check on the result is the
+    // only guard needed. Consumed by the `[TextLocale]` / `AllowLoadTextLocale`
+    // directive handling.
+    VAR_LOCALE_INDEX = 0x00C5DE9C,
+    VAR_LOCALE_NAME_TABLE = 0x00AD2FE0,
+
+    // The client interface (TOC) version this build advertises — the value the
+    // engine's addon out-of-date check compares each addon's `## Interface:`
+    // against. Fixed for WoW 3.3.5a build 12340; the TOC parser (FUN_005F86A0)
+    // stores the addon's own value via a plain atoi of the FIRST number on the
+    // line (entry+0x1C), which is exactly why a multi-value `## Interface:` list
+    // whose client version isn't first is otherwise seen as out of date.
+    CLIENT_INTERFACE_VERSION = 30300,
+
     // Addon-subsystem init: `void __cdecl AddonInit(char *basePath)`.
     // Runs registry setup, then the disk scan FUN_ADDON_DISK_SCAN, then sets
     // the "addons initialized" flag `DAT_00C24918 = 1` (VAR_ADDON_INITIALIZED).
