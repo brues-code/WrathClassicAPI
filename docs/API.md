@@ -493,18 +493,15 @@ regardless of cache state).
 
 ### `QUEST_TURNED_IN` event
 
-Payload: `questID`
+Payload: `questID, xpReward, moneyReward`
 
-Fires when the player completes (turns in) a quest — hooked at the
-"Complete Quest" reward-choice send. The 3.3.5 client checks reward-item
-bag space before sending and blocks the turn-in with a UI error
-otherwise, so a dispatched turn-in reliably succeeds; firing here rather
-than on the server's completion packet is accurate in practice.
+Fires when the server confirms a quest turn-in (hooked at the quest-complete
+processor that runs on `SMSG_QUESTGIVER_QUEST_COMPLETE`).
 
-Payload is `questID` only. The modern event's `xpReward` / `moneyReward`
-aren't included — the client hasn't been told the reward amounts at
-turn-in time (they arrive in the server's completion packet, which 3.3.5
-doesn't surface as an event).
+`xpReward` and `moneyReward` (copper) are the amounts the player **actually
+receives** — the server's XP/money rate multipliers are already applied, so on a
+custom-rate server this is the real granted XP, not the base quest value.
+`xpReward` is `0` at max level (the server converts it to money).
 
 ### `QUEST_REMOVED` event
 

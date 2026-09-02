@@ -73,7 +73,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `QUEST_DATA_LOAD_RESULT` | `questID, success` | The engine has just filled the quest static-info cache for an **explicit** `C_QuestLog.RequestLoadQuestByID` call |
 | `BAG_UPDATE_DELAYED` | *(none)* | Once at the end of a frame in which one or more `BAG_UPDATE` events fired. Register for this event instead of `BAG_UPDATE` and rescan bags once per frame. During a loading screen, the event holds; the first in-world frame fires it once for the settled inventory |
 | `FACTION_STANDING_CHANGED` | `factionID, newStanding, repGained` | Once per reputation change, after the "+N reputation" message. `repGained` is the signed delta. Does not fire for the initial faction sync at login |
-| `QUEST_TURNED_IN` | `questID` | When the player completes (turns in) a quest — at the "Complete Quest" reward-choice send. Payload is `questID` only (3.3.5 doesn't expose the server's XP/money reward amounts at this point) |
+| `QUEST_TURNED_IN` | `questID, xpReward, moneyReward` | When the server confirms a quest turn-in. `xpReward` / `moneyReward` are the amounts actually granted, with the server's XP/money rates applied (copper for money; `xpReward` is 0 at max level) |
 | `QUEST_REMOVED` | `questID` | When a quest leaves the quest log for any reason — turned in, abandoned, or auto-failed |
 
 A given cache fill fires exactly one of these — never both — depending

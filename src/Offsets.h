@@ -1152,15 +1152,19 @@ enum Offsets {
     // (1.12's analog is at +0x9C — the layout drifted between builds.)
     OFF_QUEST_TITLE                    = 0xB4,
 
-    // QUEST_TURNED_IN event hook. FUN_0058CFA0 sends CMSG_QUESTGIVER_CHOOSE_REWARD
-    // — the "Complete Quest" turn-in action, `__cdecl(uint rewardChoice)`. It's
-    // gated on the reward panel being open (state at 0x00C0D658 == 3) and flips
-    // the in-flight flag VAR_QUESTGIVER_REQUEST_PENDING to 1 on a successful send.
-    // The quest being turned in is VAR_QUESTGIVER_ACTIVE_QUEST_ID (the questID it
-    // passes to the packet builder). Called from Script_GetQuestReward.
-    FUN_QUESTGIVER_SEND_CHOOSE_REWARD  = 0x0058CFA0,
-    VAR_QUESTGIVER_ACTIVE_QUEST_ID     = 0x00C0D65C,
-    VAR_QUESTGIVER_REQUEST_PENDING     = 0x00C0D6AC,
+    // QUEST_TURNED_IN event hook. FUN_006D0E10 is the quest-complete processor,
+    // invoked from the SMSG_QUESTGIVER_QUEST_COMPLETE handler (FUN_006D1110, the
+    // 0x191 case of the quest opcode dispatcher FUN_006D7F10) — the server's
+    // turn-in confirmation. Signature
+    // `__cdecl(uint questID, void *scratch, int *reward, char process)`:
+    // `process` != 0 is the reward-granting pass (== 0 just frees the buffer),
+    // and `reward` carries the amounts the player actually receives, with the
+    // server's rate multipliers already applied — reward[0] = XP, reward[1] =
+    // money (copper), [2] honor, [3] talent points, [4] arena points. Verified in
+    // FUN_006D0E10 by the sound/message each field drives (XP sound 0xA1, money
+    // sound 0xA4, COMBATLOG_HONORAWARD, LEVEL_UP_CHAR_POINTS,
+    // COMBATLOG_ARENAPOINTSAWARD). Only ever called on turn-in.
+    FUN_QUEST_COMPLETE_PROCESS         = 0x006D0E10,
 
     // QUEST_REMOVED event hook. FUN_005E6940 rebuilds the quest-log display array
     // on every quest-log change (and fires QUEST_LOG_UPDATE at the end);
