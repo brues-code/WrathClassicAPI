@@ -1786,4 +1786,25 @@ enum Offsets {
     // unregistered (hash + case-insensitive compare). Pass VAR_XML_TEMPLATE_OBJECT
     // for the template table; the returned node's def is at +0x18. FUN_0055F4D0.
     FUN_STORM_HASH_LOOKUP = 0x0055F4D0,
+
+    // --- Combat log (src/combatlog/CurrentEventInfo.cpp) -----------------------
+    //
+    // Backing for `CombatLogGetCurrentEventInfo()`. 3.3.5 fires
+    // COMBAT_LOG_EVENT_UNFILTERED with the event's fields as its Lua arguments and
+    // has no stored "current event" record to read back — so we snapshot the
+    // payload as the engine builds it.
+    //
+    // FUN_CLEU_BUILD_ARGS is the per-entry combat-log argument builder,
+    // `int __thiscall(entry, lua_State *L)`: it pushes the payload onto L
+    // (timestamp, subEvent, sourceGUID, sourceName, sourceFlags, destGUID,
+    // destName, destFlags, then the sub-event-specific values) and returns the
+    // number of values pushed. Called once per entry from the combat-log queue
+    // flush (FUN_0074f910), whose output is dispatched to both COMBAT_LOG_EVENT
+    // (event id 0x236) and COMBAT_LOG_EVENT_UNFILTERED (0x237). Hooked post to
+    // copy the freshly-pushed top-N values into a persistent capture table, then
+    // returned untouched so the engine still dispatches them. Exposed for a raw
+    // pointer hook as `__fastcall(entry /*ecx*/, edx_unused, L)` — same register
+    // layout as the __thiscall (verified at the call site: `MOV ECX,[entry];
+    // PUSH L; CALL`, callee-cleaned).
+    FUN_CLEU_BUILD_ARGS = 0x0074E290,
 };

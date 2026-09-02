@@ -31,6 +31,8 @@ Conventions:
   - [`C_ColorUtil.ConvertHSLToRGB`](#c_colorutilconverthsltorgb)
   - [`C_ColorUtil.GenerateTextColorCode(color)`](#c_colorutilgeneratetextcolorcodecolor)
   - [`C_ColorUtil.WrapTextInColor` / `WrapTextInColorCode`](#c_colorutilwraptextincolor--wraptextincolorcode)
+- [Combat Log](#combat-log)
+  - [`CombatLogGetCurrentEventInfo()`](#combatloggetcurrenteventinfo)
 - [Console](#console)
   - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
   - [`ExportDBCFiles`](#exportdbcfiles)
@@ -303,6 +305,37 @@ string. Both return `"|c<code><text>|r"`.
 ```lua
 C_ColorUtil.WrapTextInColor("Hi", { r = 1, g = 0, b = 0 })  -- "|cffff0000Hi|r"
 C_ColorUtil.WrapTextInColorCode("Hi", "ffff0000")           -- "|cffff0000Hi|r"
+```
+
+---
+
+## Combat Log
+
+### `CombatLogGetCurrentEventInfo()`
+
+Returns the fields of the combat-log event currently being processed, as multiple
+return values — the same values `COMBAT_LOG_EVENT_UNFILTERED` delivers as its
+arguments. Call it from a `COMBAT_LOG_EVENT_UNFILTERED` handler; the return is the
+event that triggered the handler.
+
+The leading fields are always present:
+
+```
+timestamp, subEvent, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags
+```
+
+followed by the values specific to `subEvent`. For `SPELL_*` sub-events the next
+three are `spellID, spellName, spellSchool`; `SWING_*` sub-events add none before
+their own values. `sourceName` / `destName` are `nil` when the unit isn't known.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+f:SetScript("OnEvent", function()
+    local timestamp, subEvent, sourceGUID, sourceName, sourceFlags,
+          destGUID, destName, destFlags = CombatLogGetCurrentEventInfo()
+    print(subEvent, sourceName, "->", destName)
+end)
 ```
 
 ---
