@@ -1495,6 +1495,11 @@ enum Offsets {
     // the LoadAddOn path leaves a table on the Lua stack at entry, so
     // our hook gates on (a) path prefix "Interface\\AddOns\\" and
     // (b) `lua_type(L, -1) == LUA_TTABLE` to ignore the others.
+    //
+    // Two features need this same "about to run addon X's files" seam:
+    // GetAddOnLocalTable (above) and LoadSavedVariablesFirst (below). A target
+    // may carry only ONE detour, so src/addons/TocExecutor.cpp owns the hook and
+    // calls both in a fixed order; neither module hooks this address itself.
     FUN_TOC_EXECUTOR = 0x00814340,
 
     // --- Embedded `!!!WrathClassicAPI` addon (src/addons/Embedded.cpp) ---
@@ -1547,17 +1552,11 @@ enum Offsets {
     // THEN loads the account then per-character SavedVariables — so file-scope
     // Lua sees SavedVariables still nil. To honor the modern
     // `## LoadSavedVariablesFirst: 1` directive we load the SavedVariables
-    // before the file-list loader runs, then suppress the engine's own later
+    // before the addon's file list runs (off the shared FUN_TOC_EXECUTOR seam,
+    // see src/addons/TocExecutor.cpp), then suppress the engine's own later
     // (re)load of those exact paths so file-scope writes survive. All of these
     // were read straight out of FUN_005F80B0's own SavedVariables step.
     //
-    // TOC file-list loader — `uint32 __cdecl(char *tocPath, char *name,
-    // int *a3, void **ctx)`. Reads `tocPath` and runs each referenced file;
-    // FUN_005F80B0 calls it once per addon. It also loads GlueXML/FrameXML
-    // (FUN_004DA5F0), so gate on the path being an addon `.toc`. Hooked PRE to
-    // load SavedVariables early for a flagged addon.
-    FUN_ADDON_LOAD_FILES = 0x00814340,
-
     // Read + run a Lua file — `uint32 __cdecl(const char *path, void *ctx)`.
     // Reads via FUN_FILE_READ, compiles, pcalls; `ctx` (a load/error context) is
     // null-safe — every use is guarded, so callers may pass nullptr. How the

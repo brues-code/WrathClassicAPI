@@ -179,9 +179,20 @@ HookAutoRegister::HookAutoRegister(uintptr_t target, void *hook, void **original
 }
 
 bool RunHookRegistrations(IHookHost &host) {
-    for (auto *node = g_hookHead; node != nullptr; node = node->next)
+    for (auto *node = g_hookHead; node != nullptr; node = node->next) {
+        // One detour per target. MinHook rejects a second hook on an address
+        // outright, while a chaining host would accept it and run both with no
+        // defined order between them — so two modules hooking the same function
+        // is a bug that would otherwise surface on only one front-end. Reject it
+        // here so every front-end fails the same way: give the target a single
+        // owning module and have it call the features in an explicit order (see
+        // src/addons/TocExecutor.cpp).
+        for (auto *prior = g_hookHead; prior != node; prior = prior->next)
+            if (prior->target == node->target)
+                return false;
         if (!host.Install(node->target, node->hook, node->original))
             return false;
+    }
     return true;
 }
 

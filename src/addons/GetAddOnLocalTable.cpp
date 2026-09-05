@@ -28,20 +28,23 @@
 // the table with `lua_settop(L, -2)`, so we have to intercept and
 // hold a reference before that happens.
 //
-// Hook strategy: detour FUN_TOC_EXECUTOR. At entry, when the TOC path
-// matches the addon-side layout AND the Lua stack top is a table, we
-// stash the table into our own registry-stored lookup table keyed by
-// lowercased addon name, and parse the same TOC's
-// `AllowAddOnTableAccess` directive into a C++ map. The Lua function
-// then gates on the flag and serves from the registry table.
+// Hook strategy: observe FUN_TOC_EXECUTOR (the hook itself is owned by
+// src/addons/TocExecutor.cpp, which this shares with
+// LoadSavedVariablesFirst). At entry, when the TOC path matches the
+// addon-side layout AND the Lua stack top is a table, we stash the
+// table into our own registry-stored lookup table keyed by lowercased
+// addon name, and parse the same TOC's `AllowAddOnTableAccess`
+// directive into a C++ map. The Lua function then gates on the flag and
+// serves from the registry table.
 //
 // Failure modes (all return nil to match modern WoW):
 //   * Addon not loaded yet (no LoadAddOn fire)         → nil
 //   * Addon loaded without `AllowAddOnTableAccess: 1` → nil
 //   * Name misspelled / unknown addon                  → nil
 
+#include "addons/GetAddOnLocalTable.h"
+
 #include "Game.h"
-#include "Offsets.h"
 
 #include <cctype>
 #include <cstdio>
@@ -113,8 +116,8 @@ bool ParseAllowFlag(const char *tocPath) {
 }
 
 // `lowercase(addon_name) -> AllowAddOnTableAccess` flag. Populated by
-// the FUN_TOC_EXECUTOR hook. Single-threaded access (Lua is
-// single-threaded on this build) — no mutex needed.
+// OnTocExecute. Single-threaded access (Lua is single-threaded on this
+// build) — no mutex needed.
 std::unordered_map<std::string, bool> g_allowFlag;
 
 // Pushes our per-process namespace-lookup registry table onto the Lua
@@ -128,41 +131,6 @@ void PushNamespaceRegistry(void *L) {
         Game::Lua::SetField(L, Game::Lua::REGISTRY_INDEX, kRegistryKey); // [t]
     }
 }
-
-using TocExecutor_t = int(__cdecl *)(const char *tocPath, const char *addonName,
-                                     void *param3, void **param4);
-TocExecutor_t TocExecutor_o = nullptr;
-
-int __cdecl TocExecutor_h(const char *tocPath, const char *addonName, void *param3,
-                          void **param4) {
-    void *L = Game::Lua::State();
-
-    // Only the LoadAddOn caller has a fresh `lua_newtable` on the stack
-    // at entry. Two filters disambiguate it from the FrameXML/Glues
-    // callers: the path prefix, and the actual stack-top type.
-    const bool isAddonPath =
-        tocPath != nullptr &&
-        std::strncmp(tocPath, kAddOnPathPrefix, std::strlen(kAddOnPathPrefix)) == 0;
-
-    if (L != nullptr && addonName != nullptr && isAddonPath &&
-        Game::Lua::Type(L, -1) == Game::Lua::TYPE_TABLE) {
-
-        const std::string key = Lowercase(addonName);
-        g_allowFlag[key] = ParseAllowFlag(tocPath);
-
-        // Stack at entry: [..., ns_tbl]
-        PushNamespaceRegistry(L);                // [..., ns_tbl, registry]
-        Game::Lua::PushValue(L, -2);             // [..., ns_tbl, registry, ns_tbl]
-        Game::Lua::SetField(L, -2, key.c_str()); // [..., ns_tbl, registry] (pops ns_tbl)
-        Game::Lua::SetTop(L, -2);                // [..., ns_tbl] (pop registry)
-    }
-
-    return TocExecutor_o(tocPath, addonName, param3, param4);
-}
-
-const Game::HookAutoRegister _hookreg{Offsets::FUN_TOC_EXECUTOR,
-                                      reinterpret_cast<void *>(&TocExecutor_h),
-                                      reinterpret_cast<void **>(&TocExecutor_o)};
 
 int __cdecl Script_C_AddOns_GetAddOnLocalTable(void *L) {
     if (!Game::Lua::IsString(L, 1))
@@ -190,4 +158,29 @@ void RegisterLuaFunctions() {
 const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};
 
 } // namespace
+
+void OnTocExecute(const char *tocPath, const char *addonName) {
+    void *L = Game::Lua::State();
+
+    // Only the LoadAddOn caller has a fresh `lua_newtable` on the stack
+    // at entry. Two filters disambiguate it from the FrameXML/Glues
+    // callers: the path prefix, and the actual stack-top type.
+    const bool isAddonPath =
+        tocPath != nullptr &&
+        std::strncmp(tocPath, kAddOnPathPrefix, std::strlen(kAddOnPathPrefix)) == 0;
+
+    if (L == nullptr || addonName == nullptr || !isAddonPath ||
+        Game::Lua::Type(L, -1) != Game::Lua::TYPE_TABLE)
+        return;
+
+    const std::string key = Lowercase(addonName);
+    g_allowFlag[key] = ParseAllowFlag(tocPath);
+
+    // Stack at entry: [..., ns_tbl]
+    PushNamespaceRegistry(L);                // [..., ns_tbl, registry]
+    Game::Lua::PushValue(L, -2);             // [..., ns_tbl, registry, ns_tbl]
+    Game::Lua::SetField(L, -2, key.c_str()); // [..., ns_tbl, registry] (pops ns_tbl)
+    Game::Lua::SetTop(L, -2);                // [..., ns_tbl] (pop registry)
+}
+
 } // namespace AddOns::GetAddOnLocalTable

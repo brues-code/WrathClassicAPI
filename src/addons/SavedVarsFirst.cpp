@@ -20,15 +20,17 @@
 // THEN fires ADDON_LOADED. So file-scope SV is always nil, and the engine never
 // parses the directive.
 //
-// We hook the per-addon file-list loader (FUN_ADDON_LOAD_FILES, which the addon
-// loader calls to run the addon's files). For an addon whose TOC declares
-// `## LoadSavedVariablesFirst` (nonzero), load its SavedVariables first —
+// We observe the per-addon file-list loader (FUN_TOC_EXECUTOR, which the addon
+// loader calls to run the addon's files; the hook itself is owned by
+// src/addons/TocExecutor.cpp, shared with GetAddOnLocalTable). For an addon
+// whose TOC declares `## LoadSavedVariablesFirst` (nonzero), load its
+// SavedVariables first —
 // mirroring the two paths the engine itself loads a few steps later, and gating
 // each on file existence exactly as the engine does (3.3.5 loads SV on
 // existence, not on the `## SavedVariables` declaration):
 //   account : WTF\Account\<account>\SavedVariables\<Name>.lua
 //   per-char: WTF\Account\<account>\<realm>\<character>\SavedVariables\<Name>.lua
-// then call the original so the files run with SV present.
+// then return so the files run with SV present.
 //
 // The engine STILL runs its own SavedVariables load right after the files. Left
 // alone, that re-load would overwrite any value the addon wrote at file scope
@@ -38,6 +40,8 @@
 // AND writes both survive. Our own early load calls the trampoline directly, so
 // it is never self-suppressed. FUN_LUA_LOAD_FILE is a cold, addon-load-time path
 // (the file-list loader runs the addon's own files through a different loader).
+
+#include "addons/SavedVarsFirst.h"
 
 #include "Game.h"
 #include "Offsets.h"
@@ -61,14 +65,10 @@ using Addons::EngineIO::SMemFreeFn;
 using Addons::Toc::FindValue;
 using Addons::Toc::Lower;
 
-// TOC file-list loader (see Offsets::FUN_ADDON_LOAD_FILES) and the Lua file
-// loader (Offsets::FUN_LUA_LOAD_FILE), both plain __cdecl on this build.
-using LoadTocFiles_t = uint32_t(__cdecl *)(char *tocPath, uint8_t *name, int *a3,
-                                           void **ctx);
+// The Lua file loader (Offsets::FUN_LUA_LOAD_FILE), plain __cdecl on this build.
 using LuaLoadFile_t = uint32_t(__cdecl *)(const char *path, void *ctx);
 using NameGetter_t = const char *(__cdecl *)(); // no-arg session-name readers
 
-LoadTocFiles_t LoadTocFiles_o = nullptr;
 LuaLoadFile_t LuaLoadFile_o = nullptr;
 
 // Full SV paths we pre-loaded whose imminent engine re-load must be skipped
@@ -192,14 +192,6 @@ void LoadSavedVarsEarly(const char *addonName) {
         RunLuaFile(path);
 }
 
-uint32_t __cdecl LoadTocFiles_h(char *tocPath, uint8_t *name, int *a3, void **ctx) {
-    char addonName[128];
-    if (tocPath != nullptr && AddonNameFromToc(tocPath, addonName, sizeof addonName) &&
-        WantsSavedVarsFirst(tocPath))
-        LoadSavedVarsEarly(addonName);
-    return LoadTocFiles_o(tocPath, name, a3, ctx);
-}
-
 // Skip the engine's one redundant SavedVariables re-load per pre-loaded path.
 // Every other file load passes straight through. Match is by full path
 // (case-insensitive); a path is suppressed exactly once. Our own early load
@@ -217,14 +209,17 @@ uint32_t __cdecl LuaLoad_h(const char *path, void *ctx) {
     return LuaLoadFile_o(path, ctx);
 }
 
-const Game::HookAutoRegister _hookFiles{
-    Offsets::FUN_ADDON_LOAD_FILES, reinterpret_cast<void *>(&LoadTocFiles_h),
-    reinterpret_cast<void **>(&LoadTocFiles_o)};
-
 const Game::HookAutoRegister _hookLua{
     Offsets::FUN_LUA_LOAD_FILE, reinterpret_cast<void *>(&LuaLoad_h),
     reinterpret_cast<void **>(&LuaLoadFile_o)};
 
 } // namespace
+
+void OnTocExecute(const char *tocPath, const char *) {
+    char addonName[128];
+    if (tocPath != nullptr && AddonNameFromToc(tocPath, addonName, sizeof addonName) &&
+        WantsSavedVarsFirst(tocPath))
+        LoadSavedVarsEarly(addonName);
+}
 
 } // namespace Addons::SavedVarsFirst

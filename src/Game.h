@@ -282,6 +282,11 @@ bool InstallCoreHooks(IHookHost &host);
 // list at DLL-load time. `RunHookRegistrations(host)` walks the list and installs
 // each hook through `host`, returning false on the first Install failure so the
 // installer can fail-fast. The front-end applies/commits the batch afterwards.
+//
+// A target may carry only ONE detour — two modules registering the same address
+// is rejected (see RunHookRegistrations). When two features need the same seam,
+// one module owns the hook and calls them in an explicit order; see
+// src/addons/TocExecutor.cpp.
 struct HookAutoRegister {
     HookAutoRegister(uintptr_t target, void *hook, void **original);
     uintptr_t target;
