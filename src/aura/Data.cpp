@@ -95,6 +95,48 @@ bool IsLiveSlot(const uint8_t *entry) {
     return (ReadFlagsByteFromEntry(entry) & Offsets::AURA_FLAG_EFF_INDEX_MASK) != 0;
 }
 
+// True unless `spellID`'s Spell.dbc record marks it a hidden/system aura —
+// see the `SPELL_ATTR_HIDDEN_CLIENTSIDE` / `SPELL_ATTR_EX_NO_AURA_ICON` /
+// `SPELL_AURA_TRACK_*` / `SPELL_AURA_MOD_STALKED` comments in Offsets.h.
+// Fails closed (hidden) for a spellID with no record, matching the engine's
+// own convention for an unresolvable aura.
+bool IsVisible(uint32_t spellID) {
+    SpellRecordBuffer record{};
+    if (!::Spell::Lookup::CopyRecord(spellID, record.bytes))
+        return false;
+
+    const uint32_t attributes = *reinterpret_cast<const uint32_t *>(
+        record.bytes + Offsets::OFF_SPELL_RECORD_ATTRIBUTES);
+    if ((attributes & Offsets::SPELL_ATTR_HIDDEN_CLIENTSIDE) != 0)
+        return false;
+
+    const uint32_t attributesEx = *reinterpret_cast<const uint32_t *>(
+        record.bytes + Offsets::OFF_SPELL_RECORD_ATTRIBUTES_EX);
+    if ((attributesEx & Offsets::SPELL_ATTR_EX_NO_AURA_ICON) != 0)
+        return false;
+
+    // Hidden when every populated effect is a tracking/stalked aura — a
+    // spell that combines one with a real effect (e.g. a damage component)
+    // still counts as visible.
+    bool sawEffect = false;
+    bool sawNonTrackingEffect = false;
+    for (int i = 0; i < 3; ++i) {
+        const int32_t effect = *reinterpret_cast<const int32_t *>(
+            record.bytes + Offsets::OFF_SPELL_EFFECT + i * 4);
+        if (effect == 0)
+            continue; // unused effect slot
+        sawEffect = true;
+        const int32_t auraName = *reinterpret_cast<const int32_t *>(
+            record.bytes + Offsets::OFF_SPELL_EFFECT_APPLY_AURA_NAME + i * 4);
+        if (auraName != Offsets::SPELL_AURA_TRACK_CREATURES &&
+            auraName != Offsets::SPELL_AURA_TRACK_RESOURCES &&
+            auraName != Offsets::SPELL_AURA_MOD_STALKED) {
+            sawNonTrackingEffect = true;
+        }
+    }
+    return !sawEffect || sawNonTrackingEffect;
+}
+
 } // namespace
 
 int SlotCount(const uint8_t *unit) {
@@ -142,7 +184,15 @@ bool IsHelpful(const uint8_t *entry) {
     return (ReadFlagsByteFromEntry(entry) & Offsets::AURA_FLAG_HARMFUL) == 0;
 }
 
-int FindNthSlot(const uint8_t *unit, int oneBasedIndex, Filter filter) {
+bool IsVisibleSlot(const uint8_t *unit, int slot) {
+    const uint8_t *entry = EntryAt(unit, slot);
+    if (entry == nullptr)
+        return true;
+    return IsVisible(ReadSpellIDFromEntry(entry));
+}
+
+int FindNthSlot(const uint8_t *unit, int oneBasedIndex, Filter filter,
+               bool includeHidden) {
     if (unit == nullptr || oneBasedIndex < 1)
         return -1;
     const int total = SlotCount(unit);
@@ -153,14 +203,29 @@ int FindNthSlot(const uint8_t *unit, int oneBasedIndex, Filter filter) {
             continue;
         if (!MatchesFilter(entry, filter))
             continue;
+        if (!includeHidden && !IsVisible(ReadSpellIDFromEntry(entry)))
+            continue;
         if (++matches == oneBasedIndex)
             return slot;
     }
     return -1;
 }
 
+int NextSlot(const uint8_t *unit, int fromSlot, Filter filter, bool includeHidden) {
+    if (unit == nullptr)
+        return -1;
+    const int total = SlotCount(unit);
+    for (int slot = (fromSlot > 0) ? fromSlot : 0; slot < total; ++slot) {
+        const uint8_t *entry = EntryAt(unit, slot);
+        if (entry != nullptr && IsLiveSlot(entry) && MatchesFilter(entry, filter) &&
+            (includeHidden || IsVisible(ReadSpellIDFromEntry(entry))))
+            return slot;
+    }
+    return -1;
+}
+
 int FindSlotBySpellID(const uint8_t *unit, uint32_t spellID,
-                      const Filter *filter) {
+                      const Filter *filter, bool includeHidden) {
     if (unit == nullptr || spellID == 0)
         return -1;
     const int total = SlotCount(unit);
@@ -171,12 +236,34 @@ int FindSlotBySpellID(const uint8_t *unit, uint32_t spellID,
             continue;
         if (filter != nullptr && !MatchesFilter(entry, *filter))
             continue;
+        if (!includeHidden && !IsVisible(spellID))
+            continue;
         return slot;
     }
     return -1;
 }
 
-void Push(void *L, const uint8_t *unit, int slot) {
+namespace {
+
+// Everything the two emitters need, resolved once from the aura entry and its
+// Spell.dbc record. The string fields point at DBC storage (`name`, `icon`,
+// `dispel`) or the engine's shared token buffer (`source`) — both stay valid
+// across the Lua pushes that follow, which call no engine resolver.
+struct Resolved {
+    uint32_t spellID = 0;
+    const char *name = nullptr;
+    const char *icon = nullptr;
+    const char *dispel = nullptr;
+    const char *source = nullptr;
+    int applications = 0;
+    double duration = 0.0;
+    double expiration = 0.0;
+    bool helpful = false;
+    bool fromPlayerOrPet = false;
+    bool stealable = false;
+};
+
+Resolved ResolveAura(const uint8_t *unit, int slot) {
     const uint8_t *entry = EntryAt(unit, slot);
     const uint32_t spellID = (entry != nullptr) ? ReadSpellIDFromEntry(entry) : 0;
     const bool helpful = IsHelpful(entry);
@@ -220,20 +307,37 @@ void Push(void *L, const uint8_t *unit, int slot) {
         stealable = fn(unit, entry, record.bytes);
     }
 
+    Resolved out;
+    out.spellID = spellID;
+    out.name = name;
+    out.icon = icon;
+    out.dispel = dispel;
+    out.source = source;
+    out.applications = applications;
+    out.duration = duration;
+    out.expiration = expiration;
+    out.helpful = helpful;
+    out.fromPlayerOrPet = fromPlayerOrPet;
+    out.stealable = stealable;
+    return out;
+}
+
+// `Emit::Table` leaf — the modern `AuraData` table. Net stack effect: +1.
+void BuildTable(void *L, const Resolved &a) {
     Game::Lua::NewTable(L);
 
-    Game::Lua::SetFieldString(L, "name", name);
-    Game::Lua::SetFieldString(L, "icon", icon);
-    Game::Lua::SetFieldNumber(L, "applications", static_cast<double>(applications));
-    Game::Lua::SetFieldNumber(L, "spellId", static_cast<double>(spellID));
-    Game::Lua::SetFieldString(L, "dispelName", dispel);
-    Game::Lua::SetFieldBool(L, "isHelpful", helpful);
-    Game::Lua::SetFieldBool(L, "isHarmful", !helpful);
-    Game::Lua::SetFieldNumber(L, "duration", duration);
-    Game::Lua::SetFieldNumber(L, "expirationTime", expiration);
-    Game::Lua::SetFieldString(L, "sourceUnit", source);
-    Game::Lua::SetFieldBool(L, "isFromPlayerOrPlayerPet", fromPlayerOrPet);
-    Game::Lua::SetFieldBool(L, "isStealable", stealable);
+    Game::Lua::SetFieldString(L, "name", a.name);
+    Game::Lua::SetFieldString(L, "icon", a.icon);
+    Game::Lua::SetFieldNumber(L, "applications", static_cast<double>(a.applications));
+    Game::Lua::SetFieldNumber(L, "spellId", static_cast<double>(a.spellID));
+    Game::Lua::SetFieldString(L, "dispelName", a.dispel);
+    Game::Lua::SetFieldBool(L, "isHelpful", a.helpful);
+    Game::Lua::SetFieldBool(L, "isHarmful", !a.helpful);
+    Game::Lua::SetFieldNumber(L, "duration", a.duration);
+    Game::Lua::SetFieldNumber(L, "expirationTime", a.expiration);
+    Game::Lua::SetFieldString(L, "sourceUnit", a.source);
+    Game::Lua::SetFieldBool(L, "isFromPlayerOrPlayerPet", a.fromPlayerOrPet);
+    Game::Lua::SetFieldBool(L, "isStealable", a.stealable);
     Game::Lua::SetFieldNumber(L, "timeMod", 1.0);
 
     // `points` — modern's per-effect value list. 3.3.5 doesn't keep per-aura
@@ -263,6 +367,45 @@ void Push(void *L, const uint8_t *unit, int slot) {
     // system, and the companion APIs (GetAuraDataByAuraInstanceID, the UNIT_AURA
     // instance payloads) don't exist here — a synthesized id would only mislead
     // callers that key on it.
+}
+
+// `Emit::Positional` leaf — the `UnitAura` value tuple, no table allocated.
+// Net stack effect: +POSITIONAL_COUNT. Values mirror `BuildTable` exactly so
+// the two shapes never disagree, absent strings included: those push nil here
+// just as they leave the table's field nil.
+void PushPositional(void *L, const Resolved &a) {
+    Game::Lua::PushString(L, a.name);                             // 1  name
+    Game::Lua::PushString(L, a.icon);                             // 2  icon
+    Game::Lua::PushNumber(L, static_cast<double>(a.applications)); // 3  count
+    Game::Lua::PushString(L, a.dispel);                           // 4  dispelType
+    Game::Lua::PushNumber(L, a.duration);                         // 5  duration
+    Game::Lua::PushNumber(L, a.expiration);                       // 6  expirationTime
+    Game::Lua::PushString(L, a.source);                           // 7  sourceUnit
+    Game::Lua::PushBool(L, a.stealable);                          // 8  isStealable
+    Game::Lua::PushBool(L, false);                                // 9  nameplateShowPersonal
+    Game::Lua::PushNumber(L, static_cast<double>(a.spellID));     // 10 spellId
+    Game::Lua::PushBool(L, false);                                // 11 canApplyAura
+    Game::Lua::PushBool(L, false);                                // 12 isBossDebuff
+    Game::Lua::PushBool(L, a.fromPlayerOrPet);                    // 13 castByPlayer
+    Game::Lua::PushBool(L, false);                                // 14 nameplateShowAll
+    Game::Lua::PushNumber(L, 1.0);                                // 15 timeMod
+}
+
+} // namespace
+
+void Push(void *L, const uint8_t *unit, int slot, Emit emit) {
+    const Resolved a = ResolveAura(unit, slot);
+    if (emit == Emit::Positional)
+        PushPositional(L, a);
+    else
+        BuildTable(L, a);
+}
+
+bool PushBySlot(void *L, const uint8_t *unit, int slot, Emit emit) {
+    if (!IsSlotPopulated(unit, slot))
+        return false;
+    Push(L, unit, slot, emit);
+    return true;
 }
 
 } // namespace Aura::Data

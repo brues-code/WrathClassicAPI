@@ -48,7 +48,8 @@ namespace Lua {
     F(Error,       luaL_error,      LUAL_ERROR)       \
     F(PCall,       lua_pcall,       LUA_PCALL)        \
     F(RawSetI,     lua_rawseti,     LUA_RAW_SETI)     \
-    F(Next,        lua_next,        LUA_NEXT)
+    F(Next,        lua_next,        LUA_NEXT)         \
+    F(CheckStack,  lua_checkstack,  LUA_CHECK_STACK)
 
 #define WRATHCLASSICAPI_BIND_LUA(Name, Typedef, Offset) \
     const Typedef##_t Name = reinterpret_cast<Typedef##_t>(Offsets::Offset);

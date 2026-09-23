@@ -157,7 +157,9 @@ Conventions:
   - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
-  - [`C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`](#c_unitaurasgetbuffdatabyindexunit-index--getdebuffdatabyindexunit-index)
+  - [`C_UnitAuras.GetBuffDataByIndex(unit, index[, filter])` / `GetDebuffDataByIndex(unit, index[, filter])`](#c_unitaurasgetbuffdatabyindexunit-index-filter--getdebuffdatabyindexunit-index-filter)
+  - [`C_UnitAuras.GetAuraSlots(unit[, filter[, maxSlots[, continuationToken]]])`](#c_unitaurasgetauraslotsunit-filter-maxslots-continuationtoken)
+  - [`C_UnitAuras.GetAuraDataBySlot(unit, slot)` / `UnitAuraBySlot(unit, slot)`](#c_unitaurasgetauradatabyslotunit-slot--unitaurabyslotunit-slot)
   - [`C_UnitAuras.GetUnitAuraBySpellID(unit, spellID[, filter])`](#c_unitaurasgetunitaurabyspellidunit-spellid-filter)
   - [`C_UnitAuras.GetPlayerAuraBySpellID(spellID)`](#c_unitaurasgetplayeraurabyspellidspellid)
   - [`C_UnitAuras.GetUnitAuras(unit[, filter])`](#c_unitaurasgetunitaurasunit-filter)
@@ -2197,6 +2199,24 @@ accepted but no-ops — they'd need source-side caster classification
 we don't surface or modern-only systems (nameplate-only auras)
 that don't exist in 3.3.5.
 
+Every getter that takes a `filter` also skips **hidden auras** by
+default: secondary-skill tracking (Find Herbs, Track Humanoids, ...)
+and stance/shapeshift-form auras (Defensive Stance, Battle Stance,
+...) are real entries in the unit's aura array, but the client's own
+buff frame never shows an icon for them — `UnitBuff`/`UnitDebuff`
+exclude them the same way. Add `"HIDDEN"` to the filter string to see
+them too:
+
+```lua
+-- Include tracking / stance auras in the results.
+local d = C_UnitAuras.GetAuraDataByIndex("player", 1, "HELPFUL|HIDDEN")
+```
+
+A by-spellID lookup ([`GetUnitAuraBySpellID`](#c_unitaurasgetunitaurabyspellidunit-spellid-filter),
+[`GetPlayerAuraBySpellID`](#c_unitaurasgetplayeraurabyspellidspellid))
+always finds a hidden aura too — naming the exact spell already says
+you want it, `HIDDEN` isn't needed there.
+
 ### `C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`
 
 Returns the `index`-th aura on `unit` matching `filter` as an
@@ -2220,12 +2240,89 @@ returned here matches the (n)th of the corresponding 3.3.5
 Returns `nil` for unresolvable unit tokens, indices `< 1`, or
 indices past the populated-aura count.
 
-### `C_UnitAuras.GetBuffDataByIndex(unit, index)` / `GetDebuffDataByIndex(unit, index)`
+### `C_UnitAuras.GetBuffDataByIndex(unit, index[, filter])` / `GetDebuffDataByIndex(unit, index[, filter])`
 
-Filter-locked variants. Equivalent to
+Range-locked variants. Equivalent to
 `GetAuraDataByIndex(unit, index, "HELPFUL")` and
-`GetAuraDataByIndex(unit, index, "HARMFUL")` respectively. Saves
-the third arg when you know which polarity you want.
+`GetAuraDataByIndex(unit, index, "HARMFUL")` respectively, plus
+whatever's in `filter` — in practice that just means `"HIDDEN"`,
+since the range is already fixed.
+
+### `C_UnitAuras.GetAuraSlots(unit[, filter[, maxSlots[, continuationToken]]])`
+
+Returns a continuation token followed by the slot ids of the auras on
+`unit` matching `filter`. A slot id is a number naming one aura — pass
+it to [`GetAuraDataBySlot` or
+`UnitAuraBySlot`](#c_unitaurasgetauradatabyslotunit-slot--unitaurabyslotunit-slot)
+to read that aura.
+
+```lua
+local token, slot1, slot2 = C_UnitAuras.GetAuraSlots("target", "HARMFUL", 2)
+```
+
+Ids come in the same order the by-index getters visit the auras.
+`maxSlots` caps how many ids one call returns; `nil` or `0` returns all
+of them. When auras remain past the batch, the first return is a token —
+pass it back as `continuationToken` to get the next batch. On the batch
+that reaches the last aura, the first return is `nil`.
+
+```lua
+-- Every helpful aura on the player, 8 per batch.
+local function handle(unit, token, ...)
+    for i = 1, select("#", ...) do
+        print(C_UnitAuras.UnitAuraBySlot(unit, (select(i, ...))))
+    end
+    return token
+end
+
+local token
+repeat
+    token = handle("player", C_UnitAuras.GetAuraSlots("player", "HELPFUL", 8, token))
+until not token
+```
+
+Prefer this over a loop of `GetAuraDataByIndex`: the by-index getters
+walk the unit's aura array from the start on every call, so such a loop
+re-walks it once per index. One `GetAuraSlots` call plus a by-slot fetch
+per aura walks it once.
+
+`filter` takes the same tokens as `GetAuraDataByIndex` — the range is
+helpful unless the string contains `"HARMFUL"`. A slot id stays valid
+until the unit's auras change; re-enumerate on `UNIT_AURA` rather than
+storing ids. Unresolvable unit tokens return a lone `nil` (no ids).
+
+### `C_UnitAuras.GetAuraDataBySlot(unit, slot)` / `UnitAuraBySlot(unit, slot)`
+
+`GetAuraDataBySlot` returns the [`AuraData`](#auradata-table-shape)
+table for the aura that `slot` names on `unit`, or `nil` when that slot
+no longer holds an aura. Get slot ids from
+[`GetAuraSlots`](#c_unitaurasgetauraslotsunit-filter-maxslots-continuationtoken).
+
+```lua
+local token, slot = C_UnitAuras.GetAuraSlots("player", "HELPFUL", 1)
+if slot then
+    local d = C_UnitAuras.GetAuraDataBySlot("player", slot)
+    print(d.name, d.applications, d.expirationTime - GetTime())
+end
+```
+
+`UnitAuraBySlot` returns the same aura as 15 positional values instead
+of a table, so a per-frame scan allocates nothing:
+
+```lua
+local name, icon, count, dispelType, duration, expirationTime, sourceUnit,
+      isStealable, nameplateShowPersonal, spellId, canApplyAura, isBossDebuff,
+      castByPlayer, nameplateShowAll, timeMod =
+    C_UnitAuras.UnitAuraBySlot("player", slot)
+```
+
+The values are the `AuraData` fields under their positional names:
+`count` is `applications`, `dispelType` is `dispelName`, `sourceUnit`
+and `castByPlayer` are `sourceUnit` and `isFromPlayerOrPlayerPet`.
+`nameplateShowPersonal`, `canApplyAura`, `isBossDebuff`, and
+`nameplateShowAll` are always `false`, and `timeMod` is always `1`
+(see [shape-parity defaults](#auradata-table-shape)). A slot holding no
+aura returns a single `nil`.
 
 ### `C_UnitAuras.GetUnitAuraBySpellID(unit, spellID[, filter])`
 
@@ -2260,7 +2357,8 @@ Bulk fetch. Returns an array (1-indexed) of every populated
 [`AuraData`](#auradata-table-shape) on `unit`. With `filter`,
 restricts to one polarity (`"HELPFUL"` or `"HARMFUL"`); without,
 returns helpful + harmful interleaved in the engine's storage
-order.
+order. Like the other getters, hidden auras (tracking, stance) are
+excluded unless `filter` contains `"HIDDEN"`.
 
 ```lua
 for _, aura in ipairs(C_UnitAuras.GetUnitAuras("player")) do

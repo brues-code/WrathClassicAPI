@@ -86,6 +86,7 @@ using luaL_error_t = int(__cdecl *)(void *L, const char *fmt, ...);
 using lua_pcall_t = int(__cdecl *)(void *L, int nargs, int nresults, int errfunc);
 using lua_rawseti_t = void(__cdecl *)(void *L, int idx, int n);
 using lua_next_t = int(__cdecl *)(void *L, int idx);
+using lua_checkstack_t = int(__cdecl *)(void *L, int size);
 
 extern const lua_isnumber_t IsNumber;
 extern const lua_isstring_t IsString;
@@ -154,6 +155,12 @@ extern const lua_rawseti_t RawSetI;
 // and returns 0 at the end of the table. The standard table-iteration
 // primitive (JSON/CBOR serialization walk arbitrary Lua tables with it).
 extern const lua_next_t Next;
+
+// lua_checkstack(L, size): ensures `size` more values fit on the stack,
+// returning 0 if it can't grow that far. A C function starts with only
+// LUA_MINSTACK (20) free slots, so call this before pushing a count the
+// caller controls (e.g. the slot list `C_UnitAuras.GetAuraSlots` returns).
+extern const lua_checkstack_t CheckStack;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
 // Wrap it so callers can write `Game::Lua::ToString(L, n)`.

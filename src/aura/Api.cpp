@@ -25,6 +25,13 @@
 // are accepted but no-ops — they'd require either source-side
 // caster classification we don't expose or modern-only systems
 // (nameplate-only auras) that don't exist in 3.3.5.
+//
+// `HIDDEN` — a WrathClassicAPI extension, not a modern token. The aura array
+// holds entries the client's own buff frame never shows an icon for
+// (secondary-skill tracking like Find Herbs, stance/shapeshift-form auras
+// like Defensive Stance — see `Aura::Data::IsVisibleSlot`); every getter here
+// excludes those by default to match, and `HIDDEN` in the filter string opts
+// back into seeing them.
 
 #include "Data.h"
 
@@ -55,6 +62,14 @@ Data::Filter ParseFilter(const char *filter) {
     return Data::Filter::Helpful;
 }
 
+// `HIDDEN` — a WrathClassicAPI extension, not a modern token. By default the
+// index/slot/bulk getters skip auras the client's own buff frame never shows
+// an icon for (see `Aura::Data::IsVisibleSlot`); a filter string containing
+// `HIDDEN` opts back into seeing them.
+bool ParseIncludeHidden(const char *filter) {
+    return filter != nullptr && std::strstr(filter, "HIDDEN") != nullptr;
+}
+
 const char *ArgUnit(void *L, int idx) {
     if (!Game::Lua::IsString(L, idx))
         return nullptr;
@@ -77,8 +92,8 @@ const char *ArgOptString(void *L, int idx) {
 // or nil if none. Shared by GetAuraDataByIndex /
 // GetBuffDataByIndex / GetDebuffDataByIndex.
 int PushAuraByIndex(void *L, const uint8_t *unit, int oneBasedIndex,
-                    Data::Filter filter) {
-    const int slot = Data::FindNthSlot(unit, oneBasedIndex, filter);
+                    Data::Filter filter, bool includeHidden) {
+    const int slot = Data::FindNthSlot(unit, oneBasedIndex, filter, includeHidden);
     if (slot < 0) {
         Game::Lua::PushNil(L);
         return 1;
@@ -95,29 +110,37 @@ int __cdecl Script_GetAuraDataByIndex(void *L) {
         Game::Lua::PushNil(L);
         return 1;
     }
-    return PushAuraByIndex(L, ResolveUnit(unitTok), index, ParseFilter(filterStr));
+    return PushAuraByIndex(L, ResolveUnit(unitTok), index, ParseFilter(filterStr),
+                           ParseIncludeHidden(filterStr));
 }
 
 int __cdecl Script_GetBuffDataByIndex(void *L) {
     const char *unitTok = ArgUnit(L, 1);
     const int index = ArgInt(L, 2);
+    const char *filterStr = ArgOptString(L, 3);
     if (unitTok == nullptr || index < 1) {
         Game::Lua::PushNil(L);
         return 1;
     }
-    return PushAuraByIndex(L, ResolveUnit(unitTok), index, Data::Filter::Helpful);
+    return PushAuraByIndex(L, ResolveUnit(unitTok), index, Data::Filter::Helpful,
+                           ParseIncludeHidden(filterStr));
 }
 
 int __cdecl Script_GetDebuffDataByIndex(void *L) {
     const char *unitTok = ArgUnit(L, 1);
     const int index = ArgInt(L, 2);
+    const char *filterStr = ArgOptString(L, 3);
     if (unitTok == nullptr || index < 1) {
         Game::Lua::PushNil(L);
         return 1;
     }
-    return PushAuraByIndex(L, ResolveUnit(unitTok), index, Data::Filter::Harmful);
+    return PushAuraByIndex(L, ResolveUnit(unitTok), index, Data::Filter::Harmful,
+                           ParseIncludeHidden(filterStr));
 }
 
+// By-spellID lookups always find a hidden aura (tracking / stance / etc.)
+// too — the caller already named the exact spell they want, so gating that
+// on visibility would just make a correct call return nil.
 int __cdecl Script_GetUnitAuraBySpellID(void *L) {
     const char *unitTok = ArgUnit(L, 1);
     const int spellID = ArgInt(L, 2);
@@ -133,7 +156,8 @@ int __cdecl Script_GetUnitAuraBySpellID(void *L) {
         f = ParseFilter(filterStr);
         fp = &f;
     }
-    const int slot = Data::FindSlotBySpellID(unit, static_cast<uint32_t>(spellID), fp);
+    const int slot = Data::FindSlotBySpellID(unit, static_cast<uint32_t>(spellID), fp,
+                                             /*includeHidden=*/true);
     if (slot < 0) {
         Game::Lua::PushNil(L);
         return 1;
@@ -149,7 +173,8 @@ int __cdecl Script_GetPlayerAuraBySpellID(void *L) {
         return 1;
     }
     const uint8_t *unit = ResolveUnit("player");
-    const int slot = Data::FindSlotBySpellID(unit, static_cast<uint32_t>(spellID), nullptr);
+    const int slot = Data::FindSlotBySpellID(unit, static_cast<uint32_t>(spellID), nullptr,
+                                             /*includeHidden=*/true);
     if (slot < 0) {
         Game::Lua::PushNil(L);
         return 1;
@@ -158,13 +183,95 @@ int __cdecl Script_GetPlayerAuraBySpellID(void *L) {
     return 1;
 }
 
+// `C_UnitAuras.GetAuraSlots(unit [, filter [, maxSlots [, continuationToken]]])`
+//   -> continuationToken, slot1, slot2, ...
+//
+// Enumerates the slot ids of the auras on `unit` matching `filter`, in the
+// order the by-index getters visit them, `maxSlots` at a time (nil / 0 = all).
+// The first return is the token to pass back for the next batch, or nil when
+// this batch reached the end — modern's batching contract, and what makes a
+// full aura scan linear: one enumeration per batch plus a direct by-slot fetch
+// per aura, instead of a fresh from-slot-0 walk per index.
+//
+// The token is the aura-array index to resume at, plus one; opaque to callers.
+// Slot ids are the aura-array indices themselves, which is what lets
+// `GetAuraDataBySlot` fetch one with no walk.
+int __cdecl Script_GetAuraSlots(void *L) {
+    const char *unitTok = ArgUnit(L, 1);
+    const char *filterStr = ArgOptString(L, 2);
+    const int maxSlots = ArgInt(L, 3);
+    const int token = ArgInt(L, 4);
+
+    const uint8_t *unit = ResolveUnit(unitTok);
+    const Data::Filter filter = ParseFilter(filterStr);
+    const bool includeHidden = ParseIncludeHidden(filterStr);
+    const int first = (token > 0) ? token - 1 : 0;
+
+    // Count this batch (and find where the next one resumes) before pushing
+    // anything, so the stack is grown exactly once for a known count.
+    int n = 0;
+    int resume = -1;
+    for (int slot = Data::NextSlot(unit, first, filter, includeHidden); slot >= 0;
+         slot = Data::NextSlot(unit, slot + 1, filter, includeHidden)) {
+        if (maxSlots > 0 && n == maxSlots) {
+            resume = slot;
+            break;
+        }
+        ++n;
+    }
+
+    // Everything below only pushes, so the args can go; a batch is n + 1
+    // values, past the headroom a C function is guaranteed.
+    Game::Lua::SetTop(L, 0);
+    if (Game::Lua::CheckStack(L, n + 1) == 0) {
+        Game::Lua::PushNil(L);
+        return 1;
+    }
+    if (resume >= 0)
+        Game::Lua::PushNumber(L, static_cast<double>(resume + 1));
+    else
+        Game::Lua::PushNil(L);
+    int slot = Data::NextSlot(unit, first, filter, includeHidden);
+    for (int i = 0; i < n; ++i, slot = Data::NextSlot(unit, slot + 1, filter, includeHidden))
+        Game::Lua::PushNumber(L, static_cast<double>(slot));
+    return n + 1;
+}
+
+// Shared body of GetAuraDataBySlot (table) / UnitAuraBySlot (positional):
+// pushes the aura a slot id from GetAuraSlots names, or a single nil for an id
+// that no longer names one.
+int PushAuraBySlot(void *L, Data::Emit emit) {
+    const char *unitTok = ArgUnit(L, 1);
+    if (unitTok == nullptr || !Game::Lua::IsNumber(L, 2)) {
+        Game::Lua::PushNil(L);
+        return 1;
+    }
+    if (Data::PushBySlot(L, ResolveUnit(unitTok), ArgInt(L, 2), emit))
+        return (emit == Data::Emit::Positional) ? Data::POSITIONAL_COUNT : 1;
+    Game::Lua::PushNil(L);
+    return 1;
+}
+
+// `C_UnitAuras.GetAuraDataBySlot(unit, slot)` -> AuraData | nil
+int __cdecl Script_GetAuraDataBySlot(void *L) {
+    return PushAuraBySlot(L, Data::Emit::Table);
+}
+
+// `C_UnitAuras.UnitAuraBySlot(unit, slot)` -> the 15 positional UnitAura
+// values | nil. Allocation-free sibling of GetAuraDataBySlot for per-frame
+// scans that don't want a table per aura.
+int __cdecl Script_UnitAuraBySlot(void *L) {
+    return PushAuraBySlot(L, Data::Emit::Positional);
+}
+
 // Walks every aura entry on `unit` once, pushing AuraData tables
 // matching `filter` (or all if `filter==nullptr`) into the array
 // at `outerIdx` starting at `nextKey`. Updates `nextKey` so a
 // follow-up call (e.g. helpful then harmful) can append to the
-// same outer table.
+// same outer table. Hidden auras (see `Data::IsVisibleSlot`) are
+// skipped unless `includeHidden` is true.
 void AppendAuras(void *L, const uint8_t *unit, int outerIdx,
-                 const Data::Filter *filter, int &nextKey) {
+                 const Data::Filter *filter, int &nextKey, bool includeHidden) {
     const int total = Data::SlotCount(unit);
     for (int slot = 0; slot < total; ++slot) {
         if (!Data::IsSlotPopulated(unit, slot))
@@ -174,6 +281,8 @@ void AppendAuras(void *L, const uint8_t *unit, int outerIdx,
             if ((*filter == Data::Filter::Helpful) != helpful)
                 continue;
         }
+        if (!includeHidden && !Data::IsVisibleSlot(unit, slot))
+            continue;
         Game::Lua::PushNumber(L, static_cast<double>(nextKey++));
         Data::Push(L, unit, slot);
         Game::Lua::RawSet(L, outerIdx);
@@ -184,6 +293,7 @@ int __cdecl Script_GetUnitAuras(void *L) {
     const char *unitTok = ArgUnit(L, 1);
     const char *filterStr = ArgOptString(L, 2);
     const uint8_t *unit = ResolveUnit(unitTok);
+    const bool includeHidden = ParseIncludeHidden(filterStr);
 
     Game::Lua::SetTop(L, 0);
     Game::Lua::NewTable(L);
@@ -192,10 +302,10 @@ int __cdecl Script_GetUnitAuras(void *L) {
 
     int nextKey = 1;
     if (filterStr == nullptr) {
-        AppendAuras(L, unit, 1, nullptr, nextKey);
+        AppendAuras(L, unit, 1, nullptr, nextKey, includeHidden);
     } else {
         const Data::Filter f = ParseFilter(filterStr);
-        AppendAuras(L, unit, 1, &f, nextKey);
+        AppendAuras(L, unit, 1, &f, nextKey, includeHidden);
     }
     return 1;
 }
@@ -269,6 +379,12 @@ void RegisterLuaFunctions() {
                                      &Script_GetBuffDataByIndex);
     Game::Lua::RegisterTableFunction("C_UnitAuras", "GetDebuffDataByIndex",
                                      &Script_GetDebuffDataByIndex);
+    Game::Lua::RegisterTableFunction("C_UnitAuras", "GetAuraSlots",
+                                     &Script_GetAuraSlots);
+    Game::Lua::RegisterTableFunction("C_UnitAuras", "GetAuraDataBySlot",
+                                     &Script_GetAuraDataBySlot);
+    Game::Lua::RegisterTableFunction("C_UnitAuras", "UnitAuraBySlot",
+                                     &Script_UnitAuraBySlot);
     Game::Lua::RegisterTableFunction("C_UnitAuras", "GetUnitAuraBySpellID",
                                      &Script_GetUnitAuraBySpellID);
     Game::Lua::RegisterTableFunction("C_UnitAuras", "GetPlayerAuraBySpellID",

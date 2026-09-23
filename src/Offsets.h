@@ -735,6 +735,16 @@ enum Offsets {
     // lua_next — pops a key, pushes the next key+value pair (or nothing
     // and returns 0 at end of table). Cross-checked against awesome_wotlk.
     LUA_NEXT          = 0x0084EF50, // int  lua_next(L, idx)
+    // lua_checkstack — grows the stack so `size` more pushes fit, and
+    // raises the current C call's ceiling to match. A C function is
+    // only guaranteed LUA_MINSTACK (20) free slots, so any call that
+    // returns a caller-controlled number of values must call this
+    // first. Identified by its `(top - base) / 16 + size > 0x800`
+    // ceiling test (LUAI_MAXCSTACK is 2048 in this build) followed by
+    // the `luaD_growstack` call at 0x00855CD0; sits immediately before
+    // lua_xmove (0x0084DB10) / lua_newthread (0x0084DB90), matching
+    // lapi.c's declaration order.
+    LUA_CHECK_STACK   = 0x0084DAB0, // int  lua_checkstack(L, size) — 0 = can't grow
 
     // `FrameScript_FireOnUpdate` — engine's per-frame dispatcher that
     // fires every Lua-bound `OnUpdate` handler. Cross-checked against
@@ -1166,6 +1176,62 @@ enum Offsets {
     OFF_SPELL_EFFECT                     = 0x11C,
     OFF_SPELL_EFFECT_IMPLICIT_TARGET_A   = 0x158,
     OFF_SPELL_EFFECT_IMPLICIT_TARGET_B   = 0x164,
+    // Per-effect SpellAuraName (int32[3]) — which SPELL_AURA_* an
+    // APPLY_AURA-type effect applies. Directly confirmed against a live
+    // 3.3.5.12340 Spell.dbc: Defensive Stance's Effect[0]=6 (APPLY_AURA)
+    // pairs with EffectApplyAuraName[0]=36 (SPELL_AURA_MOD_SHAPESHIFT) at
+    // this offset; Find Herbs / Track Humanoids / etc. show 44/45
+    // (TRACK_CREATURES/TRACK_RESOURCES) here — see the spot-check note above
+    // `SPELL_AURA_TRACK_CREATURES`.
+    OFF_SPELL_EFFECT_APPLY_AURA_NAME     = 0x17C,
+
+    // Base Attributes / AttributesEx. Verified via decompile of FUN_00540a30
+    // (the engine function behind `C_Spell.GetSpellInfo`, which already reads
+    // AttributesEx2 one dword later at this same offset): the byte at this
+    // buffer offset gates a rank-text lookup the same way `Attributes & 2`
+    // would. Directly confirmed against a live 3.3.5.12340 Spell.dbc (field 4
+    // = Attributes, field 5 = AttributesEx, at their expected byte offsets)
+    // — see the spot-check note above `SPELL_AURA_TRACK_CREATURES`.
+    OFF_SPELL_RECORD_ATTRIBUTES        = 0x010,
+    OFF_SPELL_RECORD_ATTRIBUTES_EX     = 0x014,
+    // Attributes bit 7 — "hidden from the spellbook, the aura-icon list, and
+    // partially the combat log, client-side only" (wowdev.wiki naming:
+    // SPELL_ATTR0_DO_NOT_DISPLAY_SPELLBOOK_AURA_ICON_COMBAT_LOG). Stable
+    // across 1.12→3.3.5; ClassicAPI's aura module checks the same bit at its
+    // own (differently-offset) Attributes field for the same purpose.
+    SPELL_ATTR_HIDDEN_CLIENTSIDE       = 0x80,
+    // AttributesEx bit 28 — suppresses the aura-icon specifically (a spell
+    // can still show in the spellbook/log). ClassicAPI's 1.12 aura module
+    // checks the same bit for the same purpose.
+    SPELL_ATTR_EX_NO_AURA_ICON         = 0x10000000,
+
+    // SpellAuraName values the client tracks as "system" auras with no
+    // buff-frame icon: secondary-skill tracking (Find Herbs, Track
+    // Humanoids, ...) and the "stalked" marker (Hunter's Mark's
+    // reveal-to-caster component). A spell whose every populated effect
+    // applies one of these (and isn't otherwise excluded via the
+    // HIDDEN_CLIENTSIDE / NO_AURA_ICON attributes above) is treated as a
+    // hidden aura by `Aura::Data::IsVisibleSlot`. Values verified stable
+    // 1.12→3.3.5 — ClassicAPI's aura module excludes the same three IDs for
+    // the same purpose.
+    //
+    // All of the above (OFF_SPELL_RECORD_ATTRIBUTES/_EX,
+    // OFF_SPELL_EFFECT_APPLY_AURA_NAME, and both attribute bits) were
+    // spot-checked against a live 3.3.5.12340 Spell.dbc: Defensive Stance
+    // (71) has Attributes=0x29050010 (HIDDEN_CLIENTSIDE clear) but
+    // AttributesEx=0x10000400 (NO_AURA_ICON set) with its sole effect
+    // Effect[0]=6 (APPLY_AURA), EffectApplyAuraName[0]=36
+    // (SPELL_AURA_MOD_SHAPESHIFT — not one of the three below, so it's the
+    // NO_AURA_ICON bit doing the work here); Find Herbs (2383), Find
+    // Minerals (2580), Find Treasure (2481), Track Beasts (1494), and Track
+    // Humanoids (5225) all have AttributesEx & 0x10000000 set AND
+    // EffectApplyAuraName containing 44 or 45. Six ordinary buffs (Battle
+    // Shout 6673, Power Word: Fortitude 1243, Rejuvenation 774, Thorns 467,
+    // Mark of the Wild 1126, Arcane Intellect 1459) all have neither
+    // attribute bit set, confirming no false-positive exclusions.
+    SPELL_AURA_TRACK_CREATURES         = 44,
+    SPELL_AURA_TRACK_RESOURCES         = 45,
+    SPELL_AURA_MOD_STALKED             = 151,
 
     // Spell power-cost calculators, both `int __cdecl(record, casterObj)` taking
     // the copied Spell.dbc record and a CGUnit. These resolve the true cost for
