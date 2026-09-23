@@ -695,27 +695,38 @@ enum Offsets {
     // player-side linear slot against it before using it.
     OFF_INVMGR_SLOT_COUNT = 0x00,
 
-    // Player-container linear-slot map, read out of that same encoder
-    // (`FUN_005D7380`, the engine's `PackBagSlot`). A 1-based slot S in a
-    // range maps to `firstSlot - 1 + S`:
+    // The player inventory manager's linear-slot map. All of it is one flat
+    // index space; a container's bagID picks a range, and a 1-based slot S
+    // within it maps to `firstSlot - 1 + S`.
+    //
+    // Item-holding ranges, read out of the engine's own bagID encoder
+    // (`FUN_005D7380`, its `PackBagSlot`):
     //   backpack  (bagID  0) → 0x17..0x26 (16 slots)
     //   bank main (bagID -1) → 0x27..0x42 (28 slots)
     //   keyring   (bagID -2) → 0x56..0x75 (32 slots)
-    // Equipped bags (bagID 1..4) and bank bags (bagID 5..11) are NOT in
-    // this map — they address their own CGContainer with a 0-based slot.
-    // Only the backpack range is consumed today; the other two are
-    // recorded here because the encoder they came from defines all three
-    // together and splitting them up loses that context.
+    //
+    // Bag-holding ranges — the slots the bags themselves sit in. A bag's
+    // CONTENTS are addressed through its own CGContainer from 0, so these
+    // only locate the bag object. `FUN_005D7380` reaches them by GUID
+    // instead, but `FUN_006DF890`'s "is this a player-direct slot" test
+    // (`slot < 0x17 || slot - 0x43 < 7`) pins both ranges exactly:
+    //   equipped bags (bagID 1..4)  → 0x13..0x16
+    //   bank bags     (bagID 5..11) → 0x43..0x49
     INVMGR_BACKPACK_FIRST_SLOT = 0x17,
     INVMGR_BACKPACK_LAST_SLOT = 0x26,
     INVMGR_BANK_MAIN_FIRST_SLOT = 0x27,
     INVMGR_BANK_MAIN_LAST_SLOT = 0x42,
     INVMGR_KEYRING_FIRST_SLOT = 0x56,
     INVMGR_KEYRING_LAST_SLOT = 0x75,
+    INVMGR_BAG_FIRST_SLOT = 0x13,
+    INVMGR_BAG_LAST_SLOT = 0x16,
+    INVMGR_BANK_BAG_FIRST_SLOT = 0x43,
+    INVMGR_BANK_BAG_LAST_SLOT = 0x49,
 
-    // 1-based paperdoll slot holding the first equipped bag (bagID 1);
-    // bagID N is at `INVSLOT_BAG1 + N - 1`, so bags 1..4 are slots 20..23.
-    INVSLOT_BAG1 = 20,
+    // bagID range naming the bank's bag slots, the way `GetContainerItemInfo`
+    // numbers them: 1..4 are the equipped bags, 5..11 the bank's seven.
+    FIRST_BANK_BAG_ID = 5,
+    LAST_BANK_BAG_ID = 11,
 
     // CGContainer (bag) layout. First dword is the slot count —
     // verified at `Script_GetContainerNumSlots` (FUN_005D74A0): after

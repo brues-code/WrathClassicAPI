@@ -20,18 +20,19 @@ namespace Item::Swap {
 // with the cursor never read or written.
 //
 // bagID follows the `GetContainerItemInfo` convention:
-//   0    = backpack
-//   1..4 = equipped bags (paperdoll slots 20..23)
-// `slot` is 1-based. The bank (bagID -1 / 5..11) and the keyring (bagID -2)
-// are not addressable here, matching what `Item::Location` resolves today —
-// their linear-slot ranges are recorded in `Offsets::INVMGR_*` for whenever
-// that changes.
+//   -2   = keyring
+//   -1   = bank, main window
+//    0   = backpack
+//    1..4 = equipped bags
+//    5..11 = bank bags
+// `slot` is 1-based. Bank-side slots resolve only while the bank window is
+// open, since the client holds no synced copy of them before then.
 //
 // The destination may be empty (the engine treats that as a move) or occupied
 // (atomic swap). The source must be occupied. Returns false without sending
-// anything for: an out-of-range bagID, a slot outside its bag's real slot
-// count, an unequipped bag, an empty source, or src and dst naming the same
-// slot. Everything else is server-side — the send is fire-and-forget and
+// anything for: an out-of-range bagID, a slot outside its container's real
+// slot count, a bag slot with no bag in it, an empty source, or src and dst
+// naming the same slot. Everything else is server-side — the send is fire-and-forget and
 // failures come back through the normal SMSG_INVENTORY_CHANGE_FAILURE /
 // BAG_UPDATE flow.
 //

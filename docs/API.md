@@ -408,9 +408,19 @@ two items trade places).
 C_Container.SwapItems(1, 3, 0, 1)
 ```
 
-`bagID` is `0` for the backpack and `1`–`4` for your equipped bags, matching
-`GetContainerItemInfo`; `slot` is 1-based. The bank and the keyring are not
-addressable yet.
+`bagID` matches `GetContainerItemInfo`, and `slot` is 1-based:
+
+| `bagID` | Container |
+|---------|-----------|
+| `-2` | Keyring |
+| `-1` | Bank, main window |
+| `0` | Backpack |
+| `1`–`4` | Equipped bags |
+| `5`–`11` | Bank bags |
+
+Bank-side slots work only while the bank window is open — the client has no
+copy of what's in the bank before you open it, so calls naming a bank slot
+return `false` until then.
 
 Returns `true` once the request is sent, `false` if it couldn't be built —
 an out-of-range bag or slot, a bag you don't have equipped, an empty source
@@ -455,9 +465,10 @@ nothing partial happens. Passing the entire source stack as `count` moves the
 whole thing.
 
 Bags and slots follow the same convention as
-[`SwapItems`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot). Returns
-`true` once the request is sent, `false` if it couldn't be built — everything
-`SwapItems` rejects, plus a `count` below 1 or larger than the source stack.
+[`SwapItems`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot), including
+the bank and keyring. Returns `true` once the request is sent, `false` if it
+couldn't be built — everything `SwapItems` rejects, plus a `count` below 1 or
+larger than the source stack.
 
 Batching has one extra caveat over `SwapItems`: `count` is checked against the
 source stack as the client currently knows it. Several calls in one frame get

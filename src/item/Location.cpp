@@ -77,23 +77,33 @@ const uint8_t *ResolveEquipmentSlot(int slot1Based) {
 
 namespace {
 
-constexpr int kBackpackSize = 16;
-constexpr int kBackpackLinearBase = 0x17;
-constexpr int kInvSlotBag1Linear0Based = 19; // (= INVSLOT_BAG1 - 1)
+// One of the player's own linear-slot ranges — the containers that live
+// directly in the inventory manager rather than in a CGContainer of their
+// own. `first == 0` means `bagID` names no such range.
+struct PlayerRange {
+    int first = 0;
+    int last = 0;
 
-// Returns the CGContainer for `bagID 1..4`, or nullptr if the
-// bag slot is empty or the item isn't actually a container.
-// Backpack (`bagID 0`) is NOT a CGContainer — the engine treats
-// it as a special range of the player's invMgr, so callers handle
-// it separately.
+    int size() const { return last - first + 1; }
+    bool valid() const { return first != 0; }
+};
+
+PlayerRange PlayerRangeFor(int bagID) {
+    if (bagID == 0)
+        return {Offsets::INVMGR_BACKPACK_FIRST_SLOT, Offsets::INVMGR_BACKPACK_LAST_SLOT};
+    if (bagID == -1)
+        return {Offsets::INVMGR_BANK_MAIN_FIRST_SLOT, Offsets::INVMGR_BANK_MAIN_LAST_SLOT};
+    if (bagID == -2)
+        return {Offsets::INVMGR_KEYRING_FIRST_SLOT, Offsets::INVMGR_KEYRING_LAST_SLOT};
+    return {};
+}
+
+// Returns the CGContainer for a bag bagID (`1..11`), or nullptr if the bag
+// slot is empty or the item isn't actually a container. The player's own
+// ranges (backpack, bank, keyring) are NOT CGContainers — they're ranges of
+// the invMgr, handled separately.
 void *ResolveEquippedBagContainer(int bagID) {
-    if (bagID < 1 || bagID > 4)
-        return nullptr;
-    void *invMgr = ResolvePlayerInvMgr();
-    if (invMgr == nullptr)
-        return nullptr;
-    const uint8_t *bagItem =
-        CallGetItemBySlot(invMgr, kInvSlotBag1Linear0Based + bagID - 1);
+    const uint8_t *bagItem = ResolveEquippedBag(bagID);
     if (bagItem == nullptr)
         return nullptr;
 
@@ -107,19 +117,39 @@ void *ResolveEquippedBagContainer(int bagID) {
 
 } // namespace
 
+const uint8_t *ResolveEquippedBag(int bagID) {
+    int linearSlot = 0;
+    if (bagID >= 1 && bagID <= 4) {
+        linearSlot = Offsets::INVMGR_BAG_FIRST_SLOT + bagID - 1;
+    } else if (bagID >= Offsets::FIRST_BANK_BAG_ID &&
+               bagID <= Offsets::LAST_BANK_BAG_ID) {
+        linearSlot = Offsets::INVMGR_BANK_BAG_FIRST_SLOT + bagID -
+                     Offsets::FIRST_BANK_BAG_ID;
+    } else {
+        return nullptr;
+    }
+
+    void *invMgr = ResolvePlayerInvMgr();
+    if (invMgr == nullptr)
+        return nullptr;
+    return CallGetItemBySlot(invMgr, linearSlot);
+}
+
 const uint8_t *ResolveBagSlot(int bagID, int slotIndex) {
     if (slotIndex < 1)
         return nullptr;
 
-    if (bagID == 0) {
-        // Backpack. PackBagSlot's `case 0: *outSlot += 0x17`. invMgr
-        // is the player's own; linear slot = (slotIndex - 1) + 0x17.
-        if (slotIndex > kBackpackSize)
-            return nullptr;
+    // Backpack / bank / keyring: a range of the player's own invMgr, indexed
+    // by the linear slot the range's base puts this 1-based slot at.
+    const PlayerRange range = PlayerRangeFor(bagID);
+    if (range.valid()) {
+        const int linearSlot = range.first + slotIndex - 1;
+        if (linearSlot > range.last)
+            return nullptr; // would alias into the next range
         void *invMgr = ResolvePlayerInvMgr();
         if (invMgr == nullptr)
             return nullptr;
-        return CallGetItemBySlot(invMgr, (slotIndex - 1) + kBackpackLinearBase);
+        return CallGetItemBySlot(invMgr, linearSlot);
     }
 
     void *container = ResolveEquippedBagContainer(bagID);
@@ -133,8 +163,10 @@ const uint8_t *ResolveBagSlot(int bagID, int slotIndex) {
 }
 
 int GetBagNumSlots(int bagID) {
-    if (bagID == 0)
-        return kBackpackSize;
+    const PlayerRange range = PlayerRangeFor(bagID);
+    if (range.valid())
+        return range.size();
+
     void *container = ResolveEquippedBagContainer(bagID);
     if (container == nullptr)
         return 0;

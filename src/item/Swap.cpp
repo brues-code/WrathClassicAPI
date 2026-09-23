@@ -70,26 +70,46 @@ struct Endpoint {
     uint32_t linearSlot = 0;
 };
 
+// The player's own linear-slot range for a bagID, or `{0, 0}` when the bagID
+// names a bag instead. Backpack, bank and keyring all live directly in the
+// inventory manager and differ only in where their range starts.
+struct PlayerRange {
+    int first = 0;
+    int last = 0;
+    bool valid() const { return first != 0; }
+};
+
+PlayerRange PlayerRangeFor(int bagID) {
+    if (bagID == 0)
+        return {Offsets::INVMGR_BACKPACK_FIRST_SLOT, Offsets::INVMGR_BACKPACK_LAST_SLOT};
+    if (bagID == -1)
+        return {Offsets::INVMGR_BANK_MAIN_FIRST_SLOT, Offsets::INVMGR_BANK_MAIN_LAST_SLOT};
+    if (bagID == -2)
+        return {Offsets::INVMGR_KEYRING_FIRST_SLOT, Offsets::INVMGR_KEYRING_LAST_SLOT};
+    return {};
+}
+
 // (bagID, 1-based slot) → `Endpoint`, mirroring the engine's own map in
-// `FUN_005D7380`: the backpack is a linear range of the player's inventory
-// manager, an equipped bag is its own container addressed from 0.
+// `FUN_005D7380`: backpack, bank and keyring are linear ranges of the player's
+// inventory manager, while a bag — equipped or in the bank — is its own
+// container addressed from 0.
 //
-// Both branches bound the slot the way the engine does — against the live slot
-// count of the owning container, not a hardcoded size — because
+// Both branches bound the slot the way the engine does, against the live slot
+// count of the owning container rather than a hardcoded size, because
 // FUN_INVENTORY_SWAP traps on an out-of-range linear slot rather than
 // rejecting it.
 bool Encode(int bagID, int slotInBag, Endpoint *out) {
     if (slotInBag < 1)
         return false;
 
-    if (bagID == 0) {
+    const PlayerRange range = PlayerRangeFor(bagID);
+    if (range.valid()) {
         auto *player = static_cast<const uint8_t *>(Unit::ResolveToken("player"));
         if (player == nullptr)
             return false;
-        const uint32_t linear =
-            static_cast<uint32_t>(Offsets::INVMGR_BACKPACK_FIRST_SLOT - 1 + slotInBag);
-        if (linear > static_cast<uint32_t>(Offsets::INVMGR_BACKPACK_LAST_SLOT))
-            return false; // would alias into the next range (bank main)
+        const uint32_t linear = static_cast<uint32_t>(range.first - 1 + slotInBag);
+        if (linear > static_cast<uint32_t>(range.last))
+            return false; // would alias into the next range
         const uint32_t slotCount = *reinterpret_cast<const uint32_t *>(
             player + Offsets::OFF_PLAYER_INVENTORY_MANAGER + Offsets::OFF_INVMGR_SLOT_COUNT);
         if (linear >= slotCount)
@@ -99,22 +119,18 @@ bool Encode(int bagID, int slotInBag, Endpoint *out) {
         return out->container.valid();
     }
 
-    if (bagID >= 1 && bagID <= 4) {
-        const int numSlots = Item::Location::GetBagNumSlots(bagID);
-        if (numSlots <= 0 || slotInBag > numSlots)
-            return false;
-        // The bag's GUID is the container's GUID — a bag is one object, and
-        // CGItem::GetContainer just re-types it.
-        const uint8_t *bagItem =
-            Item::Location::ResolveEquipmentSlot(Offsets::INVSLOT_BAG1 + bagID - 1);
-        if (bagItem == nullptr)
-            return false;
-        out->container = ReadGuid(bagItem);
-        out->linearSlot = static_cast<uint32_t>(slotInBag - 1);
-        return out->container.valid();
-    }
-
-    return false; // bank / keyring not addressable yet
+    // Equipped bags (1..4) and bank bags (5..11). The bag's GUID is the
+    // container's GUID — a bag is one object, and CGItem::GetContainer just
+    // re-types it.
+    const uint8_t *bagItem = Item::Location::ResolveEquippedBag(bagID);
+    if (bagItem == nullptr)
+        return false;
+    const int numSlots = Item::Location::GetBagNumSlots(bagID);
+    if (numSlots <= 0 || slotInBag > numSlots)
+        return false;
+    out->container = ReadGuid(bagItem);
+    out->linearSlot = static_cast<uint32_t>(slotInBag - 1);
+    return out->container.valid();
 }
 
 // Live stack count of an item — what `GetContainerItemInfo` reports as its

@@ -49,23 +49,41 @@ bool IsLocationArg(void *L, int idx);
 // interaction — safe outside a callback.
 const uint8_t *ResolveEquipmentSlot(int slot1Based);
 
+// Resolves the bag ITEM occupying a bag slot — the container object itself,
+// not anything inside it. `bagID 1..4` are the equipped bags, `5..11` the
+// bank's. Returns nullptr for a non-bag bagID or an empty bag slot.
+//
+// Deliberately not `ResolveEquipmentSlot`: bags live past
+// `EQUIPMENT_SLOT_LAST` in the same linear index space, and widening that
+// helper's bounds would silently let every one of its callers address bag
+// slots, which is not what "equipment slot" means there.
+//
+// Bank bags only resolve while the bank window is open — the client holds no
+// synced copy of them before then.
+const uint8_t *ResolveEquippedBag(int bagID);
+
 // Resolves a `(bagID, slotIndex)` pair to a `CGItem *`. Pure
 // resolution — does NOT touch the Lua stack and does NOT depend on
 // any Lua-callback context. Safe to call from anywhere once the
 // in-game world is loaded.
 //
-// bagID 0       → backpack (slotIndex 1..16)
-// bagID 1..4    → equipped bag (slotIndex 1..bagItem->numSlots)
-// bagID outside that range → nullptr (keyring, bank, etc. deferred).
+// bagID  0     → backpack (slotIndex 1..16)
+// bagID -1     → bank, main window (1..28)
+// bagID -2     → keyring (1..32)
+// bagID  1..4  → equipped bag (1..bagItem->numSlots)
+// bagID  5..11 → bank bag (1..bagItem->numSlots)
+// anything else → nullptr
+//
+// Bank-side slots resolve only while the bank window is open.
 const uint8_t *ResolveBagSlot(int bagID, int slotIndex);
 
-// Returns the number of slots in the bag at `bagID`. Backpack
-// (`bagID == 0`) is the fixed `kBackpackSize = 16`; equipped bags
-// (`bagID 1..4`) read `numSlots` off the bag's `CGContainer` (via
-// `CGItem::GetContainer`, vtable slot 10). Returns 0 if the bag
-// slot is empty, the item isn't a container, or `bagID` is out of
-// range. Same data the engine's `GetContainerNumSlots` Lua C
-// function returns, exposed here for inventory walks.
+// Returns the number of slots the container at `bagID` holds. The player's
+// own ranges (backpack, bank, keyring) are the fixed width of their
+// linear-slot range; a bag (`1..11`) reads `numSlots` off its `CGContainer`
+// (via `CGItem::GetContainer`, vtable slot 10). Returns 0 if the bag slot is
+// empty, the item isn't a container, or `bagID` is out of range. Same data
+// the engine's `GetContainerNumSlots` Lua C function returns, exposed here
+// for inventory walks.
 int GetBagNumSlots(int bagID);
 
 // Returns the local player's `CInventoryMgr *` (the player CGUnit +
