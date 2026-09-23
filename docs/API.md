@@ -129,6 +129,13 @@ Conventions:
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
+- [Textures](#textures)
+  - [`Frame:CreateMaskTexture([name[, layer[, inherits]]])`](#framecreatemasktexturename-layer-inherits)
+  - [`Texture:AddMaskTexture(mask)`](#textureaddmasktexturemask)
+  - [`Texture:RemoveMaskTexture([mask])`](#textureremovemasktexturemask)
+  - [`Texture:GetNumMaskTextures()`](#texturegetnummasktextures)
+  - [`Texture:GetMaskTexture(index)`](#texturegetmasktextureindex)
+  - [`Texture:SetMask(path)`](#texturesetmaskpath)
 - [Time](#time)
   - [`GetServerTime()`](#getservertime)
   - [`C_DateAndTime.GetCurrentCalendarTime()`](#c_dateandtimegetcurrentcalendartime)
@@ -1800,6 +1807,72 @@ and identical across dual-spec groups.
 Useful as a stable identifier for talent builds in `SavedVariables`
 or for build-sharing protocols — survives talent-tree reshuffles
 across patches, unlike `(class, tab, tier, column)` encoding.
+
+---
+
+## Textures
+
+Masks clip a texture to the shape of another image's alpha channel:
+where the mask is opaque the texture shows, and where it is transparent
+the texture is hidden. Outside the mask's rectangle the texture is
+hidden. These are real methods (`:call`) on every Frame and Texture.
+
+A texture takes up to 7 masks at once, and every mask is applied
+together. Masks follow the mask's position and size every frame, so
+moving, resizing or animating a mask moves the clip with it. Masks do
+not follow `SetRotation`. A masked texture ignores `SetDesaturated`
+while it has masks.
+
+### `Frame:CreateMaskTexture([name[, layer[, inherits]]])`
+
+Creates a mask and returns it. Takes the same arguments as
+`Frame:CreateTexture`. The mask is a hidden Texture: give it an image
+with `:SetTexture(path)`, and position it with `:SetPoint` /
+`:SetAllPoints` / `:SetSize`. It is never drawn itself.
+
+```lua
+local icon = frame:CreateTexture(nil, "ARTWORK")
+icon:SetAllPoints()
+icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+
+local mask = frame:CreateMaskTexture()
+mask:SetAllPoints(icon)
+mask:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+icon:AddMaskTexture(mask)   -- round icon
+```
+
+### `Texture:AddMaskTexture(mask)`
+
+Clips the texture to `mask`. Call it again with other masks to add
+more. Adding a mask the texture already has does nothing. `mask` can
+be any Texture; one from `CreateMaskTexture` is hidden so only its
+shape is used. One mask can clip many textures, including textures on
+other frames.
+
+### `Texture:RemoveMaskTexture([mask])`
+
+Removes `mask` from the texture. With no argument, removes all masks
+added with `AddMaskTexture`.
+
+### `Texture:GetNumMaskTextures()`
+
+Returns the number of masks added with `AddMaskTexture`.
+
+### `Texture:GetMaskTexture(index)`
+
+Returns the `index`-th mask (in the order they were added), or `nil`.
+
+### `Texture:SetMask(path)`
+
+Clips the texture to the image at `path`, stretched over the
+texture's own rectangle. `SetMask(nil)` or `SetMask("")` removes it.
+An image that can't be loaded leaves the current mask unchanged. This
+mask counts toward the 7-mask limit and applies together with any
+`AddMaskTexture` masks.
+
+```lua
+icon:SetMask("Interface\\Minimap\\UI-Minimap-Background")
+```
 
 ---
 

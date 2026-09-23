@@ -2171,4 +2171,141 @@ enum Offsets {
     VAR_AREATABLE_DBC_INDEX_TABLE = 0x00AD3154, // ptr to array of record ptrs
     OFF_AREATABLE_PARENT_AREA_ID = 0x08,
     OFF_AREATABLE_NAME = 0x2C,
+
+    // --- Texture masking (src/texture/Mask.cpp) -----------------------------
+    //
+    // UI textures render through CRenderBatch, not per region. CSimpleTexture's
+    // draw (FUN_004847A0) only QUEUES a 0x3C-byte entry into its frame's
+    // per-draw-layer batch (FUN_004846F0); the batch renderer below then packs
+    // every entry into shared vertex/index buffers and issues one draw per run
+    // of matching texture / blend / pixel shader.
+    //
+    // Batch renderer — `void __cdecl(CRenderBatch *batch)`. Runs every frame
+    // for each of a frame's 5 draw-layer batches (FUN_00491E00) and for the
+    // FUN_00494F30 list; the batch itself is only rebuilt when a layer is
+    // dirty. Of the 0x30-byte batch it reads only:
+    //   +0x0C entry count, +0x10 entry array,
+    //   +0x18 font-string list and +0x24 callback list — both consumed in the
+    //   tail after the textures draw (a zero / odd-tagged list is empty).
+    // A zero count skips straight to that tail.
+    FUN_RENDER_BATCH_DRAW = 0x00484B00,
+    OFF_RENDER_BATCH_COUNT = 0x0C,
+    OFF_RENDER_BATCH_ENTRIES = 0x10,
+    OFF_RENDER_BATCH_FONTSTRINGS = 0x18,
+    OFF_RENDER_BATCH_CALLBACKS = 0x24,
+    RENDER_BATCH_SIZE = 0x30,
+    // Batch entry (FUN_004846F0 writes it): [0] HTEXTURE, [1] renderable,
+    // [2] blend, [3] pixel shader (the region's +0xDC), [4] vertex count,
+    // [5] positions = the owning region's corner array (region+0xE0),
+    // [6] texcoords, [7] colors, [8] color stride, [9] indices,
+    // [10] index count, [11..14] atlas remap.
+    RENDER_BATCH_ENTRY_SIZE = 0x3C,
+    OFF_RENDER_ENTRY_PIXEL_SHADER = 0x0C,
+    OFF_RENDER_ENTRY_POSITIONS = 0x14,
+    // The renderer binds this UI vertex shader ("Shaders\Vertex\UI", one of
+    // two variants picked by device capability) and pushes its transform as
+    // shader constants. With both slots null it takes its own fixed-function
+    // path instead (lighting/fog states off, device transforms) — the only
+    // path on which fixed-function texgen applies.
+    VAR_UI_VERTEX_SHADER_A = 0x00B47940,
+    VAR_UI_VERTEX_SHADER_B = 0x00B47944,
+
+    // CSimpleTexture. The vtable identifies a region as a Texture (the
+    // constructor FUN_00484470 stores it; nothing derives from it).
+    // Destructor `__thiscall(this, uint8_t flags)` — bit 0 frees the memory
+    // back to the region pool; releases the +0xD4 HTEXTURE first.
+    VTBL_SIMPLETEXTURE = 0x009EA1D8,
+    FUN_SIMPLETEXTURE_DTOR = 0x00483010,
+    OFF_SIMPLETEXTURE_HTEXTURE = 0xD4,
+    // Corner array: 4 × (x, y, z), written verbatim from the layout rect by
+    // FUN_00483220 — (left,top) (left,bottom) (right,top) (right,bottom).
+    OFF_SIMPLETEXTURE_CORNERS = 0xE0,
+    // Region +0xCC bit 0x10 = "shown" flag; Script Hide (FUN_0048C570) clears
+    // it and calls FUN_REGION_HIDE_UPDATE `__fastcall(region)`.
+    OFF_REGION_SHOWN_FLAGS = 0xCC,
+    REGION_SHOWN_BIT = 0x10,
+    FUN_REGION_HIDE_UPDATE = 0x00487BF0,
+    // Script object registry ref (`lua_rawgeti(L, REGISTRY, obj[+0x08])`
+    // pushes the Lua object — CreateTexture's own return path); +0x04 is
+    // non-zero once the Lua object exists.
+    OFF_SCRIPTOBJECT_LUA_REGISTERED = 0x04,
+    OFF_SCRIPTOBJECT_LUA_REF = 0x08,
+
+    // Region layout frame at region+0x20. Mirrors Script GetRect/GetLeft
+    // (FUN_0049CE50 / FUN_0049D0B0): if dirty (`__fastcall(layout)`), resolve
+    // now with flag 1 (`__thiscall(layout, 1)` — the read-time path, so a
+    // hidden region resolves too), then read the rect (`__thiscall(layout,
+    // float out[4])`, 0 when unresolved) = {bottom, left, top, right}, y-up,
+    // in the same absolute layout units as the corner array.
+    OFF_REGION_LAYOUT = 0x20,
+    FUN_LAYOUT_IS_DIRTY = 0x00488CF0,
+    FUN_LAYOUT_RESOLVE = 0x00489DE0,
+    FUN_LAYOUT_GET_RECT = 0x00489230,
+
+    // Method-table walkers — `void __cdecl(lua_State *L)`, same shape as
+    // FUN_TOOLTIP_METHODS_WALKER: parent walker, then FUN_REGISTER_FRAME_METHODS
+    // on the type's static table. Texture: region methods + 0x00AC1028 (29).
+    // Frame: region methods + 0x00AC1550 (85); every frame subtype's walker
+    // calls this one first, so an entry added here reaches all of them.
+    FUN_TEXTURE_METHODS_WALKER = 0x0048BC20,
+    FUN_FRAME_METHODS_WALKER = 0x0049E540,
+    // Frame:CreateTexture([name, layer, inherits]) — `int __cdecl(L)`; pushes
+    // the new region object.
+    FUN_SCRIPT_CREATE_TEXTURE = 0x004A2010,
+
+    // Texture load by path, as Minimap:SetMaskTexture (FUN_00583860) does it:
+    //   FUN_TEXTURE_FLAGS_INIT `__thiscall(uint *flags, 1,0,0,0,0,0,1,0,0,0)`
+    //     (clamped, no mips) → flags
+    //   FUN_TEXTURE_LOAD_BY_PATH `__cdecl(path, flags, desc, 3)` → HTEXTURE
+    //   desc = {vtbl PTR_TEXLOAD_DESC_VTBL, 8, &self, &self|1, errorLevel}; a
+    //   load failure reports errorLevel > 1 (the handle still comes back — the
+    //   engine substitutes a placeholder). Destroy desc with
+    //   FUN_TEXLOAD_DESC_DTOR `__fastcall(desc)`.
+    //   FUN_TEXTURE_RELEASE `__cdecl(HTEXTURE)` drops the reference.
+    FUN_TEXTURE_FLAGS_INIT = 0x00681BE0,
+    FUN_TEXTURE_LOAD_BY_PATH = 0x004B9760,
+    PTR_TEXLOAD_DESC_VTBL = 0x009E2F6C,
+    FUN_TEXLOAD_DESC_DTOR = 0x0047C500,
+    FUN_TEXTURE_RELEASE = 0x0047BF30,
+    // HTEXTURE → renderable `__cdecl(h, int force, int *)`; force=1 is the
+    // per-frame residency reference the batch renderer itself takes.
+    FUN_TEXTURE_GET_RENDERABLE = 0x004B6CB0,
+
+    // --- Gx device ---------------------------------------------------------
+    // Render-state array at device+0x28F4 (0x18 bytes/state). Setters journal
+    // the old value for FUN_GX_STATE_POP: pointer form `__thiscall(dev, state,
+    // void *)` (textures, shaders), int form `__cdecl(state, int)`.
+    // Journal push/pop `__fastcall(dev)` bracket a draw's state changes.
+    VAR_GX_DEVICE = 0x00C5DF88,
+    FUN_GX_RS_SET_PTR = 0x00685F50,
+    FUN_GX_RS_SET = 0x00408BF0,
+    FUN_GX_STATE_PUSH = 0x00409670,
+    FUN_GX_STATE_POP = 0x00685FB0,
+    // Per-texture-unit states, +unit 0..7 (D3D translation in FUN_006A4C30):
+    //   texture      0x15  (pointer form)
+    //   color combine 0x25, alpha combine 0x2D — preset index into
+    //     DAT_00A2F9CC: 0 = MODULATE(texture, current), 3 = SELECTARG2(current)
+    //   texgen       0x35  — 1 = object-space position (texgen matrix =
+    //     inverse view × inverse world, built by FUN_006A4AF0)
+    //   xform mode   0x3D  — 1 = texgen matrix × the unit's texture matrix
+    // Same combination the spell-decal draw (FUN_007E3E80) uses on units 0/1.
+    GXRS_TEXTURE0 = 0x15,
+    GXRS_COLOR_COMBINE0 = 0x25,
+    GXRS_ALPHA_COMBINE0 = 0x2D,
+    GXRS_TEXGEN0 = 0x35,
+    GXRS_TEXXFORM0 = 0x3D,
+    GXRS_VERTEX_SHADER = 0x4D,
+    GX_COMBINE_MODULATE = 0,
+    GX_COMBINE_SELECT_CURRENT = 3,
+    GX_TEXGEN_OBJECT_POS = 1,
+    GX_TEXXFORM_TEXGEN_TIMES_MATRIX = 1,
+    // Texture-matrix stack per unit at device+0x1008+unit*0x118: depth at +0,
+    // dirty byte at +4. Push+load `__thiscall(dev, unit, const float m[16])`
+    // (FUN_00616A30); the engine pops inline (FUN_007E4370): `if (depth)
+    // --depth; dirty = 1`.
+    FUN_GX_TEXMTX_PUSH_LOAD = 0x00616A30,
+    OFF_GXDEV_TEXMTX_STACK0 = 0x1008,
+    GXDEV_TEXMTX_STACK_STRIDE = 0x118,
+    // Texture stages the device exposes (the D3D stage-state setters guard on it).
+    OFF_GXDEV_STAGE_COUNT = 0x214,
 };
