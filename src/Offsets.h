@@ -632,6 +632,91 @@ enum Offsets {
     // arg before calling.
     FUN_ITEMMGR_GET_ITEM_BY_SLOT = 0x00754390,
 
+    // Atomic server-side item swap — the packet builder behind every
+    // drag-and-drop between two inventory slots. Signature:
+    //   `void __thiscall(CGPlayer *player,
+    //                    u32 srcItemLo,      u32 srcItemHi,
+    //                    u32 srcContainerLo, u32 srcContainerHi, u32 srcLinearSlot,
+    //                    u32 dstContainerLo, u32 dstContainerHi, u32 dstLinearSlot,
+    //                    int flag)`
+    // Found via `Script_PickupContainerItem` (FUN_005D7FF0), which calls
+    // it with the cursor item's (guid, container, slot) as the source and
+    // the clicked bag slot as the destination. Picks its own opcode from
+    // the two container GUIDs: both sides on the player →
+    // CMSG_SWAP_INV_ITEM (0x10D, payload `dstSlot, srcSlot`), otherwise
+    // CMSG_SWAP_ITEM (0x10C, payload `dstBagIndex, dstSlot, srcBagIndex,
+    // srcSlot`) with the bag-index bytes resolved from those GUIDs.
+    //
+    // The two item-GUID args are passed by the engine's own callers but
+    // never read in the body; we pass the real source item GUID anyway to
+    // stay faithful to the observed call shape.
+    //
+    // CAUTION: the function's first act is `if (srcLinearSlot > 0xFF ||
+    // dstLinearSlot > 0xFF) int3` — an out-of-range linear slot is a hard
+    // crash, not a rejection. Callers must bound both slots first (which
+    // `Item::Swap` does, against the owning container's slot count).
+    FUN_INVENTORY_SWAP = 0x006DF890,
+
+    // Atomic server-side "split `count` off this stack and place it there" —
+    // the sibling of FUN_INVENTORY_SWAP, same arg shape with the flag slot
+    // replaced by the count:
+    //   `void __thiscall(CGPlayer *player,
+    //                    u32 srcItemLo,      u32 srcItemHi,
+    //                    u32 srcContainerLo, u32 srcContainerHi, u32 srcLinearSlot,
+    //                    u32 dstContainerLo, u32 dstContainerHi, u32 dstLinearSlot,
+    //                    int count)`
+    // Found at the same `Script_PickupContainerItem` call site, taken instead
+    // of the swap when the cursor carries a split amount. Builds
+    // CMSG_SPLIT_ITEM (0x10E): `srcBagIndex, srcSlot, dstBagIndex, dstSlot`
+    // as bytes, then the count — as a full DWORD, unlike 1.12's single byte,
+    // so WotLK stack sizes above 255 (ammo, to 1000) split correctly.
+    //
+    // CAUTION: traps (int3) on `srcLinearSlot > 0xFF`, `dstLinearSlot > 0xFF`
+    // OR `count <= 0` — a zero count is a crash here, not a no-op. Bound all
+    // three before calling.
+    FUN_INVENTORY_SPLIT = 0x006DB9D0,
+
+    // CGItem field block — the item's synced values, reached through the
+    // pointer at `item + OFF_ITEM_FIELD_BLOCK`. Distinct from a CGUnit's
+    // `OFF_UNIT_DESCRIPTOR` accessor at +0xD0: an item carries both, and this
+    // is the one holding raw field values.
+    //
+    // Verified twice in `Script_GetContainerItemInfo` (FUN_005D7A90), whose
+    // second return — the stack count — is
+    // `*(int *)(*(int *)(item + 0xD4) + 0x20)`; and in the cursor-split math
+    // inside `Script_PickupContainerItem`, which computes a destination
+    // stack's free room as `maxStack - *(int *)(*(int *)(item + 0xD4) + 0x20)`.
+    OFF_ITEM_FIELD_BLOCK = 0xD4,
+    OFF_ITEM_FIELD_STACK_COUNT = 0x20,
+
+    // CInventoryMgr layout: first dword is the live count of linear slots
+    // the manager addresses (paperdoll + backpack + bank + keyring). The
+    // engine's own bagID→slot encoder (`FUN_005D7380`) bounds every
+    // player-side linear slot against it before using it.
+    OFF_INVMGR_SLOT_COUNT = 0x00,
+
+    // Player-container linear-slot map, read out of that same encoder
+    // (`FUN_005D7380`, the engine's `PackBagSlot`). A 1-based slot S in a
+    // range maps to `firstSlot - 1 + S`:
+    //   backpack  (bagID  0) → 0x17..0x26 (16 slots)
+    //   bank main (bagID -1) → 0x27..0x42 (28 slots)
+    //   keyring   (bagID -2) → 0x56..0x75 (32 slots)
+    // Equipped bags (bagID 1..4) and bank bags (bagID 5..11) are NOT in
+    // this map — they address their own CGContainer with a 0-based slot.
+    // Only the backpack range is consumed today; the other two are
+    // recorded here because the encoder they came from defines all three
+    // together and splitting them up loses that context.
+    INVMGR_BACKPACK_FIRST_SLOT = 0x17,
+    INVMGR_BACKPACK_LAST_SLOT = 0x26,
+    INVMGR_BANK_MAIN_FIRST_SLOT = 0x27,
+    INVMGR_BANK_MAIN_LAST_SLOT = 0x42,
+    INVMGR_KEYRING_FIRST_SLOT = 0x56,
+    INVMGR_KEYRING_LAST_SLOT = 0x75,
+
+    // 1-based paperdoll slot holding the first equipped bag (bagID 1);
+    // bagID N is at `INVSLOT_BAG1 + N - 1`, so bags 1..4 are slots 20..23.
+    INVSLOT_BAG1 = 20,
+
     // CGContainer (bag) layout. First dword is the slot count —
     // verified at `Script_GetContainerNumSlots` (FUN_005D74A0): after
     // `(**(code **)(*piVar4 + 0x28))()` (= CGItem::GetContainer via

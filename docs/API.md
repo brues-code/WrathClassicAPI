@@ -36,6 +36,9 @@ Conventions:
 - [Console](#console)
   - [`ExportInterfaceFiles art|code`](#exportinterfacefiles-artcode)
   - [`ExportDBCFiles`](#exportdbcfiles)
+- [Container](#container)
+  - [`C_Container.SwapItems(srcBag, srcSlot, dstBag, dstSlot)`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot)
+  - [`C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`](#c_containermoveitemsrcbag-srcslot-dstbag-dstslot-count)
 - [Encoding](#encoding)
   - [`C_EncodingUtil.EncodeHex` / `DecodeHex`](#c_encodingutilencodehex--decodehex)
   - [`C_EncodingUtil.EncodeBase64` / `DecodeBase64`](#c_encodingutilencodebase64--decodebase64)
@@ -389,6 +392,77 @@ Extracts every client DBC table to `DBFilesClient\`. Unions the archive
 `(listfile)` under `DBFilesClient\` with a scan of the client's DBC
 path-getters, deduped case-insensitively — so it captures the authoritative
 set of DBCs the build loads, including ones the listfile doesn't index.
+
+---
+
+## Container
+
+### `C_Container.SwapItems(srcBag, srcSlot, dstBag, dstSlot)`
+
+Swaps the contents of two bag slots in a single call, without involving the
+cursor. The destination may be empty (the item moves there) or occupied (the
+two items trade places).
+
+```lua
+-- Move the item in bag 1 slot 3 to the first backpack slot.
+C_Container.SwapItems(1, 3, 0, 1)
+```
+
+`bagID` is `0` for the backpack and `1`–`4` for your equipped bags, matching
+`GetContainerItemInfo`; `slot` is 1-based. The bank and the keyring are not
+addressable yet.
+
+Returns `true` once the request is sent, `false` if it couldn't be built —
+an out-of-range bag or slot, a bag you don't have equipped, an empty source
+slot, or the same slot given as both source and destination. A `true` return
+means the request went out, not that it succeeded: the result arrives as
+`BAG_UPDATE`, or as the usual error message if the server refuses.
+
+```lua
+-- Compact a bag by pulling items down into the free slots ahead of them.
+local function Compact(bag)
+    local free = {}
+    for slot = 1, GetContainerNumSlots(bag) do
+        if not GetContainerItemID(bag, slot) then
+            free[#free + 1] = slot
+        elseif #free > 0 then
+            C_Container.SwapItems(bag, slot, bag, table.remove(free, 1))
+            free[#free + 1] = slot
+        end
+    end
+end
+```
+
+Each call is one request, so a loop like that sends several at once and the
+server applies them in order. Nothing is read back between them — decide every
+slot from your own bookkeeping rather than re-reading the bag mid-loop, since
+those reads still show the pre-swap state.
+
+### `C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`
+
+Splits `count` items off the stack in the source slot and places them in the
+destination, in one call, without involving the cursor.
+
+```lua
+-- Move 5 of the stack in bag 2 slot 1 into backpack slot 4.
+C_Container.MoveItem(2, 1, 0, 4, 5)
+```
+
+The destination may be empty (the split lands there) or hold more of the same
+item (the split merges into it, up to its max stack). A destination holding a
+different item, or one without room for all `count`, is refused outright —
+nothing partial happens. Passing the entire source stack as `count` moves the
+whole thing.
+
+Bags and slots follow the same convention as
+[`SwapItems`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot). Returns
+`true` once the request is sent, `false` if it couldn't be built — everything
+`SwapItems` rejects, plus a `count` below 1 or larger than the source stack.
+
+Batching has one extra caveat over `SwapItems`: `count` is checked against the
+source stack as the client currently knows it. Several calls in one frame get
+no server replies in between, so those counts are still pre-batch values while
+your own model has moved on. Drive a batch from your own bookkeeping.
 
 ---
 
