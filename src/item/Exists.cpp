@@ -15,6 +15,7 @@
 #include "Offsets.h"
 #include "item/Arg.h"
 #include "item/Data.h"
+#include "item/Dbc.h"
 #include "item/Location.h"
 
 #include <cstdint>
@@ -49,11 +50,12 @@ int __cdecl Script_C_Item_DoesItemExist(void *L) {
     return 1;
 }
 
-// `C_Item.DoesItemExistByID(itemInfo)` — true iff the cache currently
-// has data for this itemID (i.e. `GetItemInfo` would return non-nil
-// right now). Same semantics as the modern function: cache miss →
-// false, but we kick off the network query so a subsequent call after
-// `GET_ITEM_INFO_RECEIVED` will succeed.
+// `C_Item.DoesItemExistByID(itemInfo)` — true iff the itemID names a real
+// item. Stock items answer instantly from the client Item.dbc, regardless of
+// whether their stats have been queried yet. Items the client doesn't ship
+// (server-custom) fall back to the item-stats cache: a miss returns false and
+// kicks off the network query, so a follow-up call after
+// `GET_ITEM_INFO_RECEIVED` succeeds.
 //
 // Accepts any of retail's item-arg forms via the shared resolver — item
 // ID, item GUID string, item link (or bare "item:NNN"), or an item name
@@ -63,6 +65,10 @@ int __cdecl Script_C_Item_DoesItemExistByID(void *L) {
     const int itemID = Item::Arg::ResolveItemID(L, 1);
     if (itemID <= 0) {
         Game::Lua::PushBool(L, false);
+        return 1;
+    }
+    if (Item::Dbc::GetRecord(static_cast<uint32_t>(itemID)) != nullptr) {
+        Game::Lua::PushBool(L, true);
         return 1;
     }
     if (PeekItemRecord(static_cast<uint32_t>(itemID)) == nullptr) {

@@ -34,6 +34,7 @@
 #include "Offsets.h"
 #include "item/Arg.h"
 #include "item/Data.h"
+#include "item/Dbc.h"
 #include "item/ID.h"
 #include "item/Location.h"
 
@@ -77,25 +78,13 @@ uint32_t StoreField(uintptr_t base, unsigned off) {
     return *reinterpret_cast<const uint32_t *>(base + off);
 }
 
-// Reads the instant fields straight from client Item.dbc (no server query) via
-// the inline WowClientDB GetRow: bounds-check the itemID against [minID, maxID],
-// then index the id->record table. Returns false when the item isn't in the
-// client's Item.dbc (e.g. a server-custom item) so the caller can fall back.
+// Reads the instant fields straight from client Item.dbc (no server query).
+// Returns false when the item isn't in the client's Item.dbc (e.g. a
+// server-custom item) so the caller can fall back.
 bool ReadItemDbcInstant(uint32_t itemID, InstantFields *out) {
-    const int id = static_cast<int>(itemID);
-    const int minID = static_cast<int>(StoreField(Offsets::VAR_ITEMDBC_STORE,
-                                                   Offsets::OFF_ITEMDBC_STORE_MIN_ID));
-    const int maxID = static_cast<int>(StoreField(Offsets::VAR_ITEMDBC_STORE,
-                                                   Offsets::OFF_ITEMDBC_STORE_MAX_ID));
-    if (id < minID || id > maxID)
-        return false;
-    auto *index = *reinterpret_cast<const uint8_t *const *const *>(
-        Offsets::VAR_ITEMDBC_STORE + Offsets::OFF_ITEMDBC_STORE_INDEX);
-    if (index == nullptr)
-        return false;
-    const uint8_t *record = index[id - minID];
+    const uint8_t *record = Item::Dbc::GetRecord(itemID);
     if (record == nullptr)
-        return false; // gap in the id range
+        return false;
     out->classID = StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_CLASS);
     out->subClassID = StoreField(reinterpret_cast<uintptr_t>(record), Offsets::OFF_ITEMDBC_SUBCLASS);
     out->invType =

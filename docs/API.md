@@ -1094,11 +1094,12 @@ after `GET_ITEM_INFO_RECEIVED` returns its data.
 populated inventory slot on the active player. Empty slots and
 invalid tables return `false` without raising.
 
-`DoesItemExistByID` returns `true` iff the cache currently has data
-for the item. `item` accepts any of retail's forms — item ID, item
-GUID string, item link, or item name (of a cached item). Cache-miss
-returns `false` but kicks off the network query so a follow-up call
-lands the value.
+`DoesItemExistByID` returns `true` iff the item exists. Items that
+ship with the client return `true` right away, with no server query.
+`item` accepts any of retail's forms — item ID, item GUID string, item
+link, or item name (of a cached item). For an item the server hasn't
+sent yet it returns `false` and requests the item, so a follow-up call
+after `GET_ITEM_INFO_RECEIVED` lands the value.
 
 ### `C_Item.GetItemQuality(itemLocation)` / `GetItemQualityByID(item)`
 
