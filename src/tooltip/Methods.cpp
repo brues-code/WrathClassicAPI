@@ -11,8 +11,10 @@
 // You should have received a copy of the GNU General Public License along with
 // WrathClassicAPI. If not, see <https://www.gnu.org/licenses/>.
 
-// `GameTooltip:HasSpell()` / `:HasItem()` / `:HasUnit()` — boolean
-// predicates mirroring the modern WoW API.
+// GameTooltip content methods mirroring the modern WoW API:
+//   * `:HasSpell()` / `:HasItem()` / `:HasUnit()` / `:HasGameObject()` —
+//     boolean predicates.
+//   * `:GetGameObject()` — (name, id, guid) of the gameobject shown.
 //
 // 3.3.5 already has `:GetSpell()` / `:GetItem()` / `:GetUnit()`, which
 // return nil when the tooltip isn't displaying that content type, so
@@ -27,7 +29,7 @@
 //     `parent_methods(L); register_frame_methods(L, methodTable, count)`.
 //   * We MinHook the walker; our hook calls the original (which registers
 //     all 69 stock entries), then calls `register_frame_methods` again
-//     with our own 3-entry extension table.
+//     with our own extension table.
 //   * The registrar is the simple `for (i; i<n) lua_settable` loop at
 //     `Offsets::FUN_REGISTER_FRAME_METHODS`, so multiple invocations
 //     accumulate into the same method table on the Lua stack.
@@ -40,15 +42,16 @@
 //     helper. We extract directly via `lua_rawgeti` + `lua_touserdata`
 //     to avoid the engine's type-check error (we'd rather degrade to
 //     `false` than raise if someone misuses the API).
-//   * Spell / item / unit content offsets all live on the tooltip
-//     frame itself — see comments on `OFF_TOOLTIP_*` in `Offsets.h`.
+//   * Spell / item / unit / gameobject content offsets all live on the
+//     tooltip frame itself — see comments on `OFF_TOOLTIP_*` in `Offsets.h`.
 
 #include "Game.h"
+#include "Guid.h"
 #include "Offsets.h"
 
 #include <cstdint>
 
-namespace Tooltip::Has {
+namespace Tooltip::Methods {
 
 namespace {
 
@@ -111,6 +114,54 @@ int __cdecl Script_HasUnit(void *L) {
     return 1;
 }
 
+// GUID of the gameobject the tooltip is showing — {0, 0} when it isn't
+// showing one (the shared tooltip clear zeroes the slot on every Set*).
+Guid::Pair GameObjectGuid(const uint8_t *frame) {
+    return {*reinterpret_cast<const uint32_t *>(
+                frame + Offsets::OFF_TOOLTIP_GAMEOBJECT_GUID_LO),
+            *reinterpret_cast<const uint32_t *>(
+                frame + Offsets::OFF_TOOLTIP_GAMEOBJECT_GUID_HI)};
+}
+
+int __cdecl Script_HasGameObject(void *L) {
+    auto *frame = static_cast<const uint8_t *>(FrameFromSelf(L));
+    Game::Lua::PushBool(L, frame != nullptr && GameObjectGuid(frame).valid());
+    return 1;
+}
+
+// `:GetGameObject()` → name, id, guid — the same (name, …, id) shape as
+// `:GetItem()`. `id` is the gameobject's entry (template) ID, `guid` the
+// "0xHHHHHHHHLLLLLLLL" string UnitGUID uses. `name` is "" until the
+// gameobject's cache record has loaded. Returns nothing when the tooltip
+// isn't showing a gameobject, or the gameobject has since left the object
+// manager.
+int __cdecl Script_GetGameObject(void *L) {
+    auto *frame = static_cast<const uint8_t *>(FrameFromSelf(L));
+    if (frame == nullptr)
+        return 0;
+    const Guid::Pair guid = GameObjectGuid(frame);
+    if (!guid.valid())
+        return 0;
+    auto *obj = static_cast<const uint8_t *>(
+        Guid::ResolveObject(guid, Offsets::OBJ_FLAGS_GAMEOBJECT));
+    if (obj == nullptr)
+        return 0;
+
+    using GetName_t = const char *(__fastcall *)(const void *gameObject);
+    const char *name =
+        reinterpret_cast<GetName_t>(Offsets::FUN_GAMEOBJECT_GET_NAME)(obj);
+    const auto *descriptors = *reinterpret_cast<const uint8_t *const *>(
+        obj + Offsets::OFF_OBJECT_DESCRIPTORS);
+    const uint32_t entryID = *reinterpret_cast<const uint32_t *>(
+        descriptors + Offsets::OFF_DESCRIPTOR_ENTRY);
+
+    char buf[Guid::STRING_SIZE];
+    Game::Lua::PushString(L, name != nullptr ? name : "");
+    Game::Lua::PushNumber(L, static_cast<double>(entryID));
+    Game::Lua::PushString(L, Guid::Format(guid, buf, sizeof buf));
+    return 3;
+}
+
 // (name, func) entries appended to the GameTooltip method table.
 // Layout must match the engine's expectation: 8 bytes per entry, name
 // pointer first, function pointer second — same shape as the static
@@ -124,6 +175,8 @@ const MethodEntry kExtraMethods[] = {
     { "HasSpell", &Script_HasSpell },
     { "HasItem",  &Script_HasItem  },
     { "HasUnit",  &Script_HasUnit  },
+    { "HasGameObject", &Script_HasGameObject },
+    { "GetGameObject", &Script_GetGameObject },
 };
 constexpr int kExtraMethodCount = sizeof(kExtraMethods) / sizeof(kExtraMethods[0]);
 
@@ -140,4 +193,4 @@ const Game::HookAutoRegister _hookreg{
     reinterpret_cast<void **>(&Walker_o)};
 
 } // namespace
-} // namespace Tooltip::Has
+} // namespace Tooltip::Methods

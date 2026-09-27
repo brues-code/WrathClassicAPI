@@ -483,6 +483,8 @@ enum Offsets {
     // TYPEMASK_UNIT — resolves a GUID to its in-world CGUnit (player or creature)
     // only, or null. Used by UnitNameFromGUID.
     OBJ_FLAGS_UNIT = 0x08,
+    // TYPEMASK_GAMEOBJECT — resolves a GUID to its in-world CGGameObject_C only.
+    OBJ_FLAGS_GAMEOBJECT = 0x20,
 
     // UnitNameFromGUID (src/unit/NameFromGUID.cpp). Two name sources, mirroring
     // the engine's own Script_UnitName (FUN_0060E740):
@@ -961,6 +963,43 @@ enum Offsets {
     OFF_TOOLTIP_SPELL_ID = 0x364,
     OFF_TOOLTIP_UNIT_GUID_LO = 0x328,
     OFF_TOOLTIP_UNIT_GUID_HI = 0x32C,
+    // GameObject GUID the tooltip is showing — written by
+    // FUN_GAMETOOLTIP_BUILD_GAMEOBJECT, zeroed by the shared tooltip
+    // clear (FUN_0061C620) alongside the unit/item/spell slots.
+    OFF_TOOLTIP_GAMEOBJECT_GUID_LO = 0x330,
+    OFF_TOOLTIP_GAMEOBJECT_GUID_HI = 0x334,
+
+    // CGGameTooltip script-name resolver — vtable slot at 0x00A24E2C,
+    // `int __thiscall(this, const char *name, const char **argsTemplate)`
+    // (2 stack args). Chains to the base-frame resolver (FUN_0048E680),
+    // then maps OnTooltipSetDefaultAnchor … OnTooltipSetFrameStack to
+    // their 8-byte {handler, context} slots at this+0x4D4..+0x51C.
+    // Returns the slot address, or 0 for an unknown name.
+    FUN_GAMETOOLTIP_SCRIPT_RESOLVER = 0x0061A280,
+
+    // Tooltip script runner — `void __thiscall(frame, int *slot, int
+    // nargs, int context)` (3 stack args). The engine fires every
+    // OnTooltipSet* script through it as `(this, this+slotOff, 0, 0)`,
+    // e.g. OnTooltipSetSpell at the end of FUN_006238A0.
+    FUN_FRAME_RUN_SCRIPT = 0x0081A2C0,
+
+    // GameObject tooltip builder — `void __thiscall(this, const uint64
+    // *guid)` (1 stack arg). The single funnel for gameobject tooltips:
+    // world mouseover (FUN_0051F790) and the cache-arrival refresh
+    // (FUN_0061DCE0). Stores the GUID at OFF_TOOLTIP_GAMEOBJECT_GUID_*,
+    // then shows the tooltip; bails out (hides, GUID left zero) when
+    // the object isn't in the object manager.
+    FUN_GAMETOOLTIP_BUILD_GAMEOBJECT = 0x00626720,
+
+    // CGGameObject_C name getter — `const char *__thiscall(this)` (no
+    // stack args). Returns the GameObjectStats cache record's name, or ""
+    // until that record has loaded. The builder uses it for the tooltip
+    // title line.
+    FUN_GAMEOBJECT_GET_NAME = 0x0070CDF0,
+    // Entry (template) ID in the object's descriptor block (`[obj+0x08]`):
+    // OBJECT_FIELD_ENTRY, read by the builder as its quest-lookup key.
+    OFF_OBJECT_DESCRIPTORS = 0x08,
+    OFF_DESCRIPTOR_ENTRY = 0x0C,
 
     // Talent system — TabInfo lookup. The engine stores three
     // separate `TabInfo *` arrays for (player / pet / inspect) and

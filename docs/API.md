@@ -152,6 +152,9 @@ Conventions:
   - [`GameTooltip:HasSpell()`](#gametooltiphasspell)
   - [`GameTooltip:HasItem()`](#gametooltiphasitem)
   - [`GameTooltip:HasUnit()`](#gametooltiphasunit)
+  - [`GameTooltip:HasGameObject()`](#gametooltiphasgameobject)
+  - [`GameTooltip:GetGameObject()`](#gametooltipgetgameobject)
+  - [`OnTooltipSetGameObject` script](#ontooltipsetgameobject-script)
 - [UI Color](#ui-color)
   - [`C_UIColor.GetColors()`](#c_uicolorgetcolors)
 - [Unit](#unit)
@@ -2093,6 +2096,42 @@ Same shape as `:HasSpell()`; reads the item-state slot.
 Returns `true` iff the tooltip is currently displaying a unit.
 Reads the engine's unit-GUID slot on the tooltip frame and returns
 true if either GUID half is non-zero.
+
+### `GameTooltip:HasGameObject()`
+
+Returns `true` if the tooltip is showing a gameobject (a chest, herb,
+mining node, mailbox, and so on — from the mouseover in the world).
+
+### `GameTooltip:GetGameObject()`
+
+Returns `name, id, guid` for the gameobject that the tooltip shows:
+
+- `name` — the gameobject's name, or `""` if the client has not yet
+  received its data.
+- `id` — the gameobject's entry (template) ID.
+- `guid` — the GUID string, in the same `"0x…"` form as `UnitGUID`.
+
+Returns nothing if the tooltip does not show a gameobject, or if the
+gameobject is no longer in range.
+
+```lua
+local name, id, guid = GameTooltip:GetGameObject()
+```
+
+### `OnTooltipSetGameObject` script
+
+A tooltip script that fires each time a tooltip is filled with a
+gameobject. Use it the same way as `OnTooltipSetUnit` / `OnTooltipSetItem`:
+`SetScript`, `GetScript`, `HookScript` and XML `<Scripts>` all accept it.
+The handler gets `self` (the tooltip).
+
+```lua
+GameTooltip:HookScript("OnTooltipSetGameObject", function(self)
+    local _, id = self:GetGameObject()
+    self:AddLine("Entry ID: " .. id)
+    self:Show()
+end)
+```
 
 ---
 

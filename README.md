@@ -54,7 +54,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Textures  | `Frame:CreateMaskTexture`, `Texture:AddMaskTexture`, `Texture:RemoveMaskTexture`, `Texture:GetNumMaskTextures`, `Texture:GetMaskTexture`, `Texture:SetMask` |
 | Time      | `GetServerTime`, `C_DateAndTime.AdjustTimeByDays`, `C_DateAndTime.AdjustTimeByMinutes`, `C_DateAndTime.CompareCalendarTime`, `C_DateAndTime.GetCalendarTimeFromEpoch`, `C_DateAndTime.GetCurrentCalendarTime`, `C_DateAndTime.GetSecondsUntilDailyReset`, `C_DateAndTime.GetServerTimeLocal` |
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |
-| Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`
+| Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`, `GameTooltip:HasGameObject`, `GameTooltip:GetGameObject`, `OnTooltipSetGameObject` script |
 | UI Color  | `C_UIColor.GetColors` |
 | Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell` |
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetAuraSlots`, `C_UnitAuras.GetAuraDataBySlot`, `C_UnitAuras.UnitAuraBySlot`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
