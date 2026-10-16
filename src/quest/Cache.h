@@ -17,25 +17,29 @@
 
 namespace Quest::Cache {
 
-// Calls the engine's quest cache `_GetRecord`
-// (`FUN_DBCACHE_QUEST_GET_RECORD`). Same five-arg shape as the item
-// cache.
+// Quest-load callback — `__cdecl(questID, guid, param, success)`, 4 args /
+// 16 bytes, caller-cleaned (DBCache<QuestCache>::AddItem's dispatch at
+// 0x0067E09E: PUSH 1; PUSH param; PUSH guidPtr; PUSH questID; CALL EDX;
+// ADD ESP, 0x10 — DenyItem at 0x0067A6A3 pushes 0). `success` is a C++
+// bool, so only its low byte is defined.
+using LoadCallback = void(__cdecl *)(uint32_t questID, const uint64_t *guid, void *param,
+                                     int success);
+
+// Calls the engine's quest cache `GetRecord` (`FUN_DBCACHE_QUEST_GET_RECORD`).
 //
-// With `callback == nullptr` (use `Peek`), performs only the hash-
-// table lookup; returns the cached data block (`entry + 0x18` per
-// the engine's accessor) when loaded, or nullptr otherwise.
+// With `callback == nullptr` (use `Peek`), performs only the hash-table
+// lookup; returns the cached record when loaded, or nullptr otherwise.
 //
-// With a non-null `callback`, queues a `CMSG_QUEST_QUERY` when the
-// data isn't already loaded and registers the supplied callback
-// (`__stdcall(userData, success)`, called once `SMSG_QUEST_QUERY_RESPONSE`
-// lands). When the data is already loaded, returns the record
-// immediately and does NOT invoke the callback — same as the item
-// cache. Caller synthesizes any "fire the result event on a cache
-// hit" notification.
-const uint8_t *Lookup(uint32_t questID, void *callback, void *userData);
+// With a non-null `callback`, attaches it to the entry (once — `unique`
+// skips a callback/param pair already attached) and, for a new entry, sends
+// `CMSG_QUEST_QUERY`. The server's response runs it with success = true, or
+// false for a quest that doesn't exist. When the record is already loaded,
+// returns it immediately and does NOT invoke the callback; the caller
+// synthesizes any "fire the result event on a cache hit" notification.
+const uint8_t *Lookup(uint32_t questID, LoadCallback callback);
 
 inline const uint8_t *Peek(uint32_t questID) {
-    return Lookup(questID, nullptr, nullptr);
+    return Lookup(questID, nullptr);
 }
 
 } // namespace Quest::Cache

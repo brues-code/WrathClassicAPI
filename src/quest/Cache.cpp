@@ -19,24 +19,21 @@
 
 namespace Quest::Cache {
 
-// `__thiscall(this=cache, questID, *outBuf, callback, userData, char unused)`.
-// `outBuf` is engine bookkeeping (8 bytes get stored into the pending
-// entry — see FUN_0067DE90 `piVar3[4] = *param_2; piVar3[5] = param_2[1];`).
-// We pass an 8-byte zero block; the engine doesn't actually consume the
-// data for our use case, it's just a side-channel for paths that want
-// to associate a GUID/secondary key with the request.
+// `__thiscall(this=cache, questID, const WOWGUID &guid, callback, param, bool unique)`.
+// `guid` and `param` are stored on the callback node and handed back to the
+// callback; we need neither, so pass a zero GUID and no param.
 using GetQuestRecord_t = const uint8_t *(__thiscall *)(void *cache, uint32_t questID,
-                                                       const uint64_t *outBuf,
-                                                       void *callback, void *userData,
-                                                       int unused);
+                                                       const uint64_t *guid,
+                                                       LoadCallback callback, void *param,
+                                                       int unique);
 
-const uint8_t *Lookup(uint32_t questID, void *callback, void *userData) {
+const uint8_t *Lookup(uint32_t questID, LoadCallback callback) {
     auto fn = reinterpret_cast<GetQuestRecord_t>(
         static_cast<uintptr_t>(Offsets::FUN_DBCACHE_QUEST_GET_RECORD));
     auto *cache = reinterpret_cast<void *>(
         static_cast<uintptr_t>(Offsets::VAR_QUEST_CACHE));
-    const uint64_t outBuf = 0;
-    return fn(cache, questID, &outBuf, callback, userData, 0);
+    const uint64_t zeroGuid = 0;
+    return fn(cache, questID, &zeroGuid, callback, nullptr, /*unique=*/1);
 }
 
 } // namespace Quest::Cache

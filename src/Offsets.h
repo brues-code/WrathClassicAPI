@@ -1521,6 +1521,11 @@ enum Offsets {
     // the returned record.
     FUN_DBCACHE_QUEST_GET_RECORD       = 0x0067DE90,
     VAR_QUEST_CACHE                    = 0x00C5DA48,
+    // The cache's own query (DBCache::SendSingleQuery): the opcode and the
+    // questID, no requester GUID (the quest cache is built with
+    // sendRequester = false) and no throttle (0 queries per minute). The
+    // response fills an existing entry and runs its callbacks.
+    OPCODE_CMSG_QUEST_QUERY            = 0x5C, // payload: uint32 questID
 
     // Inline `char title[N]` inside the data block returned by the
     // quest cache's `_GetRecord`. Derivation: the engine's

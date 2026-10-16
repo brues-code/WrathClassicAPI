@@ -25,9 +25,14 @@
 #include "Cache.h"
 
 #include "Game.h"
+#include "Offsets.h"
 #include "event/Custom.h"
+#include "net/Packet.h"
+#include "tick/FrameTick.h"
 
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 namespace Quest::Data {
 
@@ -41,32 +46,103 @@ void FireQuestDataLoadResult(int questID, int success) {
     Event::Custom::Fire(eventID, "%d%d", questID, success);
 }
 
-// `__stdcall(userData, success)` — same shape as the item cache
-// callback. The engine's invocation pattern from FUN_0067DE90 is to
-// push (userData, success) and `call [entry+0x18]` with the cdecl-
-// to-stdcall convention (the callback's `ret 8` cleans the args).
-// We encode the questID into `userData` at request time so the
-// callback knows which quest completed.
-void __stdcall QuestLoadCallback(void *userData, int success) {
-    const auto questID = static_cast<int>(reinterpret_cast<uintptr_t>(userData));
-    FireQuestDataLoadResult(questID, success != 0 ? 1 : 0);
+bool InWorld() {
+    return *reinterpret_cast<const volatile uint8_t *>(
+               static_cast<uintptr_t>(Offsets::VAR_IN_WORLD)) != 0;
 }
 
-using QuestLoadCallback_t = void(__stdcall *)(void *userData, int success);
+// --- Requests we owe a completion event for -------------------------------
+//
+// The cache calls our callback when the server answers, with success or
+// with the server's "no such quest" reply, so the callback is the single
+// completion path. What the cache can't handle is a lost query: the server
+// drops quest queries that arrive while the player isn't in the world
+// (login and every loading screen), and the cache never asks again for an
+// entry it already has. So, as for items (src/item/Data.cpp):
+//
+//   - A request made outside the world waits here, unsent, and goes out
+//     on the next frame in the world.
+//   - A query sent just before a loading screen can still reach the server
+//     after it has taken the player out of the world. On the first frame
+//     back in the world, anything sent and still not loaded is asked for
+//     again with a bare CMSG_QUEST_QUERY; the response fills the existing
+//     entry and runs its callbacks.
 
-// Explicit-request path. Kicks off the cache fill via the callback
-// above (which fires QUEST_DATA_LOAD_RESULT on response). If the
-// quest is already cached, the engine won't invoke our callback —
-// synthesize the event so addons get the same notification
-// regardless of cache state, matching modern semantics.
-void RequestAndMaybeNotify(uint32_t questID) {
-    const bool wasCached = (Cache::Peek(questID) != nullptr);
-    void *userData = reinterpret_cast<void *>(static_cast<uintptr_t>(questID));
-    void *cb = reinterpret_cast<void *>(&QuestLoadCallback);
-    Cache::Lookup(questID, cb, userData);
-    if (wasCached)
+// questID -> sent (our callback is attached and the cache has the query).
+std::unordered_map<uint32_t, bool> g_requests;
+bool g_wasInWorld = false;
+
+// Fires and forgets the request for `questID`, if we owe one. Erases before
+// firing, so an OnEvent handler that requests the quest again starts fresh.
+void Complete(uint32_t questID, bool success) {
+    if (g_requests.erase(questID) == 0)
+        return;
+    FireQuestDataLoadResult(static_cast<int>(questID), success ? 1 : 0);
+}
+
+// See Cache::LoadCallback for the ABI.
+void __cdecl OnQuestLoaded(uint32_t questID, const uint64_t *guid, void *param, int success) {
+    (void)guid;
+    (void)param;
+    Complete(questID, (success & 0xFF) != 0);
+}
+
+void Send(uint32_t questID) {
+    g_requests[questID] = true;
+    // Loaded between the request and now (a response that was already on
+    // its way): the cache won't call back for a loaded entry.
+    if (Cache::Lookup(questID, &OnQuestLoaded) != nullptr)
+        Complete(questID, true);
+}
+
+// Explicit-request path. If the quest is already cached, the engine won't
+// invoke our callback — fire the event now so addons get the same
+// notification regardless of cache state, matching modern semantics.
+void Request(uint32_t questID) {
+    if (Cache::Peek(questID) != nullptr) {
         FireQuestDataLoadResult(static_cast<int>(questID), 1);
+        return;
+    }
+    const bool sent = g_requests.try_emplace(questID, false).first->second;
+    if (!sent && InWorld())
+        Send(questID);
 }
+
+std::vector<uint32_t> RequestIDs(bool sent) {
+    std::vector<uint32_t> ids;
+    for (const auto &[questID, isSent] : g_requests)
+        if (isSent == sent)
+            ids.push_back(questID);
+    return ids;
+}
+
+// On the first frame in the world: re-ask for queries a loading screen
+// swallowed, then send everything that waited.
+void OnTick() {
+    const bool inWorld = InWorld();
+    const bool entered = inWorld && !g_wasInWorld;
+    g_wasInWorld = inWorld;
+    if (!entered)
+        return;
+    for (const uint32_t questID : RequestIDs(/*sent=*/true)) {
+        if (Cache::Peek(questID) != nullptr)
+            Complete(questID, true);
+        else
+            Net::Packet::SendUint32(Offsets::OPCODE_CMSG_QUEST_QUERY, questID);
+    }
+    for (const uint32_t questID : RequestIDs(/*sent=*/false))
+        Send(questID);
+}
+
+const Tick::FrameTick::AutoSubscribe _tickSub{&OnTick};
+
+// The Lua state is going away (/reload or logout), and with it every
+// listener for the events we owe. A callback still attached to a cache
+// entry finds nothing here and does nothing; a request for the same quest
+// from the new UI reuses it.
+void PrepareForReload() { g_requests.clear(); }
+
+const Game::ReloadAutoRegister _reload{&PrepareForReload};
 
 int __cdecl Script_RequestLoadQuestByID(void *L) {
     if (!Game::Lua::IsNumber(L, 1))
@@ -75,7 +151,7 @@ int __cdecl Script_RequestLoadQuestByID(void *L) {
     const int questID = static_cast<int>(Game::Lua::ToNumber(L, 1));
     if (questID <= 0)
         return 0;
-    RequestAndMaybeNotify(static_cast<uint32_t>(questID));
+    Request(static_cast<uint32_t>(questID));
     return 0;
 }
 

@@ -837,10 +837,9 @@ the server rejected the query. Modern WoW (8.0+) addons listen for
 this to know when `C_QuestLog.GetTitleForQuestID(questID)` will
 return non-nil for a previously uncached quest.
 
-Like its modern counterpart, this fires once per explicit request —
-including for quests that were already cached when the request was
-made (we synthesize the event so addons get a uniform notification
-regardless of cache state).
+It fires for every request, including one for a quest that is
+already cached. Repeated requests for the same quest while its data
+is still loading share one event.
 
 ### `QUEST_TURNED_IN` event
 
@@ -1893,7 +1892,8 @@ Kicks off a `CMSG_QUEST_QUERY` for `questID` if its data isn't
 already cached, then fires
 [`QUEST_DATA_LOAD_RESULT(questID, success)`](#quest_data_load_result-event)
 when the response arrives (or immediately, if it was already
-cached).
+cached). A request made at login or during a loading screen is
+sent when the player enters the world, so the event still fires.
 
 ```lua
 local function ReadyTitle(questID, callback)
