@@ -33,9 +33,11 @@
 // LoadSavedVariablesFirst). At entry, when the TOC path matches the
 // addon-side layout AND the Lua stack top is a table, we stash the
 // table into our own registry-stored lookup table keyed by lowercased
-// addon name, and parse the same TOC's `AllowAddOnTableAccess`
-// directive into a C++ map. The Lua function then gates on the flag and
-// serves from the registry table.
+// addon name, and read the same TOC's `AllowAddOnTableAccess` directive
+// into a C++ map — through the engine's file reader, as the engine reads
+// the TOC (the engine itself keeps only Title/Notes/Author/Version/X-*
+// as metadata). The Lua function then gates on the flag and serves from
+// the registry table.
 //
 // Failure modes (all return nil to match modern WoW):
 //   * Addon not loaded yet (no LoadAddOn fire)         → nil
@@ -45,9 +47,9 @@
 #include "addons/GetAddOnLocalTable.h"
 
 #include "Game.h"
+#include "addons/TocFile.h"
 
 #include <cctype>
-#include <cstdio>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -75,50 +77,16 @@ std::string Lowercase(const char *s) {
     return out;
 }
 
-// Scans a TOC file for `## AllowAddOnTableAccess: <num>`. Any non-zero
-// value enables access. File-not-found, malformed, or absent directive
-// all return false (the safe default — deny by default matches modern
-// WoW's gating).
-bool ParseAllowFlag(const char *tocPath) {
-    if (tocPath == nullptr)
-        return false;
-    FILE *fp = nullptr;
-    if (fopen_s(&fp, tocPath, "rb") != 0 || fp == nullptr)
-        return false;
-    static constexpr char kKey[] = "AllowAddOnTableAccess";
-    static constexpr size_t kKeyLen = sizeof(kKey) - 1;
-    char line[1024];
-    bool allow = false;
-    while (std::fgets(line, sizeof(line), fp) != nullptr) {
-        const char *p = line;
-        if (*p != '#')
-            continue;
-        while (*p == '#')
-            ++p;
-        while (*p == ' ' || *p == '\t')
-            ++p;
-        if (std::strncmp(p, kKey, kKeyLen) != 0)
-            continue;
-        p += kKeyLen;
-        while (*p == ' ' || *p == '\t')
-            ++p;
-        if (*p != ':')
-            continue;
-        ++p;
-        while (*p == ' ' || *p == '\t')
-            ++p;
-        if (*p >= '1' && *p <= '9')
-            allow = true;
-        break;
-    }
-    std::fclose(fp);
-    return allow;
-}
-
 // `lowercase(addon_name) -> AllowAddOnTableAccess` flag. Populated by
 // OnTocExecute. Single-threaded access (Lua is single-threaded on this
 // build) — no mutex needed.
 std::unordered_map<std::string, bool> g_allowFlag;
+
+// The namespace tables die with the Lua state, and every addon loads (and
+// its TOC is read) again after /reload.
+void PrepareForReload() { g_allowFlag.clear(); }
+
+const Game::ReloadAutoRegister _reload{&PrepareForReload};
 
 // Pushes our per-process namespace-lookup registry table onto the Lua
 // stack, creating it on first use. Caller pops when done.
@@ -174,7 +142,7 @@ void OnTocExecute(const char *tocPath, const char *addonName) {
         return;
 
     const std::string key = Lowercase(addonName);
-    g_allowFlag[key] = ParseAllowFlag(tocPath);
+    g_allowFlag[key] = Addons::TocFile::ReadFlag(tocPath, "AllowAddOnTableAccess");
 
     // Stack at entry: [..., ns_tbl]
     PushNamespaceRegistry(L);                // [..., ns_tbl, registry]

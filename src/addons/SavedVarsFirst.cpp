@@ -47,6 +47,7 @@
 #include "Offsets.h"
 #include "addons/EngineIO.h"
 #include "addons/Toc.h"
+#include "addons/TocFile.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -60,9 +61,6 @@ namespace Addons::SavedVarsFirst {
 namespace {
 
 using Addons::EngineIO::FileExistsFn;
-using Addons::EngineIO::FileReadFn;
-using Addons::EngineIO::SMemFreeFn;
-using Addons::Toc::FindValue;
 using Addons::Toc::Lower;
 
 // The Lua file loader (Offsets::FUN_LUA_LOAD_FILE), plain __cdecl on this build.
@@ -112,37 +110,6 @@ bool AddonNameFromToc(const char *path, char *out, size_t outSize) {
     std::memcpy(out, path + prevSep + 1, nameLen);
     out[nameLen] = '\0';
     return true;
-}
-
-// True iff the leading integer of a TOC value is nonzero (WoW numeric flag).
-bool NonzeroFlag(const char *v, size_t n) {
-    long val = 0;
-    bool digit = false;
-    for (size_t i = 0; i < n && v[i] >= '0' && v[i] <= '9'; ++i) {
-        val = val * 10 + (v[i] - '0');
-        digit = true;
-    }
-    return digit && val != 0;
-}
-
-// Read the addon's TOC (through the hooked FUN_FILE_READ, so a rewritten/flavor
-// TOC is honored) and report whether `## LoadSavedVariablesFirst` is nonzero.
-bool WantsSavedVarsFirst(const char *tocPath) {
-    auto FileRead =
-        reinterpret_cast<FileReadFn>(static_cast<uintptr_t>(Offsets::FUN_FILE_READ));
-    void *buf = nullptr;
-    size_t size = 0;
-    if (FileRead(0, tocPath, &buf, &size, 1, 1, 0) == 0 || buf == nullptr)
-        return false;
-    const char *v = nullptr;
-    size_t n = 0;
-    const bool want =
-        FindValue(static_cast<const char *>(buf), size,
-                  "## LoadSavedVariablesFirst:", &v, &n) &&
-        NonzeroFlag(v, n);
-    reinterpret_cast<SMemFreeFn>(static_cast<uintptr_t>(Offsets::FUN_STORM_SMEM_FREE))(
-        buf, __FILE__, __LINE__, 0);
-    return want;
 }
 
 bool FileExists(const char *path) {
@@ -218,7 +185,7 @@ const Game::HookAutoRegister _hookLua{
 void OnTocExecute(const char *tocPath, const char *) {
     char addonName[128];
     if (tocPath != nullptr && AddonNameFromToc(tocPath, addonName, sizeof addonName) &&
-        WantsSavedVarsFirst(tocPath))
+        Addons::TocFile::ReadFlag(tocPath, "LoadSavedVariablesFirst"))
         LoadSavedVarsEarly(addonName);
 }
 
