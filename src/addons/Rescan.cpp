@@ -17,17 +17,16 @@
 // stock client, each fixed with the engine's own machinery:
 //
 //   1. FILE VISIBILITY. Every relative-path read resolves through a loose-file
-//      hash index built ONCE at boot; files created after boot — a new addon's
-//      TOC, a new .lua in an existing addon, a freshly written SavedVariables
-//      file — are invisible until restart. The boot root indexer
-//      (`FUN_VFS_INDEX_ROOT`) is dedup-safe, so we re-run it per /reload on the
-//      game-dir root (which covers both `Interface\AddOns` and `WTF\Account`).
-//      New files in EXISTING addons then need nothing more — the per-addon
-//      loader re-reads the TOC from disk each load pass, so once visible they
-//      load. (3.3.5's file layer is push-style — no find-open/close handle
-//      pair — so we replay the whole root walk rather than a targeted subtree;
-//      a narrower subtree reindex would need to replicate the engine's private
-//      walk-context struct, which isn't worth the fragility.)
+//      hash index built at boot; files created after boot — a new addon's TOC,
+//      a new .lua in an existing addon — are invisible until it is rebuilt.
+//      We call the engine's own `SFile::RebuildHash` (FUN_SFILE_REBUILD_HASH),
+//      which the engine itself calls mid-session whenever it creates or
+//      deletes a SavedVariables file: it clears the index under the index
+//      lock, and the next lookup rebuilds it the way boot does, also under the
+//      lock — so the async loader threads never see a half-built index, and
+//      deleted files drop out. New files in EXISTING addons then need nothing
+//      more — the per-addon loader re-reads the TOC each load pass, so once
+//      visible they load.
 //
 //   2. REGISTRY MEMBERSHIP. The addon registry is built once at login; new
 //      folders are never walked. We replay the login scan's disk walk verbatim
@@ -93,8 +92,7 @@ using DescGrow_t = void(__thiscall *)(void *desc, uint32_t newCap);
 using QuantumCalc_t = uint32_t(__thiscall *)(void *desc, uint32_t needed);
 using Qsort_t = void(__cdecl *)(void *base, uint32_t num, uint32_t width,
                                 void *compare);
-using IndexRoot_t = void(__cdecl *)(const char *basePath);
-using IsDir_t = int(__cdecl *)(const char *path);
+using RebuildHash_t = void(__cdecl *)();
 
 // The engine's ubiquitous growable-array descriptor.
 struct Desc {
@@ -144,19 +142,9 @@ uintptr_t ResolveEntryByName(const char *name) {
 
 // ── Step 1: loose-file index refresh ──────────────────────────────────
 
-// Re-run the boot root indexer on the game-dir root. Dedup-safe (the indexer
-// skips every file already present), so this only registers genuinely new
-// files. Base choice mirrors the boot walk: the recorded game dir if it opens
-// as a directory, else ".". Keys are relative to the base, which is why we
-// index the whole root (a subtree would need base-relative keys the engine's
-// private walk-context computes).
+// Drop the loose-file index; the next file lookup rebuilds it from disk.
 void RefreshLooseFileIndex() {
-    auto isDir = reinterpret_cast<IsDir_t>(Offsets::FUN_VFS_IS_DIR);
-    auto indexRoot = reinterpret_cast<IndexRoot_t>(Offsets::FUN_VFS_INDEX_ROOT);
-    const char *base = reinterpret_cast<const char *>(Offsets::VAR_VFS_BASE_PATH);
-    if (!isDir(base))
-        base = ".";
-    indexRoot(base);
+    reinterpret_cast<RebuildHash_t>(Offsets::FUN_SFILE_REBUILD_HASH)();
 }
 
 // ── Step 1.5: `##` metadata refresh (evict + re-register on change) ──
@@ -360,13 +348,10 @@ void RebuildDisplayArray() {
 }
 
 void Run() {
-    // Registry populated (login scan ran) and loose index built — both always
-    // true by the first in-world bootstrap, but these are the states the steps
-    // below mutate, so gate explicitly.
+    // Registry populated (login scan ran) — always true by the first in-world
+    // bootstrap, but it is the state the steps below mutate, so gate explicitly.
     if (*reinterpret_cast<const uint8_t *>(
-            static_cast<uintptr_t>(Offsets::VAR_ADDON_INITIALIZED)) == 0 ||
-        *reinterpret_cast<const uint8_t *>(
-            static_cast<uintptr_t>(Offsets::VAR_VFS_INDEX_READY)) == 0)
+            static_cast<uintptr_t>(Offsets::VAR_ADDON_INITIALIZED)) == 0)
         return;
 
     RefreshLooseFileIndex();

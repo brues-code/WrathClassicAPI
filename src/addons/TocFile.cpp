@@ -26,13 +26,18 @@ namespace Addons::TocFile {
 namespace {
 
 // Finds `key` the way the engine's TOC parser (LoadAddOnInfo, 0x005F86A0)
-// matches its own directives: a line starting "##", any spaces, then the key
-// case-insensitively, immediately followed by ':'. Returns whether the value's
-// leading integer (after spaces) is nonzero; false when the key is absent.
+// matches its own directives: after a UTF-8 BOM, a line starting "##", any
+// spaces, then the key case-insensitively, immediately followed by ':'.
+// Returns whether the value's leading integer (after spaces) is nonzero; false
+// when the key is absent.
 bool FlagIn(const char *buf, size_t size, const char *key) {
     const size_t klen = std::strlen(key);
     const char *end = buf + size;
-    for (const char *line = buf; line < end;) {
+    const char *start = buf;
+    if (size >= 3 && static_cast<uint8_t>(buf[0]) == 0xEF &&
+        static_cast<uint8_t>(buf[1]) == 0xBB && static_cast<uint8_t>(buf[2]) == 0xBF)
+        start += 3;
+    for (const char *line = start; line < end;) {
         const char *eol = line;
         while (eol < end && *eol != '\r' && *eol != '\n')
             ++eol;

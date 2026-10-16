@@ -78,10 +78,10 @@ enum Offsets {
     // fires for both) and avoids competing with awesome_wotlk's
     // detours on hot Lua-init paths.
     //
-    // Only fires on **first boot**. /reload uses a different path
-    // (FUN_00528F00 → FUN_00512280) — see
-    // [[feedback-two-load-script-paths]] in memory. Hooking that
-    // path is a follow-up.
+    // Fires on login AND every /reload: GameUIInit is
+    // CGGameUI::InitializeFrameXML, which the /reload path in
+    // CGGameUI::Idle runs right after CGGameUI::Shutdown (and so after
+    // UnloadAddOns has written the SavedVariables).
     FUN_UIBINDINGS_INIT = 0x005620F0,
 
     // CGlueMgr::Initialize — the login-screen (glue) state setup, the glue
@@ -2088,18 +2088,14 @@ enum Offsets {
     // — the engine's own grow-append uses it when a desc has no quantum yet.
     FUN_DESC_QUANTUM_CALC = 0x005D0040,
 
-    // Loose-file index: every relative-path read resolves through a hash index
-    // built ONCE at boot, so files created after boot are invisible until
-    // restart. Re-run the boot root indexer per /reload to register new files
-    // (dedup-safe). `void __cdecl IndexRoot(const char *basePath)` walks
-    // basePath recursively, keys relative to basePath — the game-dir root
-    // covers both Interface\AddOns and WTF\Account.
-    FUN_VFS_INDEX_ROOT = 0x00424610,
-    // `bool __cdecl IsDir(const char *path)` — boot uses it to fall back to
-    // "." when the recorded base path isn't a directory.
-    FUN_VFS_IS_DIR = 0x004281D0,
-    VAR_VFS_BASE_PATH = 0x00B32360,   // recorded game dir (index keys are relative to it)
-    VAR_VFS_INDEX_READY = 0x00B324A4, // u8 latch: loose-file index built
+    // SFile::RebuildHash — `void __cdecl()`. Every relative-path read resolves
+    // through a loose-file hash index (System_SFile2::s_fileHash). This clears
+    // it and its "built" latch (0x00B324A4) under the index lock
+    // (s_fileHashLock, a CRITICAL_SECTION at 0x00B324BC); the next FindFile
+    // (0x00424780) rebuilds it from disk under the same lock, as at boot.
+    // The engine calls it mid-session itself — UnloadAddOns and the
+    // SavedVariables writers, whenever they create or delete a file.
+    FUN_SFILE_REBUILD_HASH = 0x00423D70,
 
     // --- BAG_UPDATE_DELAYED (src/bag/UpdateDelayed.cpp) ---
     //
