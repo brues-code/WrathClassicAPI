@@ -2425,6 +2425,18 @@ enum Offsets {
     // it. The stance bar's active-form check reads the form through it.
     FUN_UNIT_GET_SHAPESHIFT_FORM = 0x0071AF70,
 
+    // CGUnit_C::GetUnitTitle — `const char *__thiscall(this)`, no stack args.
+    // The creature subtitle ("Innkeeper") from the unit's creature-cache record
+    // (CGUnit_C::m_creatureCacheEntry, +0x964, then CreatureStats_C +0x04), or
+    // null when there is no record yet, the subtitle is empty, or the unit has
+    // UNIT_FIELD_PETNUMBER set. The unit tooltip (CGTooltip unit builder) calls
+    // it for non-player units and prints the result under the name.
+    FUN_UNIT_GET_TITLE = 0x00719950,
+    // OBJECT_FIELD_TYPE — the object's TYPEMASK bits, in the object fields
+    // (`[obj + OFF_OBJECT_DESCRIPTORS]`).
+    OFF_OBJECT_FIELD_TYPE = 0x08,
+    TYPEMASK_PLAYER = 0x10,
+
     // Script_UnitGUID — `int __cdecl(L)`. Resolves the token through
     // Script_GetGUIDFromToken (0x0060ABF0), whose "player" branch reads the
     // player object, so it returns nil until the object manager has created

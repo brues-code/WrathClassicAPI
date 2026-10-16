@@ -204,6 +204,7 @@ Conventions:
   - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
   - [`UnitNameFromGUID(guid)`](#unitnamefromguidguid)
   - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
+  - [`UnitSubName(unit)`](#unitsubnameunit)
   - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -3111,6 +3112,19 @@ C_Spell.GetSpellName(UnitCreatedBySpell("target"))    -- "Stoneskin Totem"
 Works for any unit in range — anyone's summons, not just your own. Note this
 is the *summoning* spell; the spells a totem casts are server-side and never
 reach the client.
+
+### `UnitSubName(unit)`
+
+Returns the subtitle the unit's tooltip shows under its name, or `nil`
+when it has none.
+
+```lua
+UnitSubName("target")  -- "Innkeeper"
+UnitSubName("player")  -- nil
+```
+
+Returns `nil` for players, for player pets, and for a creature whose
+information hasn't arrived from the server yet.
 
 ### `UnitGUID("player")`
 
