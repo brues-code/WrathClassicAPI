@@ -59,6 +59,7 @@ Conventions:
   - [`SOUNDKIT_FINISHED` event](#soundkit_finished-event)
   - [`PLAYER_ENTERING_WORLD` payload](#player_entering_world-payload)
   - [`CURSOR_CHANGED` event](#cursor_changed-event)
+  - [`WEAPON_SLOT_CHANGED` event](#weapon_slot_changed-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -887,6 +888,34 @@ cursor, and nothing once the new content is in place.
 It arrives on the frame after the change. Picking up one of two
 identical stacks, dropping it and picking up the other reports each
 pickup separately.
+
+### `WEAPON_SLOT_CHANGED` event
+
+Payload: *(none)*
+
+Fires when the item in a weapon slot changes: main hand (16), off hand
+(17) or ranged (18). Equipping, unequipping and swapping all fire it.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("WEAPON_SLOT_CHANGED")
+f:SetScript("OnEvent", function()
+    SwingBars_ReadWeapons()
+end)
+```
+
+Use it instead of `PLAYER_EQUIPMENT_CHANGED` when only the weapons
+matter, such as for a swing timer bar or anything that reads
+`UnitAttackSpeed` and `UnitRangedDamage` again.
+
+Paladins, Shamans, Druids and Death Knights hold a relic (Libram, Totem,
+Idol or Sigil) in slot 18 instead of a ranged weapon. A relic isn't a
+weapon, so changing it doesn't fire the event.
+`UnitHasRelicSlot("player")` tells you which kind of slot 18 you have.
+
+The event fires at most once a frame. One action that changes two weapon
+slots, such as a two-hander replacing a one-hander and an off-hand,
+fires it once.
 
 ---
 

@@ -2254,6 +2254,19 @@ enum Offsets {
     OFF_CHRCLASSES_NAME_FEMALE = 0x14,
     OFF_CHRCLASSES_NAME_MALE = 0x18,
     OFF_CHRCLASSES_FILENAME = 0x1C,
+    // Flags; bit 0x8 = slot 18 is a relic slot (Libram / Idol / Totem /
+    // Sigil). Script_UnitHasRelicSlot (0x00611330) tests exactly this.
+    OFF_CHRCLASSES_FLAGS = 0x24,
+    CHRCLASSES_FLAG_RELIC_SLOT = 0x8,
+
+    // InventoryUpdate — the engine's field observer for the player's
+    // inventory-slot GUIDs: `int __cdecl(uint32 guidLo, uint32 guidHi,
+    // uint32 fieldOffset, uint32 count, const void *value, void *param)`.
+    // Runs once per changed slot field; slot (0-based) = (fieldOffset -
+    // INV_SLOT_FIELD_FIRST) / 8. For slots 0..18 it fires
+    // PLAYER_EQUIPMENT_CHANGED.
+    FUN_INVENTORY_UPDATE = 0x006DEDD0,
+    INV_SLOT_FIELD_FIRST = 0x2C0,
 
     // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:
     // `areaID in [DAT_00ad3144, DAT_00ad3140]`, record = `*(DAT_00ad3154 +
