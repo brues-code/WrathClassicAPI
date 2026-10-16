@@ -27,14 +27,14 @@
 // (`src/spell/Usable.cpp::PlayerKnowsSpell`). Index formula matches
 // the engine's reader at `FUN_0053C5B0`.
 
+#include "spell/IsPlayerSpell.h"
+
 #include "Game.h"
 #include "Offsets.h"
 
 #include <cstdint>
 
 namespace Spell::IsPlayerSpell {
-
-namespace {
 
 bool PlayerKnowsSpell(int spellID) {
     if (spellID < 1)
@@ -50,6 +50,8 @@ bool PlayerKnowsSpell(int spellID) {
     const uint32_t bit = 1u << (static_cast<uint32_t>(spellID) & 31);
     return (bitmap[spellID >> 5] & bit) != 0;
 }
+
+namespace {
 
 int __cdecl Script_IsPlayerSpell(void *L) {
     if (!Game::Lua::IsNumber(L, 1))

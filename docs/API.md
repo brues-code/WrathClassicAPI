@@ -54,6 +54,8 @@ Conventions:
   - [`QUEST_REMOVED` event](#quest_removed-event)
   - [`BAG_UPDATE_DELAYED` event](#bag_update_delayed-event)
   - [`FACTION_STANDING_CHANGED` event](#faction_standing_changed-event)
+  - [`PLAYER_SWING` event](#player_swing-event)
+  - [`PLAYER_SWING_RANGE_UPDATE` event](#player_swing_range_update-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -126,6 +128,10 @@ Conventions:
   - [`C_Spell.IsSpellHarmful` / `IsSpellHelpful`](#c_spellisspellharmfulspellidentifier--isspellhelpfulspellidentifier)
   - [`C_Spell.IsSelfBuff(spellIdentifier)`](#c_spellisselfbuffspellidentifier)
   - [`CanDualWield()`](#candualwield)
+- [Swing Timer](#swing-timer)
+  - [`C_SwingTimer.EnableRangeCheck(swingType, enable)`](#c_swingtimerenablerangecheckswingtype-enable)
+  - [`C_SwingTimer.IsTargetWithinSwingRange(swingType)`](#c_swingtimeristargetwithinswingrangeswingtype)
+  - [`Enum.PlayerSwingType`](#enumplayerswingtype)
 - [Talent](#talent)
   - [`GetTalentSpellID(tabIndex, talentIndex[, isInspect, isPet, groupIndex, rank])`](#gettalentspellidtabindex-talentindex-isinspect-ispet-groupindex-rank)
   - [`GetTalentIDByIndex(tabIndex, talentIndex[, isInspect, isPet, groupIndex])`](#gettalentidbyindextabindex-talentindex-isinspect-ispet-groupindex)
@@ -699,6 +705,72 @@ Does not fire for the initial faction sync at login — only for actual, visible
 standing changes. `repGained` is a WrathClassicAPI extra: the modern event
 delivers only `(factionID, newStanding)`, but the delta is on hand, so it's
 passed through to save addons re-deriving it from the chat string.
+
+### `PLAYER_SWING` event
+
+Payload: `swingDuration, swingType`
+
+Fires each time one of your attack timers resets.
+
+- **`swingDuration`** (number) — seconds from now until the next attack
+  of this type.
+- **`swingType`** — an [`Enum.PlayerSwingType`](#enumplayerswingtype)
+  value: which timer reset.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_SWING")
+f:SetScript("OnEvent", function(self, event, swingDuration, swingType)
+    if swingType == Enum.PlayerSwingType.MainHand then
+        MainHandBar_Start(swingDuration)
+    end
+end)
+```
+
+These change a timer:
+
+- A main-hand or off-hand attack lands or misses: that hand and the
+  ranged timer reset. The other hand is held back to at least 0.2
+  seconds, so the two never land together.
+- An on-next-swing ability (Heroic Strike, Cleave, Maul, Raptor Strike)
+  goes off: the same as a main-hand attack, which it replaces.
+- Auto Shot or a wand's Shoot fires: every timer resets.
+- You finish casting a spell that interrupts auto-attacks: every timer
+  resets. An instant cast of a spell that normally has a cast time,
+  such as a Pyroblast after Presence of Mind or an Exorcism after Art
+  of War, does not reset them.
+- You cast a spell that leaves auto-attacks alone, such as Slam: the
+  melee timers stop while you cast, and continue when the cast ends or
+  is cancelled.
+- You start attacking a target in melee range while your off hand is
+  ready: the off hand waits until half a main-hand swing after the next
+  main-hand attack.
+
+Several attacks can land at the same moment, such as an extra attack
+from Windfury. The event still fires once per timer, not once per
+attack. When you parry, the server speeds up your next attack, so
+`swingDuration` can be shorter than your weapon speed.
+
+The off-hand timer only reports while you dual wield, and the ranged
+timer only while a bow, gun, crossbow, thrown weapon or wand is
+equipped. An attack you start out of melee range does not fire the
+event until a swing can actually land.
+
+### `PLAYER_SWING_RANGE_UPDATE` event
+
+Payload: `swingType, isInRange, checksRange`
+
+Fires when your current target moves into or out of range for a swing
+type that has range checking on. See
+[`C_SwingTimer.EnableRangeCheck`](#c_swingtimerenablerangecheckswingtype-enable).
+
+- **`swingType`** — the [`Enum.PlayerSwingType`](#enumplayerswingtype)
+  value this update is for.
+- **`isInRange`** (boolean) — `true` when the target is in range. Ignore
+  it when `checksRange` is `false`.
+- **`checksRange`** (boolean) — `false` when no range check was
+  possible: there is no current target, the target can't be attacked,
+  or no weapon is equipped for this swing type.
 
 ---
 
@@ -1754,6 +1826,58 @@ spec switch — turns it off.
 ```lua
 CanDualWield()   -- true on a rogue; false on a mage
 ```
+
+---
+
+## Swing Timer
+
+Your auto-attack timers: when the next main-hand, off-hand and ranged
+attack will come, and whether your current target is in range for
+each. [`Enum.PlayerSwingType`](#enumplayerswingtype) names the swing
+types. The matching events,
+[`PLAYER_SWING`](#player_swing-event) and
+[`PLAYER_SWING_RANGE_UPDATE`](#player_swing_range_update-event), are
+under [Events](#events).
+
+### `C_SwingTimer.EnableRangeCheck(swingType, enable)`
+
+Turns [`PLAYER_SWING_RANGE_UPDATE`](#player_swing_range_update-event)
+on or off for one swing type. Range checking is off for every swing
+type after a `/reload`.
+
+```lua
+C_SwingTimer.EnableRangeCheck(Enum.PlayerSwingType.MainHand, true)
+local inRange = C_SwingTimer.IsTargetWithinSwingRange(Enum.PlayerSwingType.MainHand)
+```
+
+After you enable a swing type, call
+[`C_SwingTimer.IsTargetWithinSwingRange`](#c_swingtimeristargetwithinswingrangeswingtype)
+once to read the current range. The event fires only on a later change.
+
+### `C_SwingTimer.IsTargetWithinSwingRange(swingType)`
+
+Returns whether your current target is in range for a swing type: an
+[`Enum.PlayerSwingType`](#enumplayerswingtype) value.
+
+Melee range is the game's own melee reach, which grows with the size
+of you and your target, and is longer while you and your target are
+both running. Ranged range is the range of your ranged
+attack: Auto Shot for a hunter's bow, gun or crossbow, Shoot for other
+classes' bows, guns and crossbows and for wands, and Throw for thrown
+weapons.
+
+Returns `nil` when no range answer is possible: no current target, a
+target that can't be attacked, or no weapon equipped for that swing
+type. Do not read `nil` as out of range. Auto-attacks only apply to
+your current target, so no other unit can be asked about.
+
+### `Enum.PlayerSwingType`
+
+| Value | Field      | Meaning |
+|------:|------------|---------|
+| `0`   | `MainHand` | The main-hand weapon, or your fists. |
+| `1`   | `OffHand`  | The off-hand weapon, while you dual wield. |
+| `2`   | `Ranged`   | The ranged weapon: a bow, gun, crossbow, thrown weapon or wand. |
 
 ---
 

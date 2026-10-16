@@ -2360,4 +2360,94 @@ enum Offsets {
     GXDEV_TEXMTX_STACK_STRIDE = 0x118,
     // Texture stages the device exposes (the D3D stage-state setters guard on it).
     OFF_GXDEV_STAGE_COUNT = 0x214,
+
+    // --- Swing timer (src/combat/Swing.cpp, SwingRange.cpp) -----------------
+    //
+    // Unit descriptor fields (offsets from the descriptor base, OBJECT_FIELDs
+    // included): UNIT_FIELD_FLAGS, then BASEATTACKTIME[main, off] and
+    // RANGEDATTACKTIME as uint32 ms, already hasted — the fields
+    // UnitAttackSpeed / UnitRangedDamage read.
+    OFF_UNIT_FIELD_FLAGS = 0xD4,
+    UNIT_FLAG_IN_COMBAT = 0x80000,
+    OFF_UNIT_FIELD_MAINHAND_ATTACK_TIME = 0xE0,
+    OFF_UNIT_FIELD_OFFHAND_ATTACK_TIME = 0xE4,
+    OFF_UNIT_FIELD_RANGED_ATTACK_TIME = 0xE8,
+    OFF_UNIT_FIELD_COMBAT_REACH = 0xF0,
+
+    // CGUnit_C movement flags (CGUnit_C::GetCanFly, FUN_0071B810, reads
+    // `[this+0x7CC] & 0x1000000`). Bit values match the server's
+    // MovementFlags.
+    OFF_UNIT_MOVEMENT_FLAGS = 0x7CC,
+    MOVEMENTFLAG_FORWARD = 0x1,
+    MOVEMENTFLAG_STRAFE_LEFT = 0x4,
+    MOVEMENTFLAG_STRAFE_RIGHT = 0x8,
+    MOVEMENTFLAG_WALKING = 0x100,
+    MOVEMENTFLAG_FALLING = 0x1000,
+
+    // Item-stats cache record: weapon delay (ms, unhasted). Read by
+    // SpellRec::GetCastTime (FUN_007FF180) to scale a ranged cast.
+    OFF_ITEMSTATS_DELAY = 0xF4,
+    ITEM_CLASS_WEAPON = 2,
+    ITEM_SUBCLASS_WEAPON_THROWN = 16,
+    ITEM_SUBCLASS_WEAPON_WAND = 19,
+
+    // ATTACKROUNDINFO::Unpack — `__thiscall(ATTACKROUNDINFO *, CDataStore &)`.
+    // Its only caller is the SMSG_ATTACKER_STATE_UPDATE case of the combat
+    // packet handler (FUN_00756800). Fields filled:
+    //   +0x00 attacker GUID, +0x08 target GUID (both unpacked), +0x10 hitInfo,
+    //   +0x54 victimState (1 byte on the wire, widened).
+    FUN_ATTACK_ROUND_UNPACK = 0x00755630,
+    OFF_ATTACKROUND_ATTACKER = 0x00,
+    OFF_ATTACKROUND_TARGET = 0x08,
+    OFF_ATTACKROUND_HIT_INFO = 0x10,
+    OFF_ATTACKROUND_VICTIM_STATE = 0x54,
+    HITINFO_OFFHAND = 0x4,
+    VICTIMSTATE_PARRY = 3,
+
+    // CGUnit_C::SetAttacking — `__thiscall(CGUnit_C *, uint64 victimGuid)`.
+    // Its only caller is the SMSG_ATTACK_START case of the same handler, run
+    // on the attacker after the packet is read.
+    FUN_UNIT_SET_ATTACKING = 0x00754FF0,
+
+    // SMSG_SPELL_START / SMSG_SPELL_GO handler — `int __cdecl(void *param,
+    // uint32 msgId, uint32 time, CDataStore *msg)`. The packet opens with
+    // packed castItem GUID, packed caster GUID, uint8 castCount, uint32
+    // spellId, uint32 castFlags; SPELL_START then carries int32 castTime (ms,
+    // 0 for an instant). castCount is the client's own counter from
+    // CMSG_CAST_SPELL, so it is 0 for a server-triggered cast.
+    FUN_PACKET_SPELL_CAST = 0x0080FEE0,
+    SMSG_SPELL_START = 0x131,
+    SMSG_SPELL_GO = 0x132,
+    // SMSG_SPELL_FAILURE handler, same signature. Packet: packed caster GUID,
+    // uint8 castCount, uint32 spellId, uint8 reason.
+    FUN_PACKET_SPELL_FAILURE = 0x00809C70,
+    // CDataStore read cursor, and the engine readers that advance it:
+    // Get(uint8_t &) / Get(uint32_t &) `__thiscall(this, T *)`, and the packed
+    // GUID reader `CDataStore &__cdecl(CDataStore &, uint64 *)`.
+    OFF_DATASTORE_READ = 0x14,
+    FUN_DATASTORE_GET_U8 = 0x0047B340,
+    FUN_DATASTORE_GET_U32 = 0x0047B3C0,
+    FUN_DATASTORE_GET_PACKED_GUID = 0x0076DC20,
+
+    // Spell.dbc fields in the FUN_DBC_COPY_RECORD buffer (checked against the
+    // 12340 Spell.dbc: Heroic Strike 47450 Attributes 0x00050014, Maul 48480
+    // 0x00000414, Auto Shot 75 AttributesEx2 0x20, Slam 47475 InterruptFlags
+    // 0xD with AttributesEx2 0x20000, Fireball 133 InterruptFlags 0xF).
+    OFF_SPELL_INTERRUPT_FLAGS = 0x7C,
+    OFF_SPELL_ATTRIBUTES_EX6 = 0x28,
+    SPELL_ATTR_USES_RANGED_SLOT = 0x2,
+    SPELL_ATTR_ON_NEXT_SWING = 0x4 | 0x400,
+    SPELL_ATTR_EX2_AUTOREPEAT = 0x20,
+    SPELL_ATTR_EX2_NOT_RESET_AUTO_ACTIONS = 0x20000,
+    SPELL_ATTR_EX6_NO_RESET_IF_INSTANT = 0x02000000,
+    SPELL_INTERRUPT_FLAG_INTERRUPT = 0x8,
+    // CGUnit_C::CanAttack — `bool __thiscall(CGUnit_C *, CGUnit_C *)`.
+    FUN_UNIT_CAN_ATTACK = 0x00729740,
+    // Spell_C_RangeCheckSelected — `bool __cdecl(CGUnit_C *caster,
+    // SpellRec *, uint64 target, uint8 *inRange, bool report,
+    // PendingSpellCast *)`, what IsSpellInRange calls. Returns false when no
+    // check could be made.
+    FUN_SPELL_RANGE_CHECK_SELECTED = 0x00809610,
+    // The player's running autorepeat spell (Auto Shot / Shoot), 0 when none.
+    VAR_AUTO_REPEATING_SPELL = 0x00D397D0,
 };
