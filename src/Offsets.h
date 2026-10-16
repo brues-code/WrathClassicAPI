@@ -2303,6 +2303,19 @@ enum Offsets {
     //   FUN_TEXTURE_RELEASE `__cdecl(HTEXTURE)` drops the reference.
     FUN_TEXTURE_FLAGS_INIT = 0x00681BE0,
     FUN_TEXTURE_LOAD_BY_PATH = 0x004B9760,
+    // The texture cache (FUN_004B6FA0) keys on (name, the whole 32-bit flags
+    // word). CSimpleTexture::SetTexture (FUN_004859E0) loads with create mode
+    // 0x17, whose bit 2 lets a square texture of 64px or less go into a shared
+    // 512x512 atlas (UIFaster bit 0, on by default). Such a texture has no
+    // GxTex of its own, and its renderable is the whole atlas page, so it can't
+    // be sampled as a mask. Mode 3 never atlases, but with SetTexture's default
+    // flags (linear, clamped) the cache would still return the atlased copy. So
+    // mask loads also set this bit: m_unk16 bit 0, which the ctor zeroes and
+    // only the cache compare reads. That gives them their own cache entry.
+    TEXFLAGS_MASK_CACHE_KEY = 0x00010000,
+    // `const char *__cdecl(HTEXTURE)`: the name it was loaded by, no
+    // extension (texture+0x6C). Empty for a solid-color texture.
+    FUN_TEXTURE_GET_FILENAME = 0x004B56F0,
     PTR_TEXLOAD_DESC_VTBL = 0x009E2F6C,
     FUN_TEXLOAD_DESC_DTOR = 0x0047C500,
     FUN_TEXTURE_RELEASE = 0x0047BF30,

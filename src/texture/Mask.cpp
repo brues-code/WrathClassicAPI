@@ -39,6 +39,10 @@
 // vertex-shader slots are nulled for that one call, and the entry's pixel
 // shader is cleared in a copy of the entry.
 //
+// A mask's own texture can sit on the UI atlas (any square image of 64px or
+// less), where its renderable is the whole atlas page. So masks are sampled
+// from a separate, never-atlased load of the same file (MaskHandle).
+//
 // Mask state is keyed by the CSimpleTexture pointer, which is also what a
 // batch entry's positions pointer resolves to. A destructor co-hook drops a
 // region's state (as base and as mask) when it dies, so pooled memory can
@@ -78,6 +82,14 @@ std::unordered_map<void *, PathMask> g_pathMasks;
 // AddMaskTexture: base region -> mask regions, in Add order.
 std::unordered_map<void *, std::vector<void *>> g_baseMasks;
 
+// Mask region -> our own load of the file its SetTexture names. A null
+// handle records a failed load, so a bad file isn't retried every frame.
+struct MaskLoad {
+    std::string file;
+    void *handle = nullptr;
+};
+std::unordered_map<void *, MaskLoad> g_maskLoads;
+
 // --- engine entry points -----------------------------------------------------
 
 using BatchDraw_t = void(__cdecl *)(void *batch);
@@ -98,6 +110,7 @@ using LoadByPath_t = void *(__cdecl *)(const char *path, uint32_t flags, void *d
                                        uint32_t mode);
 using DescDtor_t = void(__fastcall *)(void *desc);
 using Release_t = void(__cdecl *)(void *handle);
+using GetFilename_t = const char *(__cdecl *)(void *handle);
 using GetRenderable_t = void *(__cdecl *)(void *handle, int force, int *);
 
 using GxRsSetPtr_t = void(__fastcall *)(void *dev, void *edx, int state, void *value);
@@ -117,8 +130,9 @@ void ReleaseHandle(void *handle) {
         reinterpret_cast<Release_t>(Offsets::FUN_TEXTURE_RELEASE)(handle);
 }
 
-// Loads `path` the way Minimap:SetMaskTexture does (clamped, no mips). Returns
-// null when the file can't be loaded.
+// Loads `path` the way Minimap:SetMaskTexture does (clamped, no mips), as a
+// texture of its own, never on the UI atlas (see TEXFLAGS_MASK_CACHE_KEY).
+// Returns null when the file can't be loaded.
 void *LoadByPath(const char *path) {
     struct TexLoadDesc {
         void *vtbl;
@@ -134,7 +148,8 @@ void *LoadByPath(const char *path) {
     desc.errorLevel = 0;
     uint32_t flagsOut = 0;
     const uint32_t flags = *reinterpret_cast<FlagsInit_t>(Offsets::FUN_TEXTURE_FLAGS_INIT)(
-        &flagsOut, nullptr, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0);
+                               &flagsOut, nullptr, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0) |
+                           Offsets::TEXFLAGS_MASK_CACHE_KEY;
     void *handle = reinterpret_cast<LoadByPath_t>(Offsets::FUN_TEXTURE_LOAD_BY_PATH)(
         path, flags, &desc, 3);
     const bool failed = desc.errorLevel > 1;
@@ -144,6 +159,38 @@ void *LoadByPath(const char *path) {
         return nullptr;
     }
     return handle;
+}
+
+// The HTEXTURE to sample for mask region `mask`. Its own HTEXTURE (set by its
+// SetTexture, present even while hidden) may be on the UI atlas, so a mask
+// with a file samples our own load of that file instead, reloaded when the
+// file changes. A solid-color mask, or a file we can't load, uses the
+// region's own. Null when the mask has no texture.
+void *MaskHandle(void *mask) {
+    void *own = At<void *>(mask, Offsets::OFF_SIMPLETEXTURE_HTEXTURE);
+    if (own == nullptr)
+        return nullptr;
+    const char *file = reinterpret_cast<GetFilename_t>(Offsets::FUN_TEXTURE_GET_FILENAME)(own);
+    if (file == nullptr || file[0] == '\0')
+        return own;
+    auto it = g_maskLoads.find(mask);
+    if (it == g_maskLoads.end()) {
+        it = g_maskLoads.emplace(mask, MaskLoad{}).first;
+    } else if (it->second.file == file) {
+        return it->second.handle != nullptr ? it->second.handle : own;
+    }
+    ReleaseHandle(it->second.handle);
+    it->second.file = file;
+    it->second.handle = LoadByPath(file);
+    return it->second.handle != nullptr ? it->second.handle : own;
+}
+
+void ForgetMaskLoad(void *mask) {
+    auto it = g_maskLoads.find(mask);
+    if (it == g_maskLoads.end())
+        return;
+    ReleaseHandle(it->second.handle);
+    g_maskLoads.erase(it);
 }
 
 // A region's resolved rect {bottom, left, top, right}. Mirrors Script GetRect:
@@ -247,9 +294,8 @@ bool DrawMaskedImpl(void *region, const uint8_t *entry, uint8_t *header) {
         for (void *mask : bit->second) {
             if (units >= usable)
                 break;
-            // The mask's own HTEXTURE (set by its SetTexture; present even
-            // while hidden). Resolving it each frame is the residency reference.
-            void *handle = At<void *>(mask, Offsets::OFF_SIMPLETEXTURE_HTEXTURE);
+            // Resolving it each frame is the residency reference.
+            void *handle = MaskHandle(mask);
             if (handle == nullptr)
                 return false;
             float r[4];
@@ -389,6 +435,7 @@ void Forget(void *region) {
         ReleaseHandle(pit->second.handle);
         g_pathMasks.erase(pit);
     }
+    ForgetMaskLoad(region);
     g_baseMasks.erase(region);
     for (auto it = g_baseMasks.begin(); it != g_baseMasks.end();) {
         auto &v = it->second;
@@ -401,7 +448,7 @@ void Forget(void *region) {
 }
 
 void *__fastcall Dtor_h(void *self, void *edx, uint8_t flags) {
-    if (self != nullptr && (!g_pathMasks.empty() || !g_baseMasks.empty()))
+    if (self != nullptr && (!g_pathMasks.empty() || !g_baseMasks.empty() || !g_maskLoads.empty()))
         Forget(self);
     return g_dtorOriginal(self, edx, flags);
 }
@@ -414,6 +461,9 @@ void PrepareForReload() {
     for (auto &kv : g_pathMasks)
         ReleaseHandle(kv.second.handle);
     g_pathMasks.clear();
+    for (auto &kv : g_maskLoads)
+        ReleaseHandle(kv.second.handle);
+    g_maskLoads.clear();
     g_baseMasks.clear();
 }
 
