@@ -50,9 +50,10 @@ struct AutoReserve {
     explicit AutoReserve(const char *name);
 };
 
-// Returns the integer event ID currently assigned to `name`, or -1 if
-// the name isn't registered yet (e.g. before the GameUI post-hook has
-// run, or for a reservation that overflowed). Caller should call this
+// Returns the integer event ID currently assigned to `name` — one of our
+// reservations or any engine event — or -1 if the name isn't registered
+// yet (e.g. before the GameUI post-hook has run, or for a reservation
+// that overflowed). Caller should call this
 // at fire time — IDs are stable for the process lifetime so they can
 // be cached after the GameUI post-hook completes, but on a code path
 // that could fire before that, look up each time.

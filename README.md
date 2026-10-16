@@ -76,6 +76,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `PLAYER_SWING` | `swingDuration, swingType` | Each time one of your main-hand, off-hand or ranged attack timers resets. `swingDuration` is the seconds until that timer's next attack |
 | `PLAYER_SWING_RANGE_UPDATE` | `swingType, isInRange, checksRange` | When your target moves into or out of range for a swing type turned on with `C_SwingTimer.EnableRangeCheck` |
 | `SOUNDKIT_FINISHED` | `soundHandle` | When a sound played with `runFinishCallback` set to `true` ends |
+| `PLAYER_ENTERING_WORLD` | `isInitialLogin, isReloadingUi` | The stock event, now with a payload: `isInitialLogin` is `true` on a login from character select, `isReloadingUi` is `true` after a `/reload`, and both are `false` after any other loading screen |
 
 ### Client extensions
 

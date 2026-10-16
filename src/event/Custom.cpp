@@ -79,6 +79,12 @@ int Lookup(const char *name) {
         if (std::strcmp(g_reserved[i].name, name) == 0)
             return g_reserved[i].slot;
     }
+    const int count = CurrentCount();
+    for (int i = 0; i < count; ++i) {
+        const char *current = ReadName(i);
+        if (current != nullptr && std::strcmp(current, name) == 0)
+            return i;
+    }
     return -1;
 }
 

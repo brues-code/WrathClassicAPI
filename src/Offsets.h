@@ -1991,6 +1991,13 @@ enum Offsets {
     // The engine's own "is in game" getter FUN_008C6330 reads it.
     VAR_IN_WORLD = 0x00BD0792,
 
+    // `u8` CGGameUI::m_currentlyReloadingUI: set by the /reload path
+    // (0x0052B00E) before it tears the UI down, cleared at the end of
+    // CGGameUI::InitializeFrameXML (0x0052AE93) after the rebuilt UI has
+    // run EnterWorld. So it is set exactly while a /reload's
+    // PLAYER_ENTERING_WORLD fires; EnterWorld itself reads it (0x005280D3).
+    VAR_UI_CURRENTLY_RELOADING = 0x00BD0790,
+
     // --- ExportInterfaceFiles console command (src/interface/Export.cpp) ---
 
     // MPQ listfile enumerator (by path prefix). `void __cdecl(const char

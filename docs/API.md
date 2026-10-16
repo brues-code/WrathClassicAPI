@@ -57,6 +57,7 @@ Conventions:
   - [`PLAYER_SWING` event](#player_swing-event)
   - [`PLAYER_SWING_RANGE_UPDATE` event](#player_swing_range_update-event)
   - [`SOUNDKIT_FINISHED` event](#soundkit_finished-event)
+  - [`PLAYER_ENTERING_WORLD` payload](#player_entering_world-payload)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -804,6 +805,34 @@ PlaySound(8959, "SFX", nil, true)
 
 Sounds played without `runFinishCallback` report nothing. The event
 arrives on the first frame after the sound ends.
+
+### `PLAYER_ENTERING_WORLD` payload
+
+Payload: `isInitialLogin, isReloadingUi`
+
+`PLAYER_ENTERING_WORLD` tells you why it fired.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:SetScript("OnEvent", function(self, event, isInitialLogin, isReloadingUi)
+    if isInitialLogin then
+        -- logged in from character select
+    elseif isReloadingUi then
+        -- /reload
+    else
+        -- came out of a loading screen: instance, portal, boat, etc.
+    end
+end)
+```
+
+| Argument | Meaning |
+|---|---|
+| `isInitialLogin` | `true` on a login from character select, including logging out and back in. |
+| `isReloadingUi` | `true` after a `/reload`. |
+
+Both are `false` after any other loading screen, and they are never both
+`true`. Handlers that ignore the arguments work as before.
 
 ---
 
