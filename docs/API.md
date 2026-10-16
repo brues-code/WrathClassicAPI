@@ -107,6 +107,7 @@ Conventions:
   - [`CreateAndInitFromMixin(mixin, ...)`](#createandinitfrommixinmixin-)
 - [Player Info](#player-info)
   - [`C_PlayerInfo.CanUseItem(item)`](#c_playerinfocanuseitemitem)
+  - [`GetSheathState()`](#getsheathstate)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`](#c_questloggetquestidforlogindexquestlogindex)
   - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
@@ -1549,6 +1550,25 @@ All of these must pass:
 Reads the item-stats cache; on a cache miss it returns `false` synchronously
 without firing a load (query the item first with `GetItemInfo` if needed). WotLK
 dropped the old PvP-rank item gates, so those aren't checked.
+
+### `GetSheathState()`
+
+Returns which kind of weapon you have drawn:
+
+| Value | Meaning |
+|---|---|
+| `1` | None: your weapons are put away. |
+| `2` | A melee weapon is drawn. |
+| `3` | A ranged weapon is drawn. |
+
+```lua
+if GetSheathState() == 3 then
+    -- the ranged weapon is out
+end
+```
+
+Returns `1` before you've entered the world. A `ToggleSheath()` shows up
+right away. To change the state, use `ToggleSheath()`.
 
 ---
 

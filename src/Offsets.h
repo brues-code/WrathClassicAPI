@@ -2276,6 +2276,12 @@ enum Offsets {
     // now your home." The server sends that packet only from the bind spell
     // effect, right after the SMSG_BINDPOINTUPDATE carrying the new bind.
     FUN_PACKET_PLAYER_GROUP_9 = 0x006E2E90,
+
+    // CGUnit_C::m_sheatheState — the drawn weapon, 0-based (0 sheathed, 1
+    // melee, 2 ranged). Written by CGUnit_C::SetSheatheState (0x00736D30,
+    // which also moves the old value to m_previousSheatheState at +0xB58)
+    // and read by CGPlayer_C::ToggleSheathe to pick the next state.
+    OFF_UNIT_SHEATH_STATE = 0xB5C,
     OPCODE_SMSG_PLAYERBOUND = 0x158,
 
     // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:
