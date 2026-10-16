@@ -390,6 +390,32 @@ enum Offsets {
     // (`*(Map.dbc.indexTable + (DAT_00bd088c - min)*4)`).
     VAR_CURRENT_MAP_ID = 0x00BD088C,
 
+    // Map.dbc client store — same `[min, max]`-bounded index-table shape as
+    // ChrClasses (g_mapDB at 0x00AD4160). Verified in CGRaidInfo::IsPVPRaid
+    // (0x00572F50): `VAR_CURRENT_MAP_ID in [min, max]`, record = `*(index +
+    // (id - min)*4)`, and InstanceType is `*(rec+0x08)` (3 battleground,
+    // 4 arena).
+    VAR_MAP_DBC_MAX_INDEX = 0x00AD416C,
+    VAR_MAP_DBC_MIN_INDEX = 0x00AD4170,
+    VAR_MAP_DBC_INDEX_TABLE = 0x00AD4180,
+    OFF_MAP_INSTANCE_TYPE = 0x08,
+    MAP_INSTANCE_TYPE_BATTLEGROUND = 3,
+    MAP_INSTANCE_TYPE_ARENA = 4,
+
+    // --- Group membership (src/group/Info.cpp) ---
+    //
+    // The client holds two groups. The CURRENT group is what GetNumPartyMembers
+    // / GetNumRaidMembers report: inside a battleground or arena that's the
+    // battleground's group. The REAL group (GetRealNumPartyMembers /
+    // GetRealNumRaidMembers) is your own group: SMSG_GROUP_LIST updates it only
+    // for a non-battleground group, and SMSG_REAL_GROUP_UPDATE keeps it current
+    // while you're in a battleground.
+    VAR_PARTY_MEMBER_GUIDS = 0x00BD1948,    // CGPartyInfo::m_members, 4 GUIDs
+    PARTY_MEMBER_SLOTS = 4,
+    VAR_PARTY_REAL_NUM_MEMBERS = 0x00BD1998, // CGPartyInfo::m_realNumMembers
+    VAR_RAID_NUM_MEMBERS = 0x00BEB608,       // CGRaidInfo::m_numMembers
+    VAR_RAID_REAL_NUM_MEMBERS = 0x00BEB60C,  // CGRaidInfo::m_realNumMembers
+
     // --- Reputation / factions ---------------------------------------------
     // Derived from Script_GetFactionInfo (FUN_005D1150 → worker FUN_005D0DA0),
     // Script_SetWatchedFactionIndex (FUN_005D1420), and Script_GetWatchedFactionInfo

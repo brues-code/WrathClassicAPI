@@ -83,6 +83,9 @@ Conventions:
   - [`C_GossipInfo.SelectOptionByIndex(orderIndex)`](#c_gossipinfoselectoptionbyindexorderindex)
   - [`C_GossipInfo.SelectAvailableQuest(questID)` / `SelectActiveQuest(questID)`](#c_gossipinfoselectavailablequestquestid--selectactivequestquestid)
   - [`C_GossipInfo.CloseGossip()`](#c_gossipinfoclosegossip)
+- [Group](#group)
+  - [`IsInGroup([groupType])`](#isingroupgrouptype)
+  - [`IsInRaid([groupType])`](#isinraidgrouptype)
 - [Item](#item)
   - [`C_Item.GetItemID(itemLocation)` / `GetItemGUID`](#c_itemgetitemiditemlocation)
   - [`C_Item.GetItemLocation(itemGUID)`](#c_itemgetitemlocationitemguid)
@@ -206,6 +209,7 @@ Conventions:
   - [`C_XMLUtil.GetTemplates()`](#c_xmlutilgettemplates)
 - [Globals](#globals)
   - [`LE_EXPANSION_*`](#le_expansion_)
+  - [`LE_PARTY_CATEGORY_*`](#le_party_category_)
 - [Behavioral extensions](#behavioral-extensions)
   - [`GetItemInfo` — auto cache warmup](#getiteminfo--auto-cache-warmup)
   - [`GameTooltip:SetSpellByID` — works for unknown spells](#gametooltipsetspellbyid--works-for-unknown-spells)
@@ -1193,6 +1197,45 @@ filtered list.
 Closes the gossip frame and clears the engine's gossip state.
 Same effect as clicking the X / pressing Escape — delegates to
 the engine's `Script_CloseGossip` so the CMSG path is verbatim.
+
+---
+
+## Group
+
+You can belong to two groups at once. Your own group is the **home**
+group. Inside a battleground or an arena you're also in that match's
+group, the **instance** group, and your home group waits for you
+outside. `groupType` picks which one to ask about:
+
+| `groupType` | Asks about |
+|---|---|
+| *(none)* | Either group |
+| `LE_PARTY_CATEGORY_HOME` (1) | Your home group |
+| `LE_PARTY_CATEGORY_INSTANCE` (2) | Your battleground or arena group |
+
+A Dungeon Finder group is a home group.
+
+### `IsInGroup([groupType])`
+
+Returns `true` if you're in a party or a raid.
+
+```lua
+if IsInGroup() then
+    SendChatMessage("ready check", IsInRaid() and "RAID" or "PARTY")
+end
+
+if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+    SendChatMessage("incoming", "BATTLEGROUND")
+end
+```
+
+### `IsInRaid([groupType])`
+
+Returns `true` if you're in a raid. A party returns `false`.
+
+```lua
+local channel = IsInRaid() and "RAID" or "PARTY"
+```
 
 ---
 
@@ -3200,6 +3243,16 @@ Numeric constants for the modern Blizzard expansion enum, matching
 
 Pair with `GetClassicExpansionLevel` / `ClassicExpansionAt*` for
 expansion-gated code paths.
+
+### `LE_PARTY_CATEGORY_*`
+
+The `groupType` values for [`IsInGroup`](#isingroupgrouptype) and
+[`IsInRaid`](#isinraidgrouptype):
+
+| Constant | Value |
+|----------|-------|
+| `LE_PARTY_CATEGORY_HOME` | 1 |
+| `LE_PARTY_CATEGORY_INSTANCE` | 2 |
 
 ---
 

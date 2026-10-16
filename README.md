@@ -43,6 +43,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
 | Friend List | `C_FriendList.GetNumFriends`, `C_FriendList.GetNumOnlineFriends`, `C_FriendList.GetFriendInfo`, `C_FriendList.GetFriendInfoByIndex`, `C_FriendList.SetFriendNotes`, `C_FriendList.SetFriendNotesByIndex`, `C_FriendList.IsFriend`, `C_FriendList.IsIgnored`, `C_FriendList.IsIgnoredByGuid` |
 | Gossip    | `C_GossipInfo.GetText`, `C_GossipInfo.GetOptions`, `C_GossipInfo.GetAvailableQuests`, `C_GossipInfo.GetActiveQuests`, `C_GossipInfo.GetNumOptions`, `C_GossipInfo.GetNumAvailableQuests`, `C_GossipInfo.GetNumActiveQuests`, `C_GossipInfo.SelectOption`, `C_GossipInfo.SelectOptionByIndex`, `C_GossipInfo.SelectAvailableQuest`, `C_GossipInfo.SelectActiveQuest`, `C_GossipInfo.CloseGossip` |
+| Group     | `IsInGroup`, `IsInRaid` |
 | Item      | `C_Item.DoesItemExist`, `C_Item.DoesItemExistByID`, `C_Item.GetCurrentItemLevel`, `C_Item.GetDetailedItemLevelInfo`, `C_Item.GetItemIcon`, `C_Item.GetItemIconByID`, `C_Item.GetItemGUID`, `C_Item.GetItemID`, `C_Item.GetItemInfo`, `C_Item.GetItemInfoInstant`, `C_Item.GetItemInventoryType`, `C_Item.GetItemInventoryTypeByID`, `C_Item.GetItemLink`, `C_Item.GetItemLocation`, `C_Item.GetItemMaxStackSize`, `C_Item.GetItemMaxStackSizeByID`, `C_Item.GetItemName`, `C_Item.GetItemNameByID`, `C_Item.GetItemQuality`, `C_Item.GetItemQualityByID`, `C_Item.GetItemSpell`, `C_Item.IsBound`, `C_Item.IsItemDataCached`, `C_Item.IsItemDataCachedByID`, `C_Item.IsLocked`, `C_Item.RequestLoadItemData`, `C_Item.RequestLoadItemDataByID` |
 | Macro     | `GetMacroIcons`, `GetMacroItemIcons`, `GetLooseMacroIcons`, `GetLooseMacroItemIcons` |
 | Mixins    | `Mixin`, `CreateFromMixins`, `CreateAndInitFromMixin` |
@@ -115,6 +116,7 @@ never touched. `ExportDBCFiles` also captures DBCs the listfile doesn't index.
 |-------|-----------|
 | Version | `WRATH_CLASSIC_API_VERSION` |
 | Expansion | `LE_EXPANSION_LEVEL_CURRENT`, `LE_EXPANSION_CLASSIC` … `LE_EXPANSION_MIDNIGHT` |
+| Group | `LE_PARTY_CATEGORY_HOME`, `LE_PARTY_CATEGORY_INSTANCE` |
 | Enum | `Enum.Base64Variant`, `Enum.CompressionMethod` |
 
 ## Building
