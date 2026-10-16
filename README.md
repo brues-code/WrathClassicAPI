@@ -79,6 +79,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `PLAYER_ENTERING_WORLD` | `isInitialLogin, isReloadingUi` | The stock event, now with a payload: `isInitialLogin` is `true` on a login from character select, `isReloadingUi` is `true` after a `/reload`, and both are `false` after any other loading screen |
 | `CURSOR_CHANGED` | `isDefault, newCursorType, oldCursorType, oldCursorVirtualID` | When what the cursor holds changes, for every kind of cursor. The types are `Enum.UICursorType` values |
 | `WEAPON_SLOT_CHANGED` | *(none)* | When the item in the main hand, off hand or ranged slot changes, at most once a frame. Relic changes don't fire it |
+| `HEARTHSTONE_BOUND` | *(none)* | Each time you bind your hearthstone, including a rebind at the same inn. `GetBindLocation()` already returns the new location |
 
 ### Client extensions
 

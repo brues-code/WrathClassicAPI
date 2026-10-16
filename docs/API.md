@@ -60,6 +60,7 @@ Conventions:
   - [`PLAYER_ENTERING_WORLD` payload](#player_entering_world-payload)
   - [`CURSOR_CHANGED` event](#cursor_changed-event)
   - [`WEAPON_SLOT_CHANGED` event](#weapon_slot_changed-event)
+  - [`HEARTHSTONE_BOUND` event](#hearthstone_bound-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -916,6 +917,24 @@ weapon, so changing it doesn't fire the event.
 The event fires at most once a frame. One action that changes two weapon
 slots, such as a two-hander replacing a one-hander and an off-hand,
 fires it once.
+
+### `HEARTHSTONE_BOUND` event
+
+Payload: *(none)*
+
+Fires each time you bind your hearthstone, including a rebind at the
+inn you're already bound to. `GetBindLocation()` returns the new
+location by the time the event fires.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("HEARTHSTONE_BOUND")
+f:SetScript("OnEvent", function()
+    print("Hearthstone set to " .. GetBindLocation())
+end)
+```
+
+It doesn't fire at login or when you change maps.
 
 ---
 

@@ -2268,6 +2268,16 @@ enum Offsets {
     FUN_INVENTORY_UPDATE = 0x006DEDD0,
     INV_SLOT_FIELD_FIRST = 0x2C0,
 
+    // Packet_Group_9 — the player's shared packet handler, `int __cdecl(void
+    // *param, uint32 msgId, uint32 time, CDataStore *msg)`, a switch on
+    // msgId; registered for SMSG_BINDPOINTUPDATE (0x155), 0x157 and
+    // SMSG_PLAYERBOUND (0x158) among others (registrations at 0x006E883D..).
+    // Its SMSG_PLAYERBOUND case plays the bind sound and prints "<area> is
+    // now your home." The server sends that packet only from the bind spell
+    // effect, right after the SMSG_BINDPOINTUPDATE carrying the new bind.
+    FUN_PACKET_PLAYER_GROUP_9 = 0x006E2E90,
+    OPCODE_SMSG_PLAYERBOUND = 0x158,
+
     // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:
     // `areaID in [DAT_00ad3144, DAT_00ad3140]`, record = `*(DAT_00ad3154 +
     // (areaID-min)*4)`; it hops once to the parent area (`*(rec+0x08)`, when
