@@ -49,6 +49,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Player Info | `C_PlayerInfo.CanUseItem` |
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
+| Sound     | `PlaySound`, `C_Sound.PlaySound`, `C_Sound.PlaySoundWithOptions`, `C_Sound.IsPlaying`, `C_Sound.GetSoundScaledVolume`, `C_Sound.PlayItemSound`, `C_Sound.PlayVocalErrorSound`, `C_Sound.GetRecentSoundFiles`, `MuteSoundFile`, `UnmuteSoundFile`, `Enum.ItemSoundType`, `Enum.Vocalerrorsounds` |
 | Spell     | `IsPlayerSpell`, `CanDualWield`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
 | Swing Timer | `C_SwingTimer.EnableRangeCheck`, `C_SwingTimer.IsTargetWithinSwingRange`, `Enum.PlayerSwingType` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
@@ -74,6 +75,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `QUEST_REMOVED` | `questID` | When a quest leaves the quest log for any reason — turned in, abandoned, or auto-failed |
 | `PLAYER_SWING` | `swingDuration, swingType` | Each time one of your main-hand, off-hand or ranged attack timers resets. `swingDuration` is the seconds until that timer's next attack |
 | `PLAYER_SWING_RANGE_UPDATE` | `swingType, isInRange, checksRange` | When your target moves into or out of range for a swing type turned on with `C_SwingTimer.EnableRangeCheck` |
+| `SOUNDKIT_FINISHED` | `soundHandle` | When a sound played with `runFinishCallback` set to `true` ends |
 
 ### Client extensions
 

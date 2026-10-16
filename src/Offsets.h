@@ -2450,4 +2450,69 @@ enum Offsets {
     FUN_SPELL_RANGE_CHECK_SELECTED = 0x00809610,
     // The player's running autorepeat spell (Auto Shot / Shoot), 0 when none.
     VAR_AUTO_REPEATING_SPELL = 0x00D397D0,
+
+    // --- Sound (src/sound/) -------------------------------------------------
+    //
+    // SI2::PlaySoundKit — `int __cdecl(int soundKitID, const C3Vector *pos,
+    // SE2SoundKitObject *object, SE2SoundKitProperties *props, uint advancedID,
+    // uint *outSoundID, int checkDistance, int keepPlaying)`. Returns 0 when
+    // the sound starts, else a reason (5 no such kit, 14 group full, 15 already
+    // playing, 16 no file, 17 sound off, ...). With no object the sound never
+    // loops. *outSoundID is the started sound's id (SESound::GetID), taken from
+    // a counter that only goes up, so an id names one sound for the session.
+    FUN_SI2_PLAY_SOUND_KIT = 0x004C6A40,
+    // SI2::LookupSoundKitId — `int __cdecl(const char *name)`, 0 if unknown.
+    FUN_SI2_LOOKUP_SOUND_KIT_ID = 0x004CCAA0,
+    // SE2SoundKitProperties::ResetToDefaults — `__thiscall(props)`. The struct
+    // is 0xE8 bytes; the fields we set:
+    SOUND_KIT_PROPERTIES_SIZE = 0xE8,
+    FUN_SOUND_KIT_PROPERTIES_RESET = 0x004C5990,
+    OFF_SOUND_KIT_PROPS_GROUP = 0x00,
+    OFF_SOUND_KIT_PROPS_VOLUME_SCALE = 0x08, // volume = kit volume * scale
+    OFF_SOUND_KIT_PROPS_PRIORITY = 0x20,
+    OFF_SOUND_KIT_PROPS_SUPPRESSOR_MODE = 0x24, // 2 = don't start while playing
+    OFF_SOUND_KIT_PROPS_REVERB = 0x3C,
+    // Channel groups (SI2::s_channelGroupNames): 0 SFX, 1 MUSIC, 2 AMBIENCE,
+    // 4 SCRIPTSOUND (under the master volume only).
+    SOUND_GROUP_SFX = 0,
+    SOUND_GROUP_MUSIC = 1,
+    SOUND_GROUP_AMBIENCE = 2,
+    SOUND_GROUP_SCRIPT_SOUND = 4,
+    // PlaySound's own settings (SI2::PlayUISound, FUN_004C8FC0).
+    SOUND_UI_PRIORITY = 128,
+    SOUND_SUPPRESSOR_NO_DUPLICATES = 2,
+
+    // SE2::GetSoundFromID — `SESound *__cdecl(uint id, int *created)`, null
+    // once the sound is released. When *created is set the SESound was made
+    // for this call: Detach it and free it, as SI2::UpdateAdvancedSounds does.
+    // SESound is { SESoundInternal *internal }.
+    FUN_SE2_GET_SOUND_FROM_ID = 0x0087B580,
+    FUN_SESOUND_IS_PLAYING = 0x00878730, // bool __thiscall(SESound *)
+    FUN_SESOUND_DETACH = 0x00878270,     // void __thiscall(SESound *)
+    // SESoundInternal::GetScaledVolume — `float __thiscall(internal)`: its
+    // volume after fades, channel-group volumes and the volume settings.
+    FUN_SESOUND_INTERNAL_GET_SCALED_VOLUME = 0x00878FD0,
+
+    // SE2::CreateWaveData — `int __cdecl(FMOD::System *, const char *path,
+    // FMOD_MODE, SESound *, SoundGroup *, SoundGroup *, bool randomStart,
+    // int priority, int reverb, bool streaming, uint decodeBufferSize,
+    // int software, float, float, float, const C3Vector *)`. Every file sound
+    // opens here (SESound::Create2D / Create3D); 0 means it didn't, which each
+    // caller already handles (PlaySoundKit returns 16).
+    FUN_SE2_CREATE_WAVE_DATA = 0x0087EE60,
+
+    // SI2::PlayItemSound — `void __cdecl(int type, int displayInfoID)`:
+    // ItemDisplayInfo -> ItemGroupSounds -> m_sound[type], type 0..3.
+    FUN_SI2_PLAY_ITEM_SOUND = 0x004D0090,
+
+    // SI2::PlayVocalErrorSound — `void __cdecl(int error)`. Plays the
+    // player's race/sex recording (table built at login by
+    // SI2::InitVocalErrorSounds from VocalUISounds.dbc, 68 entries). Honors
+    // Sound_EnableErrorSpeech and doesn't overlap itself. Only bounds-checks
+    // the top, so callers keep error in 0..67.
+    FUN_SI2_PLAY_VOCAL_ERROR_SOUND = 0x00986D00,
+    VOCAL_ERROR_SOUND_COUNT = 68,
+
+    // OsGetAsyncTimeMs — `uint __cdecl()`, the clock GetTime() reads.
+    FUN_OS_GET_ASYNC_TIME_MS = 0x0086AE20,
 };

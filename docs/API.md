@@ -56,6 +56,7 @@ Conventions:
   - [`FACTION_STANDING_CHANGED` event](#faction_standing_changed-event)
   - [`PLAYER_SWING` event](#player_swing-event)
   - [`PLAYER_SWING_RANGE_UPDATE` event](#player_swing_range_update-event)
+  - [`SOUNDKIT_FINISHED` event](#soundkit_finished-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -116,6 +117,16 @@ Conventions:
   - [`C_Reputation.GetLastStandingChange()`](#c_reputationgetlaststandingchange)
   - [`FACTION_STANDING_CHANGED` event](#faction_standing_changed-event)
   - [`FactionData` table shape](#factiondata-table-shape)
+- [Sound](#sound)
+  - [`PlaySound(soundKitID [, channel, forceNoDuplicates, runFinishCallback])`](#playsoundsoundkitid-channel-forcenoduplicates-runfinishcallback)
+  - [`C_Sound.PlaySound(soundKitID [, channel, forceNoDuplicates, runFinishCallback])`](#c_soundplaysoundsoundkitid-channel-forcenoduplicates-runfinishcallback)
+  - [`C_Sound.PlaySoundWithOptions(params)`](#c_soundplaysoundwithoptionsparams)
+  - [`C_Sound.IsPlaying(soundHandle)`](#c_soundisplayingsoundhandle)
+  - [`C_Sound.GetSoundScaledVolume(soundHandle)`](#c_soundgetsoundscaledvolumesoundhandle)
+  - [`C_Sound.PlayItemSound(soundType, item)`](#c_soundplayitemsoundsoundtype-item)
+  - [`C_Sound.PlayVocalErrorSound(vocalErrorSoundID)`](#c_soundplayvocalerrorsoundvocalerrorsoundid)
+  - [`MuteSoundFile(file)` / `UnmuteSoundFile(file)`](#mutesoundfilefile--unmutesoundfilefile)
+  - [`C_Sound.GetRecentSoundFiles()`](#c_soundgetrecentsoundfiles)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
@@ -771,6 +782,28 @@ type that has range checking on. See
 - **`checksRange`** (boolean) — `false` when no range check was
   possible: there is no current target, the target can't be attacked,
   or no weapon is equipped for this swing type.
+
+### `SOUNDKIT_FINISHED` event
+
+Payload: `soundHandle`
+
+Fires when a sound played with `runFinishCallback` set to `true` ends.
+`soundHandle` is the handle
+[`PlaySound`](#playsoundsoundkitid-channel-forcenoduplicates-runfinishcallback)
+returned for it.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("SOUNDKIT_FINISHED")
+f:SetScript("OnEvent", function(self, event, soundHandle)
+    print("finished:", soundHandle)
+end)
+
+PlaySound(8959, "SFX", nil, true)
+```
+
+Sounds played without `runFinishCallback` report nothing. The event
+arrives on the first frame after the sound ends.
 
 ---
 
@@ -1615,6 +1648,188 @@ end)
 | `isChild` | boolean | A sub-faction under a header. |
 | `hasBonusRepGain` | boolean | Always `false`. |
 | `isAccountWide` | boolean | Always `false`. |
+
+---
+
+## Sound
+
+Every sound the game plays comes from one table of sound entries. Each
+entry has an id, its **SoundKitID**, and one or more audio files. The
+ids match the modern client's `SOUNDKIT` values, so `8959` is the raid
+warning in both. [`MuteSoundFile`](#mutesoundfilefile--unmutesoundfilefile)
+takes a sound's file path, and
+[`C_Sound.GetRecentSoundFiles`](#c_soundgetrecentsoundfiles) shows the
+path of a sound you just heard. The
+[`SOUNDKIT_FINISHED`](#soundkit_finished-event) event can tell you when
+a sound ends.
+
+### `PlaySound(soundKitID [, channel, forceNoDuplicates, runFinishCallback])`
+
+Plays a sound and returns `willPlay, soundHandle`.
+
+```lua
+local willPlay, handle = PlaySound(8959)
+PlaySound("igMainMenuOpen")             -- a sound entry's name also works
+PlaySound(8959, "Master", nil, true)    -- SOUNDKIT_FINISHED when it ends
+```
+
+An entry with several files plays one of them, picked the way the game
+picks for its own sounds.
+
+`willPlay` is `false`, and `soundHandle` is `nil`, when the sound can't
+start:
+
+- the id or name names no sound
+- sound is turned off in the sound options, or the channel's sounds
+  are (for example, sound effects for `"SFX"`)
+- the same sound is already playing: a sound never plays a second copy
+  over itself
+- its file is muted with `MuteSoundFile`
+
+| Argument | Meaning |
+|---|---|
+| `channel` | Which volume slider applies: `"SFX"` (the default), `"Music"`, `"Ambience"` or `"Master"` (the master volume only). `"Dialog"` and any other value play as `"SFX"`. |
+| `forceNoDuplicates` | Accepted and ignored: a sound never plays over itself. |
+| `runFinishCallback` | Pass `true` to get [`SOUNDKIT_FINISHED`](#soundkit_finished-event) when this sound ends. |
+
+### `C_Sound.PlaySound(soundKitID [, channel, forceNoDuplicates, runFinishCallback])`
+
+The same as [`PlaySound`](#playsoundsoundkitid-channel-forcenoduplicates-runfinishcallback).
+
+### `C_Sound.PlaySoundWithOptions(params)`
+
+Plays a sound with its options in a table, and returns
+`success, soundHandle`. The sound plays on the `"SFX"` channel.
+
+```lua
+local ok, handle = C_Sound.PlaySoundWithOptions({
+    soundKitID = 8959,
+    volumeOverride = 0.4,
+    runFinishCallback = true,
+})
+```
+
+| Field | Meaning |
+|---|---|
+| `soundKitID` | The sound to play. |
+| `volumeOverride` | Scales the sound's volume: `1` leaves it alone, `0` is silent. Leave it out for the sound's own volume. |
+| `runFinishCallback` | Pass `true` to get [`SOUNDKIT_FINISHED`](#soundkit_finished-event) when this sound ends. |
+| `uiSoundSubType` | Accepted and ignored. |
+| `forceNoDuplicates` | Accepted and ignored. |
+| `overridePriority` | Accepted and ignored. |
+
+### `C_Sound.IsPlaying(soundHandle)`
+
+Returns `true` while the sound for a handle is playing.
+
+```lua
+local _, handle = PlaySound(8959)
+C_Sound.IsPlaying(handle)   -- true until the sound ends
+```
+
+A handle names one sound for the whole session, so an old handle never
+reports a different sound.
+
+### `C_Sound.GetSoundScaledVolume(soundHandle)`
+
+Returns the volume a sound is playing at, from `0` to `1`: its own
+volume after `volumeOverride` and your volume settings. Returns `nil`
+once the sound has ended.
+
+```lua
+local _, handle = C_Sound.PlaySoundWithOptions({ soundKitID = 8959, volumeOverride = 0.4 })
+C_Sound.GetSoundScaledVolume(handle)
+```
+
+### `C_Sound.PlayItemSound(soundType, item)`
+
+Plays the noise an item makes when you handle it, without doing the
+action.
+
+```lua
+C_Sound.PlayItemSound(Enum.ItemSoundType.Pickup, { bagID = 0, slotIndex = 1 })
+C_Sound.PlayItemSound(Enum.ItemSoundType.Drop, 19019)
+```
+
+`soundType` is an `Enum.ItemSoundType` value:
+
+| Value | Field |
+|---|---|
+| 0 | `Pickup` |
+| 1 | `Drop` |
+| 2 | `Use` |
+| 3 | `Close` |
+
+`item` is an item location (`{ bagID = B, slotIndex = S }` or
+`{ equipmentSlotIndex = N }`), or any item argument the `C_Item` `ByID`
+functions take: an itemID, an item link, the name of a cached item, or
+an item GUID.
+
+The sound comes from the item's appearance, so items that look alike
+sound alike. With the game's own data only `Pickup` and `Drop` have
+sounds; `Use` and `Close` play nothing unless the realm's data adds
+them. Nothing plays, and nothing is raised, for an item that can't be
+found.
+
+### `C_Sound.PlayVocalErrorSound(vocalErrorSoundID)`
+
+Plays your character's spoken complaint for an error ("my bags are
+full", "I have no ammo") in the voice of their race and sex.
+
+```lua
+C_Sound.PlayVocalErrorSound(Enum.Vocalerrorsounds.Inventoryfull)
+C_Sound.PlayVocalErrorSound(Enum.Vocalerrorsounds.Outofammo)
+```
+
+`Enum.Vocalerrorsounds` holds all 68 values, from `Inventoryfull` (0)
+to `ExhaustedObsolete` (67). Like the game's own error speech, it plays
+nothing while the error speech sound option is off, or while your
+character is already saying one. Some combinations have no recording
+and play nothing.
+
+### `MuteSoundFile(file)` / `UnmuteSoundFile(file)`
+
+Stops a sound file from playing, and lets it play again.
+
+```lua
+MuteSoundFile("Sound\\Interface\\RaidWarning.wav")
+PlaySound(8959)      -- false: silent
+UnmuteSoundFile("Sound\\Interface\\RaidWarning.wav")
+PlaySound(8959)      -- true: plays again
+```
+
+`file` is the path of the audio file. Upper and lower case don't
+matter, and `/` works in place of `\\`. A mute applies to the file, so
+it covers every sound that uses it, whoever plays it.
+
+`MuteSoundFile` returns `true` when the path is now muted.
+`UnmuteSoundFile` returns `true` when the path had been muted.
+
+Mutes last until you log out or reload. To keep them, save your list
+and apply it again on login.
+
+### `C_Sound.GetRecentSoundFiles()`
+
+Returns the files that played most recently, newest first. Use it to
+find the path of a sound you just heard.
+
+```lua
+local recent = C_Sound.GetRecentSoundFiles()
+-- recent[1] = { file = "Sound\\Interface\\RaidWarning.wav",
+--               time = 96036833, muted = false }
+```
+
+| Field | Meaning |
+|---|---|
+| `file` | The path of the audio file. Pass it to `MuteSoundFile`. |
+| `time` | When it played, in milliseconds on `GetTime()`'s clock: `GetTime() * 1000 - time` is how long ago. |
+| `muted` | `true` when the file is muted. |
+
+The list holds the last 64 different files. A file that plays again
+moves to the front instead of taking a second place, so a repeating
+footstep can't push the rest out. Muted files stay in the list, marked
+`muted = true`, so you can still find one to unmute. The list covers
+every sound the game plays, not only the ones you start.
 
 ---
 
