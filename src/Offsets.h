@@ -2420,6 +2420,14 @@ enum Offsets {
     // which also moves the old value to m_previousSheatheState at +0xB58)
     // and read by CGPlayer_C::ToggleSheathe to pick the next state.
     OFF_UNIT_SHEATH_STATE = 0xB5C,
+
+    // CGUnit_C::GetShapeshiftForm — `uint32_t __thiscall(this)`, no stack
+    // args. Returns the SpellShapeshiftForm.dbc ID (byte 3 of
+    // UNIT_FIELD_BYTES_2, descriptor +0x1D3), or 0 while
+    // CGUnit_C::m_shapeshiftSuppressed (+0x9F4) is set: CancelShapeshift
+    // sets it to hide the form at once, and the server's form update clears
+    // it. The stance bar's active-form check reads the form through it.
+    FUN_UNIT_GET_SHAPESHIFT_FORM = 0x0071AF70,
     OPCODE_SMSG_PLAYERBOUND = 0x158,
 
     // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:

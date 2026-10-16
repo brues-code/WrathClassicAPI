@@ -121,6 +121,7 @@ Conventions:
 - [Player Info](#player-info)
   - [`C_PlayerInfo.CanUseItem(item)`](#c_playerinfocanuseitemitem)
   - [`GetSheathState()`](#getsheathstate)
+  - [`GetShapeshiftFormID()`](#getshapeshiftformid)
 - [Quest Log](#quest-log)
   - [`C_QuestLog.GetQuestIDForLogIndex(questLogIndex)`](#c_questloggetquestidforlogindexquestlogindex)
   - [`C_QuestLog.ReadyForTurnIn(questID)`](#c_questlogreadyforturninquestid)
@@ -1787,6 +1788,29 @@ end
 
 Returns `1` before you've entered the world. A `ToggleSheath()` shows up
 right away. To change the state, use `ToggleSheath()`.
+
+### `GetShapeshiftFormID()`
+
+Returns the ID of your current shapeshift form, stance or stealth, or
+`nil` when you aren't in one.
+
+| Class | Form IDs |
+|---|---|
+| Druid | `1` Cat, `2` Tree of Life, `3` Travel, `4` Aquatic, `5` Bear, `8` Dire Bear, `27` Swift Flight, `29` Flight, `31` Moonkin |
+| Warrior | `17` Battle, `18` Defensive, `19` Berserker |
+| Shaman | `16` Ghost Wolf |
+| Rogue | `13` Shadow Dance, `30` Stealth |
+| Priest | `28` Shadowform, `32` Spirit of Redemption |
+| Warlock | `22` Metamorphosis |
+
+```lua
+if GetShapeshiftFormID() == 1 then
+    -- in Cat Form
+end
+```
+
+Returns `nil` before you've entered the world. A `CancelShapeshiftForm()`
+shows up right away. `UPDATE_SHAPESHIFT_FORM` fires when the form changes.
 
 ---
 
