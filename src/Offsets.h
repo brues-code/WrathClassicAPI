@@ -1998,6 +1998,36 @@ enum Offsets {
     // PLAYER_ENTERING_WORLD fires; EnterWorld itself reads it (0x005280D3).
     VAR_UI_CURRENTLY_RELOADING = 0x00BD0790,
 
+    // --- Cursor contents (src/cursor/Changed.cpp) ---
+    //
+    // CGGameUI's cursor globals, as Script_GetCursorInfo (0x00515200)
+    // reads them and the CGGameUI::SetCursor* setters (0x00520770..
+    // 0x00520DC0) write them. `VAR_CURSOR_TYPE` says which of the others
+    // is live:
+    //    0 empty                    7 item from an action bar or PickupItem
+    //    1 bag/equipped item (GUID)  8 macro (macroID)
+    //    2 money                     9 ammo slot item
+    //    3 spell                    10 stabled pet (stable index)
+    //    4 pet action               11 guild bank item
+    //    5 merchant item            12 guild bank money
+    //                               13 equipment set (setID)
+    // Types 5/7/9/11 keep the itemID in `VAR_CURSOR_VIRTUAL_ID` and their
+    // source slot in `VAR_CURSOR_VIRTUAL_SLOT` (0-based merchant index for 5).
+    VAR_CURSOR_TYPE = 0x00BD0748,
+    VAR_CURSOR_VIRTUAL_SLOT = 0x00BD0750,
+    VAR_CURSOR_VIRTUAL_ID = 0x00BD0758,
+    VAR_CURSOR_ITEM_GUID_LO = 0x00BD0768,
+    VAR_CURSOR_ITEM_GUID_HI = 0x00BD076C,
+    VAR_CURSOR_MONEY = 0x00BD079C, // copper; types 2 and 12
+    VAR_CURSOR_SPELL_ID = 0x00BD07E0,
+    VAR_CURSOR_PET_ACTION = 0x00BD07E4, // packed PetAction word
+    VAR_CURSOR_MACRO_ID = 0x00BD07E8,
+    VAR_CURSOR_STABLE_PET = 0x00BD07EC,
+    VAR_CURSOR_EQUIPMENT_SET = 0x00AC80A0, // -1 when none
+    // CGUIMacros::GetMacroIndexByID — `int __cdecl(uint32 macroID)`, the
+    // 0-based slot, or -1. Script_GetCursorInfo adds 1 for Lua.
+    FUN_MACRO_INDEX_BY_ID = 0x00564AB0,
+
     // --- ExportInterfaceFiles console command (src/interface/Export.cpp) ---
 
     // MPQ listfile enumerator (by path prefix). `void __cdecl(const char

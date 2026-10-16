@@ -58,6 +58,7 @@ Conventions:
   - [`PLAYER_SWING_RANGE_UPDATE` event](#player_swing_range_update-event)
   - [`SOUNDKIT_FINISHED` event](#soundkit_finished-event)
   - [`PLAYER_ENTERING_WORLD` payload](#player_entering_world-payload)
+  - [`CURSOR_CHANGED` event](#cursor_changed-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -833,6 +834,59 @@ end)
 
 Both are `false` after any other loading screen, and they are never both
 `true`. Handlers that ignore the arguments work as before.
+
+### `CURSOR_CHANGED` event
+
+Payload: `isDefault, newCursorType, oldCursorType, oldCursorVirtualID`
+
+Fires when what the cursor holds changes, and says what it held before.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("CURSOR_CHANGED")
+f:SetScript("OnEvent", function(self, event, isDefault, newType, oldType, oldID)
+    if newType == Enum.UICursorType.Item then
+        -- an item was just picked up; GetCursorInfo() has the details
+    end
+end)
+```
+
+| Argument | Meaning |
+|---|---|
+| `isDefault` | `true` when the cursor is now empty. |
+| `newCursorType` | What the cursor holds now, as an `Enum.UICursorType` value. |
+| `oldCursorType` | What it held before, as an `Enum.UICursorType` value. |
+| `oldCursorVirtualID` | The previous content's number: an itemID, spellID, macro slot, merchant slot, equipment set ID, or a money amount in copper. `0` when the cursor was empty, and for a pet action or a stabled pet. |
+
+`Enum.UICursorType` holds every value from `Default` (0) to
+`PerksProgramVendorItem` (20). The cursor can hold these:
+
+| Value | Name | What's on the cursor |
+|---|---|---|
+| 0 | `Default` | Nothing |
+| 1 | `Item` | An item from your bags, your equipment, or an action bar |
+| 2 | `Money` | Money from your purse |
+| 3 | `Spell` | A spell, companion or mount |
+| 4 | `PetAction` | A pet action bar button |
+| 5 | `Merchant` | An item from a merchant |
+| 7 | `Macro` | A macro |
+| 8 | `Ammo` | The item in your ammo slot |
+| 9 | `Pet` | A stabled pet |
+| 10 | `GuildBank` | An item from the guild bank |
+| 11 | `GuildBankMoney` | Money from the guild bank |
+| 12 | `EquipmentSet` | An equipment set |
+
+`CURSOR_UPDATE` still fires as before, so nothing that listens to it
+needs changing. Prefer `CURSOR_CHANGED` for new code, because it reports
+every kind of cursor. `CURSOR_UPDATE` describes a new holding only for
+items: picking up money, a spell, a macro, a pet action, a stabled pet or
+an equipment set gives one `CURSOR_UPDATE` that describes an *empty*
+cursor, and nothing once the new content is in place.
+
+`CURSOR_CHANGED` fires once per real change and stays quiet otherwise.
+It arrives on the frame after the change. Picking up one of two
+identical stacks, dropping it and picking up the other reports each
+pickup separately.
 
 ---
 
