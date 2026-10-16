@@ -113,6 +113,7 @@ Conventions:
   - [`C_Item.IsLocked(itemLocation)`](#c_itemislockeditemlocation)
   - [`C_Item.IsBound(itemLocation)`](#c_itemisbounditemlocation)
   - [`C_Item.GetItemSpell(item)`](#c_itemgetitemspellitem)
+  - [`GetInventoryItemRepairCost(invSlot)`](#getinventoryitemrepaircostinvslot)
 - [Macro](#macro)
   - [`GetMacroIcons` / `GetMacroItemIcons` / `GetLooseMacroIcons` / `GetLooseMacroItemIcons`](#getmacroicons--getmacroitemicons--getloosemacroicons--getloosemacroitemicons)
 - [Mixins](#mixins)
@@ -1674,6 +1675,23 @@ Returns `false` for empty slots, malformed `itemLocation`, and
 items whose stats record isn't cached yet (pair with
 `C_Item.RequestLoadItemData(itemLocation)` if you're querying a
 recently-seen item that might not be loaded).
+
+### `GetInventoryItemRepairCost(invSlot)`
+
+Returns the copper it costs to repair the item you have equipped in
+`invSlot`. It's the same value `GameTooltip:SetInventoryItem` returns
+third.
+
+```lua
+local cost = GetInventoryItemRepairCost(INVSLOT_CHEST)
+if cost > 0 then
+    print(GetCoinTextureString(cost))
+end
+```
+
+Returns `0` for an empty slot and for an item that doesn't need or
+can't take repair. While a merchant window is open, the cost includes
+that merchant's reputation discount; otherwise it's the full price.
 
 ---
 

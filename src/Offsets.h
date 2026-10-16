@@ -2432,6 +2432,14 @@ enum Offsets {
     // UNIT_FIELD_PETNUMBER set. The unit tooltip (CGTooltip unit builder) calls
     // it for non-player units and prints the result under the name.
     FUN_UNIT_GET_TITLE = 0x00719950,
+
+    // CGMerchantInfo::GetRepairCost — `int32_t __cdecl(CGItem_C *item)`. The
+    // item's repair cost in copper (CGItem_C::GetRepairCost, 0x00708540: 0 for
+    // broken, unrepairable, full-durability, or uncached items), less the
+    // reputation discount of the merchant whose window is open
+    // (CGMerchantInfo::m_merchant). GameTooltip:SetInventoryItem returns it
+    // as its third value.
+    FUN_MERCHANT_GET_REPAIR_COST = 0x00584B20,
     // OBJECT_FIELD_TYPE — the object's TYPEMASK bits, in the object fields
     // (`[obj + OFF_OBJECT_DESCRIPTORS]`).
     OFF_OBJECT_FIELD_TYPE = 0x08,
