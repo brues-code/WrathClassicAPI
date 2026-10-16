@@ -50,6 +50,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "frame/Methods.h"
 
 #include <windows.h>
 
@@ -120,7 +121,6 @@ using GxTexMtxPushLoad_t = void(__fastcall *)(void *dev, void *edx, int unit, co
 
 BatchDraw_t g_batchDrawOriginal = nullptr;
 Walker_t g_textureWalkerOriginal = nullptr;
-Walker_t g_frameWalkerOriginal = nullptr;
 Dtor_t g_dtorOriginal = nullptr;
 
 // --- textures and rects ------------------------------------------------------
@@ -608,13 +608,7 @@ int __cdecl Script_CreateMaskTexture(void *L) {
     return 1;
 }
 
-// (name, func) pairs in the engine's 8-byte method-table layout.
-struct MethodEntry {
-    const char *name;
-    Game::Lua::CFunction func;
-};
-
-const MethodEntry kTextureMethods[] = {
+const Frame::Methods::Entry kTextureMethods[] = {
     {"SetMask", &Script_SetMask},
     {"AddMaskTexture", &Script_AddMaskTexture},
     {"RemoveMaskTexture", &Script_RemoveMaskTexture},
@@ -622,31 +616,22 @@ const MethodEntry kTextureMethods[] = {
     {"GetMaskTexture", &Script_GetMaskTexture},
 };
 
-const MethodEntry kFrameMethods[] = {
+const Frame::Methods::Entry kFrameMethods[] = {
     {"CreateMaskTexture", &Script_CreateMaskTexture},
 };
 
-void RegisterMethods(void *L, const MethodEntry *table, int count) {
-    reinterpret_cast<RegisterFrameMethods_t>(Offsets::FUN_REGISTER_FRAME_METHODS)(L, table, count);
-}
-
 void __cdecl TextureWalker_h(void *L) {
     g_textureWalkerOriginal(L);
-    RegisterMethods(L, kTextureMethods, static_cast<int>(std::size(kTextureMethods)));
-}
-
-void __cdecl FrameWalker_h(void *L) {
-    g_frameWalkerOriginal(L);
-    RegisterMethods(L, kFrameMethods, static_cast<int>(std::size(kFrameMethods)));
+    reinterpret_cast<RegisterFrameMethods_t>(Offsets::FUN_REGISTER_FRAME_METHODS)(
+        L, kTextureMethods, static_cast<int>(std::size(kTextureMethods)));
 }
 
 static const Game::HookAutoRegister _textureWalkerHook{
     Offsets::FUN_TEXTURE_METHODS_WALKER, reinterpret_cast<void *>(&TextureWalker_h),
     reinterpret_cast<void **>(&g_textureWalkerOriginal)};
 
-static const Game::HookAutoRegister _frameWalkerHook{
-    Offsets::FUN_FRAME_METHODS_WALKER, reinterpret_cast<void *>(&FrameWalker_h),
-    reinterpret_cast<void **>(&g_frameWalkerOriginal)};
+static const Frame::Methods::AutoRegister _frameMethods{
+    kFrameMethods, static_cast<int>(std::size(kFrameMethods))};
 
 } // namespace
 

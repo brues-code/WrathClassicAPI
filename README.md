@@ -40,7 +40,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Container | `C_Container.SwapItems`, `C_Container.MoveItem` |
 | CVar      | `C_CVar.GetCVar`, `C_CVar.SetCVar`, `C_CVar.GetCVarDefault`, `C_CVar.RegisterCVar`, `C_CVar.GetCVarBool`, `C_CVar.GetCVarInfo`, `C_CVar.DoesCVarExist`, `C_CVar.AreCVarsLoaded`, `C_CVar.GetCVarBitfield`, `C_CVar.SetCVarBitfield`, `C_CVar.SetTempCVar`, `C_CVar.RemoveTempCVar` |
 | Encoding  | `C_EncodingUtil.EncodeHex`, `C_EncodingUtil.DecodeHex`, `C_EncodingUtil.EncodeBase64`, `C_EncodingUtil.DecodeBase64`, `C_EncodingUtil.CompressString`, `C_EncodingUtil.DecompressString`, `C_EncodingUtil.SerializeJSON`, `C_EncodingUtil.DeserializeJSON`, `C_EncodingUtil.SerializeCBOR`, `C_EncodingUtil.DeserializeCBOR` |
-| Events    | `C_EventUtils.IsEventValid` |
+| Events    | `C_EventUtils.IsEventValid`, `Frame:RegisterUnitEvent`, `Frame:IsEventRegistered` |
 | Expansion | `GetClassicExpansionLevel`, `ClassicExpansionAtLeast`, `ClassicExpansionAtMost` |
 | Friend List | `C_FriendList.GetNumFriends`, `C_FriendList.GetNumOnlineFriends`, `C_FriendList.GetFriendInfo`, `C_FriendList.GetFriendInfoByIndex`, `C_FriendList.SetFriendNotes`, `C_FriendList.SetFriendNotesByIndex`, `C_FriendList.IsFriend`, `C_FriendList.IsIgnored`, `C_FriendList.IsIgnoredByGuid` |
 | Gossip    | `C_GossipInfo.GetText`, `C_GossipInfo.GetOptions`, `C_GossipInfo.GetAvailableQuests`, `C_GossipInfo.GetActiveQuests`, `C_GossipInfo.GetNumOptions`, `C_GossipInfo.GetNumAvailableQuests`, `C_GossipInfo.GetNumActiveQuests`, `C_GossipInfo.SelectOption`, `C_GossipInfo.SelectOptionByIndex`, `C_GossipInfo.SelectAvailableQuest`, `C_GossipInfo.SelectActiveQuest`, `C_GossipInfo.CloseGossip` |

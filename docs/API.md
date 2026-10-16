@@ -55,6 +55,8 @@ Conventions:
   - [`C_EncodingUtil.SerializeCBOR` / `DeserializeCBOR`](#c_encodingutilserializecbor--deserializecbor)
 - [Events](#events)
   - [`C_EventUtils.IsEventValid(eventName)`](#c_eventutilsiseventvalideventname)
+  - [`Frame:RegisterUnitEvent(event, unit1 [, unit2, ...])`](#frameregisteruniteventevent-unit1--unit2-)
+  - [`Frame:IsEventRegistered(event)`](#frameiseventregisteredevent)
   - [`GET_ITEM_INFO_RECEIVED` event](#get_item_info_received-event)
   - [`ITEM_DATA_LOAD_RESULT` event](#item_data_load_result-event)
   - [`QUEST_DATA_LOAD_RESULT` event](#quest_data_load_result-event)
@@ -753,6 +755,44 @@ C_EventUtils.IsEventValid("NOT_A_REAL_EVENT")       -- false
 
 Calls into the engine's own event-name hash table, so it covers
 every stock event plus any custom event WrathClassicAPI has appended.
+
+### `Frame:RegisterUnitEvent(event, unit1 [, unit2, ...])`
+
+Registers the frame for `event`, but only delivers it when the event's
+first argument is one of the given unit tokens. Returns `true` if the
+event exists and the frame is now registered.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterUnitEvent("UNIT_HEALTH", "player", "target")
+f:SetScript("OnEvent", function(self, event, unit)
+    print(event, unit)  -- only "player" or "target"
+end)
+```
+
+- Unit tokens compare case-insensitively. Non-string arguments are
+  ignored; with no unit at all, this is a plain `RegisterEvent`.
+- Events whose first argument isn't a string are delivered unfiltered.
+- On a frame already registered with `RegisterUnitEvent`, the new units
+  replace the old ones.
+- On a frame already registered with `RegisterEvent`, the registration
+  stays unfiltered. Call `UnregisterEvent` first to switch.
+- `RegisterEvent` on a unit-filtered registration keeps the filter.
+- `UnregisterEvent` and `UnregisterAllEvents` remove the filter.
+
+### `Frame:IsEventRegistered(event)`
+
+Returns `true` if the frame is registered for `event`, else `false`.
+For a `RegisterUnitEvent` registration, the units follow, in the order
+they were given.
+
+```lua
+f:RegisterUnitEvent("UNIT_HEALTH", "player", "target")
+f:IsEventRegistered("UNIT_HEALTH")  -- true, "player", "target"
+f:RegisterEvent("PLAYER_LOGIN")
+f:IsEventRegistered("PLAYER_LOGIN") -- true
+f:IsEventRegistered("UNIT_MANA")    -- false
+```
 
 ### `GET_ITEM_INFO_RECEIVED` event
 

@@ -1781,6 +1781,53 @@ enum Offsets {
     VAR_EVENT_TABLE      = 0x00D3F7A8,
     FUN_EVENT_TABLE_FIND = 0x004BC410,
 
+    // FrameScript_EventObject (the entry FUN_EVENT_TABLE_FIND returns) holds
+    // three TSList<EVENTLISTENERNODE>: the live listeners, and the unregisters /
+    // registers a frame made while the event is mid-dispatch (applied once the
+    // dispatch ends). Each OFF_EVENT_*_HEAD is its list's first-node link; a
+    // link with bit 0 set (or 0) ends the list. Node: next link at +0x04, the
+    // FrameScript_Object* listener at +0x08. Read by the dispatcher
+    // (FUN_FRAMESCRIPT_SIGNAL_EVENT, 0x0081AA00) and by
+    // FrameScript_Object::IsScriptEventRegistered (0x0081B330).
+    OFF_EVENT_LISTENERS_HEAD   = 0x20,
+    OFF_EVENT_UNREGISTERS_HEAD = 0x2C,
+    OFF_EVENT_REGISTERS_HEAD   = 0x38,
+    OFF_EVENT_NODE_NEXT        = 0x04,
+    OFF_EVENT_NODE_OBJECT      = 0x08,
+
+    // FrameScript_Object::RegisterScriptEvent — `int __thiscall(object, const
+    // char *name)`. Looks the name up (case-insensitive), cancels a pending
+    // unregister, and adds the object to the listeners (or, mid-dispatch, to
+    // the pending registers) if it isn't already there. Returns 0 for an
+    // unknown event, else 1. Frame:RegisterEvent's whole body after its self
+    // check (0x0049EFE0).
+    FUN_SCRIPTOBJECT_REGISTER_EVENT = 0x0081B380,
+
+    // FrameScript_Object::UnregisterScriptEvent — `void __thiscall(object, const
+    // char *name)`. The single funnel for dropping a frame from an event:
+    // Frame:UnregisterEvent (0x0049F0AA) and UnregisterAllScriptEvents
+    // (0x0081B4C0, which loops it over every event) are its only callers.
+    FUN_SCRIPTOBJECT_UNREGISTER_EVENT = 0x0081B410,
+
+    // FrameScript_Execute — `void __cdecl(int luaRef, FrameScript_Object *object,
+    // int argCount, const char *taint, FrameScript_EventObject *event)`. Runs a
+    // script handler with the top `argCount` stack values as its arguments and
+    // pops them. The event dispatcher calls it once per listener with `event`
+    // set and the args (event name, arg1, …) pushed; its other two callers
+    // (FUN_FRAME_RUN_SCRIPT, the key-binding runner at 0x0055F91B) pass
+    // event = null.
+    FUN_FRAMESCRIPT_EXECUTE = 0x00819EA0,
+
+    // CSimpleFrame's script-object type id, assigned lazily on first use from
+    // the shared counter (`if (!id) id = ++counter;`) — the `type` every Frame
+    // method passes to FrameScript_GetObjectThis (0x004A81B0). That helper
+    // takes L in ESI, so we reproduce its body instead of calling it: type
+    // check self, rawget self[0], then the object's IsA vmethod —
+    // `bool __thiscall(object, int type)` at vtable +0x10.
+    VAR_SIMPLEFRAME_OBJECT_TYPE   = 0x00B49984,
+    VAR_SCRIPTOBJECT_TYPE_COUNTER = 0x00D3F778,
+    VTBL_OFF_SCRIPTOBJECT_IS_A    = 0x10,
+
     // Addon TOC executor — `int __cdecl(char *toc_path, char *addon_name,
     // void *unused, void **logger)`. Reads the TOC file line-by-line and
     // dispatches each non-`#` entry through the per-file loader
