@@ -114,18 +114,36 @@ enum Offsets {
     // bounds-checks against the event list count).
     FUN_VFIRE_EVENT = 0x0081AC90,
 
-    // Item-data cache. The engine's `DBCache_ItemStats_C::GetRecord`
-    // — `__thiscall(this, itemID, *guid, callback, userData, unused)`.
+    // Item-data cache. The engine's `DBCache<ItemStats_C>::GetRecord`
+    // — `__thiscall(this, itemID, *guid, callback, param, unique)`.
     // With `callback == nullptr`, returns the cached record or NULL
-    // (hash-table lookup only). With a non-null callback, also kicks
-    // off `SMSG_ITEM_QUERY_SINGLE` for uncached items — the engine
-    // fills the cache asynchronously and invokes the supplied
-    // callback with `userData` smuggled through.
+    // (hash-table lookup only). With a non-null callback and no entry
+    // yet, creates the entry and sends `CMSG_ITEM_QUERY_SINGLE`; on an
+    // existing unloaded entry it only adds the callback (`unique` skips
+    // a callback+param pair already attached), so an entry whose query
+    // was lost is never asked for again. The response handler
+    // (FUN_0067CBD0) runs every attached callback — `success = 1` with
+    // the record filled, or `0` for the server's "no such item" reply,
+    // after which the entry is deleted.
     //
-    // Identical signature to 1.12's same function (ClassicAPI uses
-    // the same shape).
+    // The cache throttles itself: built with 512 queries per minute, it
+    // sends at most 256 per 30 s window and holds the rest in its own
+    // queue for the idle pump to send.
     FUN_DBCACHE_ITEMSTATS_GET_RECORD = 0x0067CA30,
     VAR_ITEMDB_CACHE = 0x00C5D828,
+    OPCODE_CMSG_ITEM_QUERY_SINGLE = 0x56, // payload: uint32 itemID
+
+    // Outgoing packets. `CDataStore` is the engine's 0x18-byte packet
+    // buffer (vtable, data, base, alloc, size, read). Build one with the
+    // constructor, `Put` each uint32, `Finalize`, hand it to
+    // `ClientServices::Send2`, then destroy it.
+    FUN_CDATASTORE_CTOR = 0x00401050,     // __thiscall(this)
+    FUN_CDATASTORE_PUT_U32 = 0x0047B0A0,  // __thiscall(this, uint32) -> this
+    FUN_CDATASTORE_FINALIZE = 0x00401130, // __thiscall(this)
+    FUN_CDATASTORE_DTOR = 0x00403880,     // __thiscall(this)
+    CDATASTORE_SIZE = 0x18,
+    // `__cdecl(CDataStore *)`: sends on the current world connection.
+    FUN_CLIENT_SERVICES_SEND2 = 0x006B0B50,
 
     // `Script_GetItemInfo` — Lua `GetItemInfo(itemID|"name"|"itemlink")`.
     // Hooked for transparent cache warmup: pre-resolve arg to itemID,

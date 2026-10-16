@@ -18,25 +18,22 @@
 #include "item/Data.h"
 #include "item/ID.h"
 #include "item/Location.h"
+#include "net/Packet.h"
 #include "tick/FrameTick.h"
 
 #include <cstdint>
-
-#include <windows.h>
+#include <unordered_map>
+#include <vector>
 
 namespace Item::Data {
 
 namespace {
 
-// `DBCache_ItemStats_C::GetRecord` — `__thiscall(this, itemID, *guid,
-// callback, userData, unused)`. With `callback == nullptr`, hash-table
-// lookup only (returns cached record or NULL). With non-null callback,
-// also kicks off `SMSG_ITEM_QUERY_SINGLE` for uncached items; the
-// engine fills the cache asynchronously and invokes the callback when
-// the response arrives.
+// `DBCache<ItemStats_C>::GetRecord` — `__thiscall(this, itemID, *guid,
+// callback, param, unique)`. See Offsets.h.
 using GetItemRecord_t = const uint8_t *(__thiscall *)(void *cache, uint32_t itemID,
                                                       const uint64_t *guid, void *callback,
-                                                      void *userData, int unused);
+                                                      void *param, int unique);
 
 // Two events fire on item-data arrival; they are **mutually exclusive**
 // based on what triggered the cache fill. Mirrors ClassicAPI's split:
@@ -76,332 +73,188 @@ void FireByTag(uint32_t itemID, bool success, bool implicit) {
         FireItemDataLoadResult(static_cast<int>(itemID), success ? 1 : 0);
 }
 
-// Item-load callback — `__cdecl(itemID, guid, userData, success)`, 4
-// args / 16 bytes, caller-cleaned (verified at FUN_0067CBD0's callback
-// dispatch: PUSH 1; PUSH userData; PUSH guidPtr; PUSH itemID; CALL EDX;
-// ADD ESP, 0x10). The itemID arrives as the first arg directly, so we
-// never smuggle it through `userData`.
+// Item-load callback — `__cdecl(itemID, guid, param, success)`, 4 args /
+// 16 bytes, caller-cleaned (FUN_0067CBD0's dispatch: PUSH success; PUSH
+// param; PUSH guidPtr; PUSH itemID; CALL EDX; ADD ESP, 0x10). `success`
+// is a C++ bool, so only its low byte is defined.
 using ItemLoadCallback_t = void(__cdecl *)(uint32_t itemID, const uint64_t *guid,
-                                           void *userData, int success);
+                                           void *param, int success);
 
-// Calls `DBCache_ItemStats_C::GetRecord`. With `callback == nullptr`,
+// Calls `DBCache<ItemStats_C>::GetRecord`. With `callback == nullptr`,
 // performs only the hash-table lookup; returns the cached record or
-// nullptr, no SMSG. With a non-null callback, also kicks off the
-// `SMSG_ITEM_QUERY_SINGLE` for an uncached item. This is the ONE
-// primitive; every path into the cache goes through it.
+// nullptr, no query. With a callback, also attaches it to the entry and,
+// for a new entry, queries the server. This is the ONE primitive; every
+// path into the cache goes through it.
 const uint8_t *CacheFetch(uint32_t itemID, ItemLoadCallback_t callback) {
     auto fn = reinterpret_cast<GetItemRecord_t>(Offsets::FUN_DBCACHE_ITEMSTATS_GET_RECORD);
     auto *cache = reinterpret_cast<void *>(Offsets::VAR_ITEMDB_CACHE);
     const uint64_t zeroGuid = 0;
     void *cb = reinterpret_cast<void *>(callback);
-    return fn(cache, itemID, &zeroGuid, cb, nullptr, 0);
+    return fn(cache, itemID, &zeroGuid, cb, nullptr, /*unique=*/1);
 }
 
-// GetTickCount is unsigned and wraps every ~49 days; subtraction in
-// DWORD arithmetic gives the right elapsed value across wraparound.
-DWORD Elapsed(DWORD start, DWORD now) { return now - start; }
+bool InWorld() {
+    return *reinterpret_cast<const volatile uint8_t *>(
+               static_cast<uintptr_t>(Offsets::VAR_IN_WORLD)) != 0;
+}
 
-// --- Pending-request queue + throttled issue -----------------------------
+// --- Requests we owe a completion event for -------------------------------
 //
-// The naive path — fire `SMSG_ITEM_QUERY_SINGLE` the instant any
-// `GetItemInfo` miss or `RequestLoadItemData` call lands — has two
-// failure modes ClassicAPI hit in the field, both fixed here:
+// The cache does the work: it throttles its own queries (see Offsets.h)
+// and calls our callback when the server answers, with success or with
+// the server's "no such item" reply. The server answers every query it
+// processes, so the callback is the single completion path.
 //
-//   1. Network flood (ClassicAPI issue #25). One `/reload` can make
-//      pfQuest / Questie / Bagnon look up hundreds of items in a single
-//      frame. Unthrottled, every miss fired its own packet at once: a
-//      reported 1,325 requests in ~14 ms exhausted a consumer router's
-//      NAT table and dropped the machine's internet connectivity. So we
-//      never issue from the call path — every request is queued, and one
-//      per-frame tick is the SINGLE point that issues, rate-limited.
+// The one thing the cache can't handle is a lost query. The server drops
+// item queries that arrive while the player isn't in the world (login
+// and every loading screen), and the cache never asks again for an entry
+// it already has. So:
 //
-//   2. Startup orphan. Eagerly creating a cache entry (a `CacheFetch`
-//      with a callback) before the engine's network/opcode dispatch has
-//      settled leaves the entry permanently pending: the engine's own
-//      prefetch skips already-existing entries, and our SMSG goes into a
-//      hole while dispatch isn't ready. This left pfQuest/Questie item
-//      lookups nil forever when they scanned at PLAYER_ENTERING_WORLD.
-//      So the tick issues nothing until `g_settled` (see kSettleMs).
-//
-// `Track` records an item WITHOUT touching the cache; `OnTick` issues the
-// query once settled and sweeps for fills. A single completion path (the
-// sweep, `TryCompletePending`) fires exactly one event per item — the
-// escalation callback only flags a server rejection, it never fires.
+//   - A request made outside the world waits here, unsent, and goes out
+//     on the next frame in the world.
+//   - A query sent just before a loading screen can still reach the server
+//     after it has taken the player out of the world. On the first frame
+//     back in the world, anything sent and still not loaded is asked for
+//     again with a bare CMSG_ITEM_QUERY_SINGLE; the response fills the
+//     existing entry and runs its callbacks.
 
-struct Pending {
-    uint32_t itemID;
-    int ticksWaiting;
-    bool requestIssued;
+struct Request {
     bool implicit; // true: fire GET_ITEM_INFO_RECEIVED; false: ITEM_DATA_LOAD_RESULT
-    bool failed;   // set by the escalation callback on a server "no such item" reply
+    bool sent;     // our callback is attached and the cache has the query
 };
 
-constexpr int kMaxPending = 512;
-constexpr int kMaxWaitTicks = 1200;
-// Wall-clock delay past world-live before we assume the engine's startup
-// network/opcode dispatch has settled and eager queries are safe.
-// Anchored to VAR_IN_WORLD (the same flag bag/UpdateDelayed trusts), NOT
-// a raw frame count: a fixed tick count is FPS-dependent, so it could
-// fire before dispatch was ready on a fast machine (orphan risk) yet
-// leave bag icons as "?" far longer than intended on a slow login.
-constexpr DWORD kSettleMs = 1000;
-// Minimum spacing between outgoing *background* SMSG_ITEM_QUERY_SINGLE
-// requests — the flood cap (issue #25). 50 ms caps the sustained
-// background rate at 20 requests / second.
-constexpr DWORD kMinRequestSpacingMs = 50;
-// Priority tier. The player's carried items (equipment + backpack +
-// equipped bags) are what the bag / paperdoll UI shows immediately on
-// login; behind the background floor they showed as "?" for a second or
-// two while a bulk addon scan drained ahead of them. They get a separate,
-// more generous per-tick budget. The set is bounded, so worst case is
-// kOwnedPerTick + 1 packets per frame — far below the flood floor.
-constexpr int kOwnedPerTick = 6;
-constexpr int kMaxOwned = 256;
-constexpr DWORD kOwnedRefreshMs = 1000; // carried set changes slowly
-
-Pending g_pending[kMaxPending];
-int g_pendingCount = 0;
-bool g_settled = false;
-// Tick timestamp when we first saw the world go live (VAR_IN_WORLD == 1);
-// 0 = not yet. Anchors the kSettleMs delay. Only meaningful until the
-// one-way g_settled latch flips, so it is never reset.
-DWORD g_inWorldSinceMs = 0;
-DWORD g_lastRequestMs = 0;
-
-// Snapshot of the itemIDs the player currently carries. Rebuilt from the
-// engine inventory helpers (no Lua stack — safe at tick time) at most
-// once per kOwnedRefreshMs, and only while there is queued work.
-uint32_t g_owned[kMaxOwned];
-int g_ownedCount = 0;
-DWORD g_ownedBuiltMs = 0;
-bool g_ownedEverBuilt = false;
-// One-shot latch: have we proactively seeded the queue with the player's
-// carried items this enter-world session? Re-armed on in-game init.
+std::unordered_map<uint32_t, Request> g_requests;
+bool g_wasInWorld = false;
+// Have we requested the player's carried items this session? The engine
+// doesn't query bag item stats on enter-world or bag draw, so on a cold
+// cache the bag and paperdoll UI shows "?" until something else asks.
 bool g_ownedPrefetched = false;
 
-int FindPending(uint32_t itemID) {
-    for (int i = 0; i < g_pendingCount; ++i)
-        if (g_pending[i].itemID == itemID)
-            return i;
-    return -1;
-}
-
-void RemovePendingAt(int idx) {
-    --g_pendingCount;
-    if (idx != g_pendingCount)
-        g_pending[idx] = g_pending[g_pendingCount];
-}
-
-// Callback for the escalation path. The engine queues the query when we
-// pass a non-null callback to `CacheFetch`; it then invokes this with the
-// itemID directly. On a successful fill the engine has already set the
-// entry's loaded flag, so the sweep reports success — we do nothing here.
-// On a server failure (item does not exist) the engine does NOT set the
-// loaded flag, so the sweep can't detect it; we flag the pending entry so
-// the sweep fires failure immediately instead of waiting out kMaxWaitTicks.
-void __cdecl ItemLoadCallback_Escalated(uint32_t itemID, const uint64_t *guid,
-                                        void *userData, int success) {
-    (void)guid;
-    (void)userData;
-    if (success)
+// Fires and forgets the request for `itemID`, if we owe one. Erases before
+// firing, so an OnEvent handler that requests the item again starts fresh.
+void Complete(uint32_t itemID, bool success) {
+    const auto it = g_requests.find(itemID);
+    if (it == g_requests.end())
         return;
-    const int idx = FindPending(itemID);
-    if (idx >= 0)
-        g_pending[idx].failed = true;
+    const bool implicit = it->second.implicit;
+    g_requests.erase(it);
+    FireByTag(itemID, success, implicit);
 }
 
-// Records an item we owe a completion event for, WITHOUT eagerly creating
-// the cache entry (see the block comment above — doing so during startup
-// orphans it). Returns false only when the request was dropped because
-// the pending set is full; all other outcomes return true.
-bool Track(uint32_t itemID, bool implicit) {
+void __cdecl OnItemLoaded(uint32_t itemID, const uint64_t *guid, void *param, int success) {
+    (void)guid;
+    (void)param;
+    Complete(itemID, (success & 0xFF) != 0);
+}
+
+void Send(uint32_t itemID) {
+    g_requests[itemID].sent = true;
+    // Loaded between the request and now (a response that was already on
+    // its way): the cache won't call back for a loaded entry.
+    if (CacheFetch(itemID, &OnItemLoaded) != nullptr)
+        Complete(itemID, true);
+}
+
+// Records an item we owe a completion event for, and hands it to the cache
+// once the player is in the world.
+void Track(uint32_t itemID, bool implicit) {
     if (CacheFetch(itemID, nullptr) != nullptr) {
         // Already loaded. Explicit RequestLoadItemData fires its
         // completion event synchronously (modern API contract). Implicit
         // warmup mirrors the engine's already-loaded shortcut, which does
-        // not re-invoke a callback — so a cache hit fires nothing.
+        // not run a callback — so a cache hit fires nothing.
         if (!implicit)
             FireItemDataLoadResult(static_cast<int>(itemID), 1);
-        return true;
-    }
-    const int idx = FindPending(itemID);
-    if (idx >= 0) {
-        // Already tracking. An explicit request supersedes a pending
-        // implicit one so the explicit caller's ITEM_DATA_LOAD_RESULT is
-        // honored (the two events are mutually exclusive per fill).
-        if (!implicit)
-            g_pending[idx].implicit = false;
-        return true;
-    }
-    if (g_pendingCount >= kMaxPending)
-        return false;
-    g_pending[g_pendingCount].itemID = itemID;
-    g_pending[g_pendingCount].ticksWaiting = 0;
-    g_pending[g_pendingCount].requestIssued = false;
-    g_pending[g_pendingCount].implicit = implicit;
-    g_pending[g_pendingCount].failed = false;
-    ++g_pendingCount;
-    return true;
-}
-
-// Fires + removes a pending entry if it has resolved either way: loaded
-// (engine set the flag) -> success, or `failed` (escalation callback saw a
-// server rejection) -> failure. Returns true if it fired and removed the
-// entry at `i`, so callers must NOT advance their index when it does.
-bool TryCompletePending(int i) {
-    const uint32_t itemID = g_pending[i].itemID;
-    const bool implicit = g_pending[i].implicit;
-    if (CacheFetch(itemID, nullptr) != nullptr) {
-        RemovePendingAt(i);
-        FireByTag(itemID, true, implicit);
-        return true;
-    }
-    if (g_pending[i].failed) {
-        RemovePendingAt(i);
-        FireByTag(itemID, false, implicit);
-        return true;
-    }
-    return false;
-}
-
-// --- Owned-item priority set ---------------------------------------------
-//
-// The player's carried inventory, so OnTick can issue those ahead of
-// background bulk lookups. Built from the engine inventory helpers in
-// `Item::Location` (equipment + backpack + equipped bags) — pure engine
-// calls, no Lua stack, safe at tick time.
-
-void AddOwned(uint32_t itemID) {
-    if (itemID == 0)
         return;
-    for (int i = 0; i < g_ownedCount; ++i)
-        if (g_owned[i] == itemID)
-            return; // dedup — stacks / duplicates collapse to one entry
-    if (g_ownedCount < kMaxOwned)
-        g_owned[g_ownedCount++] = itemID;
+    }
+    const auto [it, inserted] = g_requests.try_emplace(itemID, Request{implicit, false});
+    // An explicit request supersedes a pending implicit one so the explicit
+    // caller's ITEM_DATA_LOAD_RESULT is honored (one event per fill).
+    if (!implicit)
+        it->second.implicit = false;
+    if (!it->second.sent && InWorld())
+        Send(itemID);
 }
 
-void RebuildOwned() {
-    g_ownedCount = 0;
+std::vector<uint32_t> RequestIDs(bool sent) {
+    std::vector<uint32_t> ids;
+    for (const auto &[itemID, request] : g_requests)
+        if (request.sent == sent)
+            ids.push_back(itemID);
+    return ids;
+}
+
+void ResendLost() {
+    for (const uint32_t itemID : RequestIDs(/*sent=*/true)) {
+        if (CacheFetch(itemID, nullptr) != nullptr)
+            Complete(itemID, true);
+        else
+            Net::Packet::SendUint32(Offsets::OPCODE_CMSG_ITEM_QUERY_SINGLE, itemID);
+    }
+}
+
+void SendWaiting() {
+    for (const uint32_t itemID : RequestIDs(/*sent=*/false))
+        Send(itemID);
+}
+
+void TrackID(uint32_t itemID) {
+    if (itemID != 0)
+        Track(itemID, /*implicit=*/true);
+}
+
+// Equipment + backpack + the four equipped bags, from the engine inventory
+// helpers in `Item::Location`.
+void PrefetchOwned() {
     for (int slot = Offsets::EQUIPMENT_SLOT_FIRST; slot <= Offsets::EQUIPMENT_SLOT_LAST; ++slot) {
         const uint8_t *item = Item::Location::ResolveEquipmentSlot(slot);
         if (item != nullptr)
-            AddOwned(static_cast<uint32_t>(Item::ID::FromCGItem(item)));
+            TrackID(static_cast<uint32_t>(Item::ID::FromCGItem(item)));
     }
-    // Backpack (bagID 0) + the four equipped bags (bagID 1..4).
     for (int bagID = 0; bagID <= 4; ++bagID) {
         const int n = Item::Location::GetBagNumSlots(bagID);
         for (int slot = 1; slot <= n; ++slot) {
             const uint8_t *item = Item::Location::ResolveBagSlot(bagID, slot);
             if (item != nullptr)
-                AddOwned(static_cast<uint32_t>(Item::ID::FromCGItem(item)));
+                TrackID(static_cast<uint32_t>(Item::ID::FromCGItem(item)));
         }
     }
-    g_ownedEverBuilt = true;
 }
 
-bool IsOwned(uint32_t itemID) {
-    for (int i = 0; i < g_ownedCount; ++i)
-        if (g_owned[i] == itemID)
-            return true;
-    return false;
-}
-
-// The ONE place any item query is issued, so the rate limiter here governs
-// every path into the cache. Per tick:
-//   1. Latch the startup gate a fixed wall-clock delay past world-live.
-//   2. Once settled, seed the queue with the player's carried items
-//      (once per session) and refresh that set slowly.
-//   3. Issue queries — carried items first (up to kOwnedPerTick), then one
-//      background item per kMinRequestSpacingMs.
-//   4. Fire completion for fills (cache hit) and server rejections
-//      (`failed`), and give up after kMaxWaitTicks for a query that was
-//      sent but never resolved.
+// On the first frame in the world: re-ask for queries a loading screen
+// swallowed, then the carried items, then everything that waited. Carried
+// items go ahead of an addon's backlog so they fit in the cache's first
+// throttle window.
 void OnTick() {
-    const DWORD now = GetTickCount();
-
-    if (!g_settled) {
-        const bool inWorld = *reinterpret_cast<const volatile uint8_t *>(
-                                 static_cast<uintptr_t>(Offsets::VAR_IN_WORLD)) != 0;
-        if (inWorld && g_inWorldSinceMs == 0)
-            g_inWorldSinceMs = now;
-        if (g_inWorldSinceMs != 0 && Elapsed(g_inWorldSinceMs, now) >= kSettleMs)
-            g_settled = true;
-    }
-
-    // Proactive carried-item prefetch (once per enter-world session). The
-    // engine does NOT query bag item stats on enter-world or bag draw, so
-    // on a cold WDB the player's carried items draw as "?" until something
-    // else queries them. Seed the queue so they issue on the owned lane
-    // ahead of any addon's background flood. Deferred to post-settle so it
-    // can't orphan an entry, and gated on a live inventory manager so a
-    // too-early settle retries next tick instead of latching an empty walk.
-    if (g_settled && !g_ownedPrefetched &&
-        Item::Location::PlayerInventoryManager() != nullptr) {
-        RebuildOwned();
-        g_ownedBuiltMs = now;
-        for (int i = 0; i < g_ownedCount; ++i)
-            Track(g_owned[i], /*implicit=*/true);
+    const bool inWorld = InWorld();
+    const bool entered = inWorld && !g_wasInWorld;
+    g_wasInWorld = inWorld;
+    if (!inWorld)
+        return;
+    if (entered)
+        ResendLost();
+    // Gated on a live inventory manager so an early frame retries instead
+    // of latching an empty walk.
+    if (!g_ownedPrefetched && Item::Location::PlayerInventoryManager() != nullptr) {
+        PrefetchOwned();
         g_ownedPrefetched = true;
     }
-
-    if (g_pendingCount == 0)
-        return;
-
-    // Refresh the carried set while there is queued work, at most once per
-    // kOwnedRefreshMs — it changes slowly and the walk is pointer-chasing.
-    if (g_settled &&
-        (!g_ownedEverBuilt || Elapsed(g_ownedBuiltMs, now) >= kOwnedRefreshMs)) {
-        RebuildOwned();
-        g_ownedBuiltMs = now;
-    }
-
-    // Two independent issue budgets this tick: carried items (up to
-    // kOwnedPerTick, no spacing floor) and background (one, once the
-    // spacing floor elapses). The background floor is wall-clock, not a
-    // tick count, so its rate is bounded regardless of FPS.
-    int ownedBudget = g_settled ? kOwnedPerTick : 0;
-    bool bgAvailable =
-        g_settled && Elapsed(g_lastRequestMs, now) >= kMinRequestSpacingMs;
-
-    for (int i = 0; i < g_pendingCount;) {
-        if (g_settled && !g_pending[i].requestIssued) {
-            const bool owned = IsOwned(g_pending[i].itemID);
-            bool issue = false;
-            if (owned && ownedBudget > 0) {
-                issue = true;
-                --ownedBudget;
-            } else if (!owned && bgAvailable) {
-                issue = true;
-                bgAvailable = false;
-                g_lastRequestMs = now;
-            }
-            if (issue) {
-                CacheFetch(g_pending[i].itemID, &ItemLoadCallback_Escalated);
-                g_pending[i].requestIssued = true;
-            }
-        }
-        // A fill (engine response) or a server rejection resolves the item.
-        if (TryCompletePending(i))
-            continue;
-        // Only time out items whose query is actually in flight. Counting
-        // from track-time would fire spurious failures for items still
-        // waiting their turn behind the rate limiter.
-        if (g_pending[i].requestIssued) {
-            if (g_pending[i].ticksWaiting >= kMaxWaitTicks) {
-                const uint32_t itemID = g_pending[i].itemID;
-                const bool implicit = g_pending[i].implicit;
-                RemovePendingAt(i);
-                FireByTag(itemID, false, implicit);
-                continue;
-            }
-            ++g_pending[i].ticksWaiting;
-        }
-        ++i;
-    }
+    if (entered)
+        SendWaiting();
 }
 
 const Tick::FrameTick::AutoSubscribe _tickSub{&OnTick};
+
+// The Lua state is going away (/reload or logout), and with it every
+// listener for the events we owe. A callback still attached to a cache
+// entry finds nothing here and does nothing; a request for the same item
+// from the new UI reuses it.
+void PrepareForReload() {
+    g_requests.clear();
+    g_ownedPrefetched = false;
+}
+
+const Game::ReloadAutoRegister _reload{&PrepareForReload};
 
 int __cdecl Script_IsItemDataCachedByID(void *L) {
     const int itemID = Item::Arg::ResolveItemID(L, 1);
@@ -436,41 +289,26 @@ int __cdecl Script_IsItemDataCached(void *L) {
     return 1;
 }
 
-// Explicit-request path: queues the item tagged explicit (so completion
-// fires ITEM_DATA_LOAD_RESULT). `Track` resolves an already-cached item
-// for free (fires the event synchronously per the modern contract) and
-// queues only a genuine miss. Returns false only if the queue is full.
-bool RequestAndMaybeNotify(uint32_t itemID) { return Track(itemID, /*implicit=*/false); }
+// Explicit-request path: completion fires ITEM_DATA_LOAD_RESULT. Returns
+// false only for an argument that names no item.
+int RequestExplicit(void *L, int itemID) {
+    if (itemID > 0)
+        Track(static_cast<uint32_t>(itemID), /*implicit=*/false);
+    Game::Lua::PushBoolean(L, itemID > 0 ? 1 : 0);
+    return 1;
+}
 
 int __cdecl Script_RequestLoadItemDataByID(void *L) {
-    const int itemID = Item::Arg::ResolveItemID(L, 1);
-    if (itemID <= 0) {
-        Game::Lua::PushBoolean(L, 0);
-        return 1;
-    }
-    const bool accepted = RequestAndMaybeNotify(static_cast<uint32_t>(itemID));
-    Game::Lua::PushBoolean(L, accepted ? 1 : 0);
-    return 1;
+    return RequestExplicit(L, Item::Arg::ResolveItemID(L, 1));
 }
 
 int __cdecl Script_RequestLoadItemData(void *L) {
     if (!Item::Location::IsLocationArg(L, 1))
         return Game::Lua::Error(L, "Usage: C_Item.RequestLoadItemData(itemLocation)");
-    const int itemID = ResolveLocationToItemID(L, 1);
-    if (itemID <= 0) {
-        Game::Lua::PushBoolean(L, 0);
-        return 1;
-    }
-    const bool accepted = RequestAndMaybeNotify(static_cast<uint32_t>(itemID));
-    Game::Lua::PushBoolean(L, accepted ? 1 : 0);
-    return 1;
+    return RequestExplicit(L, ResolveLocationToItemID(L, 1));
 }
 
 void RegisterLuaFunctions() {
-    // Re-arm the proactive carried-item prefetch for this enter-world
-    // session. g_settled is deliberately NOT reset — it is a one-way
-    // process latch; on a warm cache the re-run resolves as cache hits.
-    g_ownedPrefetched = false;
     Game::Lua::RegisterTableFunction("C_Item", "IsItemDataCachedByID",
                                      &Script_IsItemDataCachedByID);
     Game::Lua::RegisterTableFunction("C_Item", "RequestLoadItemDataByID",
@@ -489,15 +327,13 @@ const Game::ModuleAutoRegister _autoreg{&RegisterLuaFunctions};
 
 // Public API — see Data.h. Implicit (transparent) warmup path used by the
 // `Script_GetItemInfo` hook and every `GetItem*` getter's cache-miss
-// warmup. Routes through the pending queue so OnTick's single rate-limited
-// issue point governs all outgoing item queries (issue #25). A cache hit
-// resolves for free; a genuine miss queues, and the sweep fires
-// GET_ITEM_INFO_RECEIVED (implicit) when the response lands.
+// warmup. A cache hit resolves for free; a miss goes to the cache, and
+// GET_ITEM_INFO_RECEIVED fires when the response lands.
 void WarmCache(uint32_t itemID) { Track(itemID, /*implicit=*/true); }
 
 // Hook for `Script_GetItemInfo`. Pre-warms the cache from arg 1, then
 // dispatches to the original. The original still returns nil for cache
-// misses (vanilla behavior) but a query is now queued, so subsequent
+// misses (vanilla behavior) but a query is now on its way, so subsequent
 // calls return valid data and GET_ITEM_INFO_RECEIVED fires on response
 // arrival.
 Script_GetItemInfo_t Script_GetItemInfo_o = nullptr;
