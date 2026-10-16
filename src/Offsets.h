@@ -402,6 +402,66 @@ enum Offsets {
     MAP_INSTANCE_TYPE_BATTLEGROUND = 3,
     MAP_INSTANCE_TYPE_ARENA = 4,
 
+    // --- Console variables (src/cvar/) ---
+    //
+    // CVar object layout (TSHashObject<CVar, HASHKEY_STRI> base, key string
+    // at +0x10 via the hash key): flags at +0x1C, and each RCString keeps its
+    // `const char *m_str` 8 bytes in, so the live value string is at +0x28,
+    // the default at +0x40 and the latched (applies-after-restart) value at
+    // +0x58. The engine's own readers (Script_GetCVar, IterateForArchive)
+    // read exactly these.
+    OFF_CVAR_FLAGS = 0x1C,
+    OFF_CVAR_VALUE_STR = 0x28,
+    OFF_CVAR_DEFAULT_STR = 0x40,
+    // Flags, as Script_SetCVar / Script_GetCVarInfo test them.
+    CVAR_FLAG_LATCHED = 0x2,     // Set stores into the latched value only
+    CVAR_FLAG_READ_ONLY = 0x4,
+    CVAR_FLAG_PROTECTED = 0x8,   // SetCVar needs protected actions allowed
+    CVAR_FLAG_ACCOUNT = 0x10,    // saved with the account's server-stored config
+    CVAR_FLAG_CHARACTER = 0x20,  // saved with the character's
+    CVAR_FLAG_HIDDEN = 0x40,     // every Lua getter treats it as missing
+    CVAR_FLAG_READ_ONLY_2 = 0x100,
+    // `CVar *__cdecl CVar::LookupRegistered(const char *name)` — the lookup
+    // every Lua cvar function makes; null for a name Lua can't see.
+    FUN_CVAR_LOOKUP_REGISTERED = 0x00767460,
+    // `bool __thiscall CVar::Set(const char *value, bool setValue, bool
+    // setReset, bool setDefault, bool setNeedsSave)`: runs the change
+    // callback, then stores; setNeedsSave marks the config for writing.
+    FUN_CVAR_SET = 0x007668C0,
+    // `int __cdecl CVar::IterateForArchive(uint32 category, uint32
+    // excludeFlags, callback, void *arg)` — the one walk behind every cvar
+    // write-out (Config.wtf and the account/character configs); it reads
+    // latched, else value, else default, and skips a value equal to the
+    // default.
+    FUN_CVAR_ITERATE_FOR_ARCHIVE = 0x00767030,
+    // CVarArrayWrapper — the engine's bit array stored in a cvar string
+    // (version byte 2, then 6 bits per character offset from '@'); used by
+    // lfdSelectedDungeons / lfdCollapsedHeaders. The wrapper is {CVar *,
+    // uint8 defaultValue}; its inlined constructor runs UpdateFromVersion
+    // when the first byte isn't 2.
+    FUN_CVAR_ARRAY_GET = 0x00766860,     // bool __thiscall(wrapper, uint32 index)
+    FUN_CVAR_ARRAY_SET = 0x00766CA0,     // bool __thiscall(wrapper, uint32 index, bool)
+    FUN_CVAR_ARRAY_UPGRADE = 0x00766B20, // void __thiscall(wrapper, int version)
+    CVAR_ARRAY_VERSION = 2,
+    // `int __cdecl StringToBOOL(const char *)` — the coercion GetCVarBool uses.
+    FUN_STRING_TO_BOOL = 0x008154E0,
+    // `bool CVar::m_initialized`, set once the cvar system has started.
+    VAR_CVAR_INITIALIZED = 0x00CA19F9,
+    // `CSimpleTop *CSimpleTop::s_instance`; `int m_allowProtectedActions` at
+    // +0x124C is what Script_SetCVar checks for a protected cvar.
+    VAR_SIMPLE_TOP = 0x00B499A8,
+    OFF_SIMPLE_TOP_ALLOW_PROTECTED = 0x124C,
+    // The engine's own Lua cvar functions, registered again under C_CVar.
+    // In-game and glue each have their own (glue's GetCVar raises for an
+    // unknown name; in-game's returns nil).
+    FUN_SCRIPT_GET_CVAR = 0x00510040,
+    FUN_SCRIPT_SET_CVAR = 0x00514C10,
+    FUN_SCRIPT_GET_CVAR_DEFAULT = 0x00510150,
+    FUN_SCRIPT_REGISTER_CVAR = 0x0050FF30,
+    FUN_GLUE_SCRIPT_GET_CVAR = 0x004DDD10,
+    FUN_GLUE_SCRIPT_SET_CVAR = 0x004DCE70,
+    FUN_GLUE_SCRIPT_GET_CVAR_DEFAULT = 0x004DDE10,
+
     // --- Group membership (src/group/Info.cpp) ---
     //
     // The client holds two groups. The CURRENT group is what GetNumPartyMembers

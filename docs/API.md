@@ -39,6 +39,14 @@ Conventions:
 - [Container](#container)
   - [`C_Container.SwapItems(srcBag, srcSlot, dstBag, dstSlot)`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot)
   - [`C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`](#c_containermoveitemsrcbag-srcslot-dstbag-dstslot-count)
+- [CVar](#cvar)
+  - [`C_CVar.GetCVar(name)` / `C_CVar.SetCVar(name, value [, scriptCVar])` / `C_CVar.GetCVarDefault(name)` / `C_CVar.RegisterCVar(name [, value])`](#c_cvargetcvarname--c_cvarsetcvarname-value--scriptcvar--c_cvargetcvardefaultname--c_cvarregistercvarname--value)
+  - [`C_CVar.GetCVarBool(name)`](#c_cvargetcvarboolname)
+  - [`C_CVar.GetCVarInfo(name)`](#c_cvargetcvarinfoname)
+  - [`C_CVar.DoesCVarExist(name)`](#c_cvardoescvarexistname)
+  - [`C_CVar.AreCVarsLoaded()`](#c_cvararecvarsloaded)
+  - [`C_CVar.GetCVarBitfield(name, index)` / `C_CVar.SetCVarBitfield(name, index, value)`](#c_cvargetcvarbitfieldname-index--c_cvarsetcvarbitfieldname-index-value)
+  - [`C_CVar.SetTempCVar(name, value)` / `C_CVar.RemoveTempCVar(name)`](#c_cvarsettempcvarname-value--c_cvarremovetempcvarname)
 - [Encoding](#encoding)
   - [`C_EncodingUtil.EncodeHex` / `DecodeHex`](#c_encodingutilencodehex--decodehex)
   - [`C_EncodingUtil.EncodeBase64` / `DecodeBase64`](#c_encodingutilencodebase64--decodebase64)
@@ -510,6 +518,134 @@ Batching has one extra caveat over `SwapItems`: `count` is checked against the
 source stack as the client currently knows it. Several calls in one frame get
 no server replies in between, so those counts are still pre-batch values while
 your own model has moved on. Drive a batch from your own bookkeeping.
+
+---
+
+## CVar
+
+Every `C_CVar` function is available on the login and character screens as
+well as in the world, except `RegisterCVar`, which is in the world only.
+
+### `C_CVar.GetCVar(name)` / `C_CVar.SetCVar(name, value [, scriptCVar])` / `C_CVar.GetCVarDefault(name)` / `C_CVar.RegisterCVar(name [, value])`
+
+The same as the global `GetCVar`, `SetCVar`, `GetCVarDefault` and
+`RegisterCVar`, under the modern namespace.
+
+```lua
+C_CVar.SetCVar("cameraDistanceMax", "25")
+C_CVar.GetCVar("cameraDistanceMax")   -- "25"
+```
+
+### `C_CVar.GetCVarBool(name)`
+
+Returns the cvar's value as `true` or `false`, or `nil` when no cvar has
+that name. The global `GetCVarBool` returns `1` or `nil`, so it can't tell
+"off" from "no such cvar".
+
+```lua
+C_CVar.GetCVarBool("autoLootDefault")   -- true or false
+C_CVar.GetCVarBool("doesNotExist")      -- nil
+```
+
+`"1"` and other non-zero numbers count as `true`, as does `"true"` in any
+case. `"0"`, an empty value and other text count as `false`.
+
+### `C_CVar.GetCVarInfo(name)`
+
+Returns a cvar's value, its default, and what may be done to it:
+
+```lua
+local value, defaultValue, isStoredServerAccount, isStoredServerCharacter,
+      isLockedFromUser, isSecure, isReadOnly = C_CVar.GetCVarInfo("cameraDistanceMax")
+```
+
+| Return | Meaning |
+|---|---|
+| `value` | The current value. |
+| `defaultValue` | The value it started with. |
+| `isStoredServerAccount` | `true` when the server stores it for your account. |
+| `isStoredServerCharacter` | `true` when the server stores it for this character. |
+| `isLockedFromUser` | Always `false`: no cvar is locked. |
+| `isSecure` | `true` when `SetCVar` can change it only while protected actions are allowed. |
+| `isReadOnly` | `true` when `SetCVar` refuses to change it. |
+
+Returns `nil` for a name that isn't a cvar. A console command isn't a cvar,
+so its name returns `nil` too.
+
+### `C_CVar.DoesCVarExist(name)`
+
+Returns whether `GetCVar` and `SetCVar` can see a cvar by that name. A
+WrathClassicAPI extension.
+
+```lua
+C_CVar.DoesCVarExist("cameraDistanceMax")   -- true
+C_CVar.DoesCVarExist("doesNotExist")        -- false
+```
+
+It's true exactly when `C_CVar.GetCVarInfo(name)` isn't `nil`, and `false`
+for anything that isn't a string.
+
+### `C_CVar.AreCVarsLoaded()`
+
+Returns whether the game has loaded its settings. Always `true` by the time
+any addon runs, because settings load when the game starts. It's here so
+ported code that checks it keeps working.
+
+### `C_CVar.GetCVarBitfield(name, index)` / `C_CVar.SetCVarBitfield(name, index, value)`
+
+Read or write one bit of a cvar, so one cvar can hold many separate on/off
+settings. The index counts from 1.
+
+```lua
+RegisterCVar("myAddonSeen", "")
+
+C_CVar.SetCVarBitfield("myAddonSeen", 3, true)
+C_CVar.GetCVarBitfield("myAddonSeen", 3)   -- true
+C_CVar.GetCVarBitfield("myAddonSeen", 4)   -- false
+```
+
+The bits use the same format as the game's own Dungeon Finder settings, so
+`C_CVar.GetCVarBitfield("lfdSelectedDungeons", dungeonID)` tells you
+whether a dungeon is ticked in the Dungeon Finder. Store your own bits in a
+cvar you register for them. The value is no longer a readable number.
+
+The index may be 1 to 1523. `GetCVarBitfield` returns `nil` outside that
+range, or for a name that isn't a cvar, so "no such bit" stays apart from
+"the bit is off".
+
+`SetCVarBitfield` returns whether it worked. It returns `false` for an
+index out of range, a name that isn't a cvar, and a cvar `SetCVar` would
+refuse to change. A write is saved the same way `SetCVar` saves, and
+setting one bit leaves the others alone.
+
+### `C_CVar.SetTempCVar(name, value)` / `C_CVar.RemoveTempCVar(name)`
+
+`SetTempCVar` changes a cvar for this session only. The game uses the new
+value at once but never saves it. `RemoveTempCVar` puts back the value the
+cvar had before the first `SetTempCVar`. Neither returns anything.
+
+```lua
+-- The saved value of cameraDistanceMax is "15".
+C_CVar.SetTempCVar("cameraDistanceMax", "40")
+GetCVar("cameraDistanceMax")      -- "40"
+-- After /reload or logout, the saved value is still "15".
+C_CVar.RemoveTempCVar("cameraDistanceMax")
+GetCVar("cameraDistanceMax")      -- "15"
+```
+
+Use this pair for a mode that changes several cvars and later turns off,
+without touching the user's saved settings.
+
+- Calling `SetTempCVar` twice on one cvar: `RemoveTempCVar` puts back the
+  value from before the first call.
+- `SetCVar` on a cvar with a temp value replaces it. The game saves the new
+  value, and `RemoveTempCVar` then leaves the cvar alone.
+- A `nil` value sets an empty string.
+- `RemoveTempCVar` does nothing for a cvar without a temp value.
+
+Both raise the same errors as `SetCVar`: for a name that isn't a cvar, and
+for a read-only cvar. A cvar that only takes effect after a restart can't be
+set for the session, so both raise an error for one of those too.
 
 ---
 
