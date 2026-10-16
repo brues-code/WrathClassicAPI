@@ -2428,6 +2428,18 @@ enum Offsets {
     // sets it to hide the form at once, and the server's form update clears
     // it. The stance bar's active-form check reads the form through it.
     FUN_UNIT_GET_SHAPESHIFT_FORM = 0x0071AF70,
+
+    // Script_UnitGUID — `int __cdecl(L)`. Resolves the token through
+    // Script_GetGUIDFromToken (0x0060ABF0), whose "player" branch reads the
+    // player object, so it returns nil until the object manager has created
+    // it from the server's first object update.
+    FUN_SCRIPT_UNIT_GUID = 0x0060E630,
+
+    // CGlueMgr::GetActive — `uint64_t __cdecl()` (EDX:EAX). The character
+    // char select logged in as: set when entering the world and sent in
+    // CMSG_PLAYER_LOGIN, kept for the session (the per-character account
+    // data reads it in-game). A main-thread TLS slot, read from Lua code.
+    FUN_GLUEMGR_GET_ACTIVE_CHARACTER = 0x004D80A0,
     OPCODE_SMSG_PLAYERBOUND = 0x158,
 
     // AreaTable.dbc client store — same shape. Verified in Script_GetFriendInfo:

@@ -204,6 +204,7 @@ Conventions:
   - [`UnitTokenFromGUID(guid)`](#unittokenfromguidguid)
   - [`UnitNameFromGUID(guid)`](#unitnamefromguidguid)
   - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
+  - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
   - [`C_UnitAuras.GetBuffDataByIndex(unit, index[, filter])` / `GetDebuffDataByIndex(unit, index[, filter])`](#c_unitaurasgetbuffdatabyindexunit-index-filter--getdebuffdatabyindexunit-index-filter)
@@ -3110,6 +3111,15 @@ C_Spell.GetSpellName(UnitCreatedBySpell("target"))    -- "Stoneskin Totem"
 Works for any unit in range — anyone's summons, not just your own. Note this
 is the *summoning* spell; the spells a totem casts are server-side and never
 reach the client.
+
+### `UnitGUID("player")`
+
+Returns your GUID from the moment addons start loading, so main-chunk
+code and `ADDON_LOADED` handlers can use it.
+
+```lua
+local playerGUID = UnitGUID("player")  -- "0x0000000000000042"
+```
 
 ---
 
