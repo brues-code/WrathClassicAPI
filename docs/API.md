@@ -23,6 +23,8 @@ Conventions:
 
 - [AddOns](#addons)
   - [`C_AddOns.GetAddOnLocalTable(addOnName)`](#c_addonsgetaddonlocaltableaddonname)
+  - [`C_AddOns.IsAddOnLoaded(name)`](#c_addonsisaddonloadedname)
+  - [`C_AddOns.GetAddOnOptionalDependencies(name)`](#c_addonsgetaddonoptionaldependenciesname)
 - [Chat Bubbles](#chat-bubbles)
   - [`C_ChatBubbles.GetAllChatBubbles([includeForbidden])`](#c_chatbubblesgetallchatbubblesincludeforbidden)
 - [Color](#color)
@@ -287,6 +289,41 @@ registry-keyed lookup so it survives past the addon-load flow's
 terminal `lua_settop(L, -2)` that would otherwise drop it for GC.
 Same effective shape as modern WoW's `C_AddOns.GetAddOnLocalTable`.
 
+
+### `C_AddOns.IsAddOnLoaded(name)`
+
+Returns two booleans for an addon: `loadedOrLoading`, then `loaded`.
+`name` is the addon's folder name, or an index from `1` to
+`GetNumAddOns()`.
+
+```lua
+local loadedOrLoading, loaded = C_AddOns.IsAddOnLoaded("Blizzard_AuctionUI")
+if not loadedOrLoading then
+    LoadAddOn("Blizzard_AuctionUI")
+end
+```
+
+`loadedOrLoading` turns `true` as soon as the addon starts loading, so
+it is already `true` inside the addon's own files; `loaded` turns `true`
+once it has finished, just before its `ADDON_LOADED` fires. Both are `false` for an addon that isn't installed.
+Blizzard addons can only be checked by name — the index range covers
+the AddOns list, which doesn't include them.
+
+### `C_AddOns.GetAddOnOptionalDependencies(name)`
+
+Returns the addons listed in an addon's `## OptionalDeps` TOC line, as
+separate return values in the order they appear. `name` is the
+addon's folder name or an index, as for `C_AddOns.IsAddOnLoaded`.
+
+```lua
+-- ## OptionalDeps: Ace3, LibSharedMedia-3.0
+local deps = { C_AddOns.GetAddOnOptionalDependencies("MyAddon") }
+-- deps = { "Ace3", "LibSharedMedia-3.0" }
+```
+
+Returns nothing for an addon without optional dependencies or one that
+isn't installed. The required list (`## Dependencies`) comes from the
+stock `GetAddOnDependencies`.
 ---
 
 ## Chat Bubbles

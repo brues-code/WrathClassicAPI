@@ -2088,6 +2088,20 @@ enum Offsets {
     // Name comparator (`__cdecl(void **a, void **b)`; resolves each name and
     // compares its Title case-insensitively) + the CRT qsort it feeds.
     FUN_ADDON_NAME_COMPARE = 0x005F7910,
+
+    // AddOns-list accessors, all `__cdecl`. GetNumAddOns `uint32_t()` and
+    // GetAddOnByIndex `const char *(uint32_t index0)` read the display array
+    // at VAR_ADDON_ARRAY_CAP (Blizzard addons excluded; null when out of
+    // range). IsAddOnLoading / IsAddOnLoaded `bool(const char *name)` look the
+    // entry up by name (case-insensitive) and return its m_loading (+0x18) /
+    // m_loaded (+0x19) flag — false for an unknown addon.
+    FUN_GET_NUM_ADDONS = 0x005F4FF0,
+    FUN_GET_ADDON_BY_INDEX = 0x005F5000,
+    FUN_IS_ADDON_LOADING = 0x005F7630,
+    FUN_IS_ADDON_LOADED = 0x005F7650,
+    // UIADDON::m_optionalDeps — growable array {cap, count, char **data} of the
+    // `## OptionalDeps` names, filled by the TOC parser (FUN_TOC_PARSER).
+    OFF_ADDON_OPTIONAL_DEPS = 0x38,
     FUN_CRT_QSORT = 0x0040BE50,
 
     // Descriptor quantum calculator `uint __thiscall(void *desc, uint needed)`

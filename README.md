@@ -33,7 +33,7 @@ Per-function reference with shape, semantics, and edge cases is in
 
 | Namespace | Calls |
 |-----------|-------|
-| AddOns    | `C_AddOns.GetAddOnLocalTable` |
+| AddOns    | `C_AddOns.GetAddOnLocalTable`, `C_AddOns.IsAddOnLoaded`, `C_AddOns.GetAddOnOptionalDependencies` |
 | Chat Bubbles | `C_ChatBubbles.GetAllChatBubbles` |
 | Color     | `C_ColorUtil.ConvertRGBToHSV`, `C_ColorUtil.ConvertHSVToRGB`, `C_ColorUtil.ConvertHSVToHSL`, `C_ColorUtil.ConvertHSLToHSV`, `C_ColorUtil.ConvertHSLToRGB`, `C_ColorUtil.GenerateTextColorCode`, `C_ColorUtil.WrapTextInColor`, `C_ColorUtil.WrapTextInColorCode` |
 | Combat Log | `CombatLogGetCurrentEventInfo` |
