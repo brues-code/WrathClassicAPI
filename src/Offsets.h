@@ -2461,6 +2461,14 @@ enum Offsets {
     // as its third value.
     FUN_MERCHANT_GET_REPAIR_COST = 0x00584B20,
 
+    // CGContainer_C::GetFreeSlots — `int32_t __thiscall(this)`: the bag's slot
+    // count less its occupied CONTAINER_FIELD_SLOT entries.
+    // CGItem_C::GetBagFamily — `uint32_t __thiscall(this)`: the item's
+    // ItemStats bagFamily (0 = general purpose; 0 too when uncached). Both are
+    // what Script_GetContainerNumFreeSlots (0x005D7590) returns for a bag.
+    FUN_CONTAINER_GET_FREE_SLOTS = 0x007069E0,
+    FUN_ITEM_GET_BAG_FAMILY = 0x007072B0,
+
     // Spell_C_CancelAura — `void __cdecl(const SpellRec *spell, CGUnit_C *unit,
     // int auraSlot)`. Cancels `unit`'s aura in `auraSlot` (an index into the
     // CGUnit aura array): CMSG_CANCEL_AURA for the player — or the

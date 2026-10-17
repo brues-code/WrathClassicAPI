@@ -42,6 +42,7 @@ Conventions:
   - [`C_Container.SwapItems(srcBag, srcSlot, dstBag, dstSlot)`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot)
   - [`C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`](#c_containermoveitemsrcbag-srcslot-dstbag-dstslot-count)
   - [`C_Container.GetContainerItemRepairCost(bagID, slot)`](#c_containergetcontaineritemrepaircostbagid-slot)
+  - [`C_Container.CalculateTotalNumberOfFreeBagSlots()`](#c_containercalculatetotalnumberoffreebagslots)
 - [CVar](#cvar)
   - [`C_CVar.GetCVar(name)` / `C_CVar.SetCVar(name, value [, scriptCVar])` / `C_CVar.GetCVarDefault(name)` / `C_CVar.RegisterCVar(name [, value])`](#c_cvargetcvarname--c_cvarsetcvarname-value--scriptcvar--c_cvargetcvardefaultname--c_cvarregistercvarname--value)
   - [`C_CVar.GetCVarBool(name)`](#c_cvargetcvarboolname)
@@ -580,6 +581,21 @@ bank, `5`–`11` for bank bags and `-2` for the keyring; bank slots only
 resolve while the bank is open. Returns `0` for an empty slot and for an
 item that doesn't need or can't take repair. While a merchant window is
 open, the cost includes that merchant's reputation discount.
+
+### `C_Container.CalculateTotalNumberOfFreeBagSlots()`
+
+Returns how many empty slots you have across your backpack and four
+bags.
+
+```lua
+if C_Container.CalculateTotalNumberOfFreeBagSlots() == 0 then
+    print("Your bags are full")
+end
+```
+
+Only general-purpose bags count. Profession bags (herb, mining, soul
+shard, quiver, ammo pouch and so on) are left out, since most items can't
+go in them. The bank isn't included.
 ---
 
 ## CVar
