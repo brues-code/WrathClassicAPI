@@ -52,7 +52,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Quest Log | `C_QuestLog.GetQuestIDForLogIndex`, `C_QuestLog.ReadyForTurnIn`, `C_QuestLog.GetTitleForQuestID`, `C_QuestLog.RequestLoadQuestByID` |
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
 | Sound     | `PlaySound`, `C_Sound.PlaySound`, `C_Sound.PlaySoundWithOptions`, `C_Sound.IsPlaying`, `C_Sound.GetSoundScaledVolume`, `C_Sound.PlayItemSound`, `C_Sound.PlayVocalErrorSound`, `C_Sound.GetRecentSoundFiles`, `MuteSoundFile`, `UnmuteSoundFile`, `Enum.ItemSoundType`, `Enum.Vocalerrorsounds` |
-| Spell     | `IsPlayerSpell`, `CanDualWield`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
+| Spell     | `IsPlayerSpell`, `CanDualWield`, `C_Spell.DoesSpellExist`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
 | Swing Timer | `C_SwingTimer.EnableRangeCheck`, `C_SwingTimer.IsTargetWithinSwingRange`, `Enum.PlayerSwingType` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
 | Textures  | `Frame:CreateMaskTexture`, `Texture:AddMaskTexture`, `Texture:RemoveMaskTexture`, `Texture:GetNumMaskTextures`, `Texture:GetMaskTexture`, `Texture:SetMask` |

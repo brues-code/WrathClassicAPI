@@ -150,6 +150,7 @@ Conventions:
   - [`C_Sound.GetRecentSoundFiles()`](#c_soundgetrecentsoundfiles)
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
+  - [`C_Spell.DoesSpellExist(spellIdentifier)`](#c_spelldoesspellexistspellidentifier)
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
   - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
   - [`C_Spell.GetSpellSubtext(spellIdentifier)`](#c_spellgetspellsubtextspellidentifier)
@@ -2286,6 +2287,21 @@ engine's native `IsSpellKnown`** — that one walks the displayable
 spellbook arrays, which famously don't include profession recipes
 in 3.3.5 (per Wowhead: "as of 3.0.8, does not work for profession
 spells"). `IsPlayerSpell` closes that gap.
+
+### `C_Spell.DoesSpellExist(spellIdentifier)`
+
+Returns `true` if `spellIdentifier` names a spell the client has data
+for, else `false`. `spellIdentifier` is a spell ID, name,
+`"name(subtext)"`, or spell link.
+
+```lua
+C_Spell.DoesSpellExist(133)             -- true (Fireball)
+C_Spell.DoesSpellExist(999999)          -- false
+C_Spell.DoesSpellExist("Fireball")      -- true only if Fireball is in your spellbook
+```
+
+A name only resolves when the spell is in your (or your pet's)
+spellbook, so `false` for a name can just mean you don't know it.
 
 ### `C_Spell.GetSpellInfo(spellIdentifier)`
 
