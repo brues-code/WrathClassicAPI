@@ -214,6 +214,7 @@ Conventions:
   - [`UnitSubName(unit)`](#unitsubnameunit)
   - [`UnitOwnerGUID(unit)`](#unitownerguidunit)
   - [`UnitCreatureID(unit)`](#unitcreatureidunit)
+  - [`UnitCreatureTypeID(unit)`](#unitcreaturetypeidunit)
   - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -3273,6 +3274,30 @@ UnitCreatureID("pet")     -- your pet's creature ID
 ```
 
 Returns `nil` for players and for a token that names no unit.
+
+### `UnitCreatureTypeID(unit)`
+
+Returns the ID of the unit's creature type, or `nil`. This is the type
+`UnitCreatureType` names, as a number that's the same in every locale.
+
+| ID | Type | ID | Type |
+|---|---|---|---|
+| `1` | Beast | `7` | Humanoid |
+| `2` | Dragonkin | `8` | Critter |
+| `3` | Demon | `9` | Mechanical |
+| `4` | Elemental | `10` | Not specified |
+| `5` | Giant | `11` | Totem |
+| `6` | Undead | `12` | Non-combat Pet |
+| | | `13` | Gas Cloud |
+
+```lua
+if UnitCreatureTypeID("target") == 6 then
+    -- the target is Undead
+end
+```
+
+A shapeshifted unit reports its form's type — a druid in Cat Form is a
+Beast. Players report their race's type.
 
 ### `UnitGUID("player")`
 

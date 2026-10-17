@@ -2458,6 +2458,13 @@ enum Offsets {
     // it for non-player units and prints the result under the name.
     FUN_UNIT_GET_TITLE = 0x00719950,
 
+    // CGUnit_C::GetCreatureType — `int32_t __thiscall(this)`, no stack args.
+    // The unit's CreatureType.dbc ID: the active shapeshift form's creature
+    // type when it has one, else the creature-cache record's type, else the
+    // race's (ChrRaces) type; 0 when none applies. Script_UnitCreatureType
+    // (0x00611780) turns it into the localized name.
+    FUN_UNIT_GET_CREATURE_TYPE = 0x0071F300,
+
     // CGMerchantInfo::GetRepairCost — `int32_t __cdecl(CGItem_C *item)`. The
     // item's repair cost in copper (CGItem_C::GetRepairCost, 0x00708540: 0 for
     // broken, unrepairable, full-durability, or uncached items), less the

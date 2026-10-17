@@ -60,7 +60,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |
 | Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`, `GameTooltip:HasGameObject`, `GameTooltip:GetGameObject`, `OnTooltipSetGameObject` script |
 | UI Color  | `C_UIColor.GetColors` |
-| Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell`, `UnitSubName`, `UnitOwnerGUID`, `UnitCreatureID`, `UnitGUID("player")` during addon loading |
+| Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell`, `UnitSubName`, `UnitOwnerGUID`, `UnitCreatureID`, `UnitCreatureTypeID`, `UnitGUID("player")` during addon loading |
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetAuraSlots`, `C_UnitAuras.GetAuraDataBySlot`, `C_UnitAuras.UnitAuraBySlot`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
 | XML       | `C_XMLUtil.DoesTemplateExist`, `C_XMLUtil.GetTemplateInfo`, `C_XMLUtil.GetTemplates` |
 
