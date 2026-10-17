@@ -662,6 +662,11 @@ enum Offsets {
     // same function anchors the owner-GUID pair the title names: CHARMEDBY
     // at desc+0x18, falling back to CREATEDBY at desc+0x28.
     OFF_UNIT_FIELD_CREATED_BY_SPELL = 0x12C,
+    // UNIT_FIELD_CHARMEDBY / UNIT_FIELD_CREATEDBY GUIDs (lo, hi), relative to
+    // the descriptor like the field above. CGUnit::GetCharmerOrCreatorGuid
+    // (0x004F5F20) returns CHARMEDBY when it is nonzero, else CREATEDBY.
+    OFF_UNIT_FIELD_CHARMED_BY = 0x18,
+    OFF_UNIT_FIELD_CREATED_BY = 0x28,
 
     // Group-roster fallback for a party/raid member outside the client's
     // object-sync range (no live object to read a descriptor from). The

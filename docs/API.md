@@ -212,6 +212,7 @@ Conventions:
   - [`UnitNameFromGUID(guid)`](#unitnamefromguidguid)
   - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
   - [`UnitSubName(unit)`](#unitsubnameunit)
+  - [`UnitOwnerGUID(unit)`](#unitownerguidunit)
   - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -3244,6 +3245,21 @@ UnitSubName("player")  -- nil
 
 Returns `nil` for players, for player pets, and for a creature whose
 information hasn't arrived from the server yet.
+
+### `UnitOwnerGUID(unit)`
+
+Returns the GUID of the unit's owner: whoever is charming it, or else
+whoever summoned it (a pet's, guardian's or totem's caster). Returns
+`nil` when the unit has no owner.
+
+```lua
+if UnitOwnerGUID("target") == UnitGUID("player") then
+    -- the target is your pet, guardian or totem
+end
+```
+
+Players and ordinary creatures have no owner. A player who is mind
+controlled returns the GUID of whoever controls them.
 
 ### `UnitGUID("player")`
 
