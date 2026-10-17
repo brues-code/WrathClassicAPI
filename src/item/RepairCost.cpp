@@ -19,6 +19,8 @@
 // CGMerchantInfo::GetRepairCost: the item's base cost, less the open
 // merchant's reputation discount.
 
+#include "item/RepairCost.h"
+
 #include "Game.h"
 #include "Offsets.h"
 #include "item/Location.h"
@@ -27,21 +29,22 @@
 
 namespace Item::RepairCost {
 
-namespace {
+uint32_t Of(const uint8_t *item) {
+    using GetRepairCost_t = int32_t(__cdecl *)(const void *item);
+    if (item == nullptr)
+        return 0;
+    return static_cast<uint32_t>(
+        reinterpret_cast<GetRepairCost_t>(Offsets::FUN_MERCHANT_GET_REPAIR_COST)(item));
+}
 
-using GetRepairCost_t = int32_t(__cdecl *)(const void *item);
+namespace {
 
 int __cdecl Script_GetInventoryItemRepairCost(void *L) {
     if (!Game::Lua::IsNumber(L, 1))
         return Game::Lua::Error(L, "Usage: GetInventoryItemRepairCost(invSlot)");
     const uint8_t *item =
         Item::Location::ResolveEquipmentSlot(static_cast<int>(Game::Lua::ToNumber(L, 1)));
-    const uint32_t cost =
-        item != nullptr
-            ? static_cast<uint32_t>(
-                  reinterpret_cast<GetRepairCost_t>(Offsets::FUN_MERCHANT_GET_REPAIR_COST)(item))
-            : 0;
-    Game::Lua::PushNumber(L, static_cast<double>(cost));
+    Game::Lua::PushNumber(L, static_cast<double>(Of(item)));
     return 1;
 }
 

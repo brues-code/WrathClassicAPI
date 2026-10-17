@@ -39,6 +39,7 @@ Conventions:
 - [Container](#container)
   - [`C_Container.SwapItems(srcBag, srcSlot, dstBag, dstSlot)`](#c_containerswapitemssrcbag-srcslot-dstbag-dstslot)
   - [`C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`](#c_containermoveitemsrcbag-srcslot-dstbag-dstslot-count)
+  - [`C_Container.GetContainerItemRepairCost(bagID, slot)`](#c_containergetcontaineritemrepaircostbagid-slot)
 - [CVar](#cvar)
   - [`C_CVar.GetCVar(name)` / `C_CVar.SetCVar(name, value [, scriptCVar])` / `C_CVar.GetCVarDefault(name)` / `C_CVar.RegisterCVar(name [, value])`](#c_cvargetcvarname--c_cvarsetcvarname-value--scriptcvar--c_cvargetcvardefaultname--c_cvarregistercvarname--value)
   - [`C_CVar.GetCVarBool(name)`](#c_cvargetcvarboolname)
@@ -525,6 +526,21 @@ source stack as the client currently knows it. Several calls in one frame get
 no server replies in between, so those counts are still pre-batch values while
 your own model has moved on. Drive a batch from your own bookkeeping.
 
+
+### `C_Container.GetContainerItemRepairCost(bagID, slot)`
+
+Returns the copper it costs to repair the item in a bag slot. It's the
+same value `GameTooltip:SetBagItem` returns as its repair cost.
+
+```lua
+local cost = C_Container.GetContainerItemRepairCost(0, 1)  -- backpack slot 1
+```
+
+`bagID` is `0` for the backpack, `1`–`4` for your bags, `-1` for the
+bank, `5`–`11` for bank bags and `-2` for the keyring; bank slots only
+resolve while the bank is open. Returns `0` for an empty slot and for an
+item that doesn't need or can't take repair. While a merchant window is
+open, the cost includes that merchant's reputation discount.
 ---
 
 ## CVar

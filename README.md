@@ -37,7 +37,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Chat Bubbles | `C_ChatBubbles.GetAllChatBubbles` |
 | Color     | `C_ColorUtil.ConvertRGBToHSV`, `C_ColorUtil.ConvertHSVToRGB`, `C_ColorUtil.ConvertHSVToHSL`, `C_ColorUtil.ConvertHSLToHSV`, `C_ColorUtil.ConvertHSLToRGB`, `C_ColorUtil.GenerateTextColorCode`, `C_ColorUtil.WrapTextInColor`, `C_ColorUtil.WrapTextInColorCode` |
 | Combat Log | `CombatLogGetCurrentEventInfo` |
-| Container | `C_Container.SwapItems`, `C_Container.MoveItem` |
+| Container | `C_Container.SwapItems`, `C_Container.MoveItem`, `C_Container.GetContainerItemRepairCost` |
 | CVar      | `C_CVar.GetCVar`, `C_CVar.SetCVar`, `C_CVar.GetCVarDefault`, `C_CVar.RegisterCVar`, `C_CVar.GetCVarBool`, `C_CVar.GetCVarInfo`, `C_CVar.DoesCVarExist`, `C_CVar.AreCVarsLoaded`, `C_CVar.GetCVarBitfield`, `C_CVar.SetCVarBitfield`, `C_CVar.SetTempCVar`, `C_CVar.RemoveTempCVar` |
 | Encoding  | `C_EncodingUtil.EncodeHex`, `C_EncodingUtil.DecodeHex`, `C_EncodingUtil.EncodeBase64`, `C_EncodingUtil.DecodeBase64`, `C_EncodingUtil.CompressString`, `C_EncodingUtil.DecompressString`, `C_EncodingUtil.SerializeJSON`, `C_EncodingUtil.DeserializeJSON`, `C_EncodingUtil.SerializeCBOR`, `C_EncodingUtil.DeserializeCBOR` |
 | Events    | `C_EventUtils.IsEventValid`, `Frame:RegisterUnitEvent`, `Frame:IsEventRegistered` |
