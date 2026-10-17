@@ -213,6 +213,7 @@ Conventions:
   - [`UnitCreatedBySpell(unit)`](#unitcreatedbyspellunit)
   - [`UnitSubName(unit)`](#unitsubnameunit)
   - [`UnitOwnerGUID(unit)`](#unitownerguidunit)
+  - [`UnitCreatureID(unit)`](#unitcreatureidunit)
   - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -3260,6 +3261,18 @@ end
 
 Players and ordinary creatures have no owner. A player who is mind
 controlled returns the GUID of whoever controls them.
+
+### `UnitCreatureID(unit)`
+
+Returns the unit's creature ID — the NPC ID databases such as Wowhead
+list — or `nil`.
+
+```lua
+UnitCreatureID("target")  -- 448 for Hogger, nil for a player
+UnitCreatureID("pet")     -- your pet's creature ID
+```
+
+Returns `nil` for players and for a token that names no unit.
 
 ### `UnitGUID("player")`
 
