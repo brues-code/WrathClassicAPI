@@ -1253,6 +1253,10 @@ enum Offsets {
     // harmful" probe, not a "helpful" probe — so callers reading
     // this directly must invert.
     AURA_FLAG_HARMFUL                  = 0x80,
+    // AFLAG_POSITIVE. With SPELL_ATTR_EX_CHANNELED, the engine's test for
+    // whether the player may cancel their own aura (Script_CancelUnitBuff,
+    // 0x00804220: `(flags & 0x10) || (AttributesEx & 0x4)`).
+    AURA_FLAG_POSITIVE                 = 0x10,
 
     // Bits 0..2 of the flag byte indicate which spell-effect indexes
     // this aura applies to (one bit per effect). An entry is considered
@@ -1443,6 +1447,8 @@ enum Offsets {
     // can still show in the spellbook/log). ClassicAPI's 1.12 aura module
     // checks the same bit for the same purpose.
     SPELL_ATTR_EX_NO_AURA_ICON         = 0x10000000,
+    // AttributesEx bit 2 — SPELL_ATTR1_IS_CHANNELLED. See AURA_FLAG_POSITIVE.
+    SPELL_ATTR_EX_CHANNELED            = 0x00000004,
 
     // SpellAuraName values the client tracks as "system" auras with no
     // buff-frame icon: secondary-skill tracking (Find Herbs, Track
@@ -2440,6 +2446,14 @@ enum Offsets {
     // (CGMerchantInfo::m_merchant). GameTooltip:SetInventoryItem returns it
     // as its third value.
     FUN_MERCHANT_GET_REPAIR_COST = 0x00584B20,
+
+    // Spell_C_CancelAura — `void __cdecl(const SpellRec *spell, CGUnit_C *unit,
+    // int auraSlot)`. Cancels `unit`'s aura in `auraSlot` (an index into the
+    // CGUnit aura array): CMSG_CANCEL_AURA for the player — or the
+    // companion-dismiss / mount path those auras need — and CMSG_PET_CANCEL_AURA
+    // for a pet. `spell` is a Spell.dbc record copy (FUN_DBC_COPY_RECORD).
+    // Script_CancelUnitBuff's own-player path calls it.
+    FUN_SPELL_CANCEL_AURA = 0x00802F80,
     // OBJECT_FIELD_TYPE — the object's TYPEMASK bits, in the object fields
     // (`[obj + OFF_OBJECT_DESCRIPTORS]`).
     OFF_OBJECT_FIELD_TYPE = 0x08,

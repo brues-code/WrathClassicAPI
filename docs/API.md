@@ -151,6 +151,7 @@ Conventions:
 - [Spell](#spell)
   - [`IsPlayerSpell(spellID)`](#isplayerspellspellid)
   - [`C_Spell.DoesSpellExist(spellIdentifier)`](#c_spelldoesspellexistspellidentifier)
+  - [`C_Spell.CancelSpellByID(spellID)`](#c_spellcancelspellbyidspellid)
   - [`C_Spell.GetSpellInfo(spellIdentifier)`](#c_spellgetspellinfospellidentifier)
   - [`C_Spell.GetSpellName(spellIdentifier)`](#c_spellgetspellnamespellidentifier)
   - [`C_Spell.GetSpellSubtext(spellIdentifier)`](#c_spellgetspellsubtextspellidentifier)
@@ -2302,6 +2303,21 @@ C_Spell.DoesSpellExist("Fireball")      -- true only if Fireball is in your spel
 
 A name only resolves when the spell is in your (or your pet's)
 spellbook, so `false` for a name can just mean you don't know it.
+
+### `C_Spell.CancelSpellByID(spellID)`
+
+Cancels your aura from `spellID`, the same as right-clicking its buff
+icon. Returns nothing.
+
+```lua
+C_Spell.CancelSpellByID(1126)   -- Mark of the Wild
+C_Spell.CancelSpellByID(2383)   -- Find Herbs
+```
+
+Does nothing when you don't have the aura or can't cancel it. You can
+cancel a helpful aura or a channelled spell; harmful auras can't be
+cancelled. Dismissing a mount or companion pet this way works like
+clicking its buff.
 
 ### `C_Spell.GetSpellInfo(spellIdentifier)`
 
