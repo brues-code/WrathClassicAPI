@@ -589,6 +589,24 @@ enum Offsets {
     OBJ_FLAGS_UNIT = 0x08,
     // TYPEMASK_GAMEOBJECT — resolves a GUID to its in-world CGGameObject_C only.
     OBJ_FLAGS_GAMEOBJECT = 0x20,
+    // TYPEMASK_CORPSE — a player's corpse, or bones.
+    OBJ_FLAGS_CORPSE = 0x80,
+
+    // CGCorpse_C::m_corpse — the corpse's updatefields (CGCorpseData), in the
+    // slot a unit keeps OFF_UNIT_DESCRIPTOR: the owner's GUID at +0x00, flags at
+    // +0x6C. CORPSE_FLAG_BONES marks bones, which the engine never treats as a
+    // player's corpse (CGCorpse_C::CanHighlight 0x00706590 reads
+    // `[[corpse+0xD0]+0x6C] & 1`).
+    OFF_CORPSE_DATA = 0xD0,
+    OFF_CORPSE_FIELD_OWNER = 0x00,
+    OFF_CORPSE_FIELD_FLAGS = 0x6C,
+    CORPSE_FLAG_BONES = 0x1,
+
+    // ClntObjMgrEnumVisibleObjects — `int __cdecl(int (__cdecl *cb)(uint64
+    // guid, void *ctx), void *ctx)`. Calls `cb` for each visible object until
+    // it returns 0. It reads the current ObjectMgr without a null check, so
+    // call it only in the world.
+    FUN_CLNT_OBJ_MGR_ENUM_VISIBLE_OBJECTS = 0x004D4B30,
 
     // UnitNameFromGUID (src/unit/NameFromGUID.cpp). Two name sources, mirroring
     // the engine's own Script_UnitName (FUN_0060E740):
@@ -1305,6 +1323,13 @@ enum Offsets {
     // "nameplateN" — appear here too. Wrapped by Unit::GuidToTokens. Consume the
     // strings before the next engine call.
     FUN_GUID_TO_UNIT_KEYWORDS          = 0x0060BB70,
+
+    // Script_SendUnitSignal — `void __cdecl(const uint64 *guid, int eventID)`.
+    // Fires `eventID` once per FUN_GUID_TO_UNIT_KEYWORDS token naming the GUID,
+    // with that token as arg1 (FrameScript_SignalEvent(eventID, "%s", token)).
+    // How the engine fires its UNIT_* events; a reserved custom event ID works
+    // the same.
+    FUN_SCRIPT_SEND_UNIT_SIGNAL        = 0x0060BF10,
 
     // Spell.dbc record-copy helper. `__thiscall(this, id, *out)` →
     // copies the 680-byte (0x2A8) record into *out, returns 1 on hit
@@ -2724,12 +2749,21 @@ enum Offsets {
     FUN_PACKET_SPELL_CAST = 0x0080FEE0,
     SMSG_SPELL_START = 0x131,
     SMSG_SPELL_GO = 0x132,
+    // SpellCastTargets mask bits that carry a packed object GUID right after
+    // the u32 mask: unit 0x2, enemy corpse 0x200, game object 0x800, ally
+    // corpse 0x8000, minipet 0x10000 — one GUID for whichever is set
+    // (SpellGetCastTargets 0x009AB9C0, `test [mask], 0x18A02`). The targets
+    // follow castTime in SMSG_SPELL_START. A resurrection aimed at a released
+    // player carries the corpse.
+    SPELL_TARGET_FLAGS_OBJECT = 0x18A02,
     // SMSG_SPELL_FAILURE handler, same signature. Packet: packed caster GUID,
     // uint8 castCount, uint32 spellId, uint8 reason.
     FUN_PACKET_SPELL_FAILURE = 0x00809C70,
-    // CDataStore read cursor, and the engine readers that advance it:
+    // CDataStore size and read cursor, and the engine readers that advance it:
     // Get(uint8_t &) / Get(uint32_t &) `__thiscall(this, T *)`, and the packed
-    // GUID reader `CDataStore &__cdecl(CDataStore &, uint64 *)`.
+    // GUID reader `CDataStore &__cdecl(CDataStore &, uint64 *)`. A read past
+    // the end sets the cursor to size + 1 (CDataStore::FetchRead).
+    OFF_DATASTORE_SIZE = 0x10,
     OFF_DATASTORE_READ = 0x14,
     FUN_DATASTORE_GET_U8 = 0x0047B340,
     FUN_DATASTORE_GET_U32 = 0x0047B3C0,

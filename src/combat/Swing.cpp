@@ -28,7 +28,8 @@
 //
 // The client sees these through its own packet parsers: ATTACKROUNDINFO::Unpack
 // (SMSG_ATTACKER_STATE_UPDATE), CGUnit_C::SetAttacking (SMSG_ATTACK_START), and
-// read-only peeks at the head of SMSG_SPELL_START / _GO / _FAILURE.
+// read-only peeks at the head of SMSG_SPELL_START / _GO / _FAILURE (through
+// Net::SpellPacket, which owns those handlers' hooks).
 //
 // Each change only marks a swing type dirty; the frame tick fires at most one
 // event per type per frame with the remaining time. Extra attacks (Windfury,
@@ -43,6 +44,7 @@
 #include "event/Custom.h"
 #include "item/ID.h"
 #include "item/Location.h"
+#include "net/DataStore.h"
 #include "spell/Lookup.h"
 #include "tick/FrameTick.h"
 #include "unit/Player.h"
@@ -404,52 +406,18 @@ void OnSpellGo(uint32_t spellID, uint8_t castCount) {
     }
 }
 
-using GetU8_t = void *(__fastcall *)(void *msg, void *edx, uint8_t *out);
-using GetU32_t = void *(__fastcall *)(void *msg, void *edx, uint32_t *out);
-using GetPackedGuid_t = void *(__cdecl *)(void *msg, uint64_t *out);
-
-// Reads a spell packet's head through the engine's own readers. Callers put
-// the read cursor back afterwards, so the handler sees the packet untouched.
-struct SpellPacketHead {
-    uint64_t caster = 0;
-    uint8_t castCount = 0;
-    uint32_t spellID = 0;
-};
-
-uint32_t &ReadCursor(void *msg) {
-    return *reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(msg) + Offsets::OFF_DATASTORE_READ);
-}
-
-uint64_t ReadPackedGuid(void *msg) {
-    uint64_t guid = 0;
-    reinterpret_cast<GetPackedGuid_t>(Offsets::FUN_DATASTORE_GET_PACKED_GUID)(msg, &guid);
-    return guid;
-}
-
-uint8_t ReadU8(void *msg) {
-    uint8_t v = 0;
-    reinterpret_cast<GetU8_t>(Offsets::FUN_DATASTORE_GET_U8)(msg, nullptr, &v);
-    return v;
-}
-
-uint32_t ReadU32(void *msg) {
-    uint32_t v = 0;
-    reinterpret_cast<GetU32_t>(Offsets::FUN_DATASTORE_GET_U32)(msg, nullptr, &v);
-    return v;
-}
+} // namespace
 
 // SMSG_SPELL_START / SMSG_SPELL_GO: packed castItem, packed caster, castCount,
 // spellID, castFlags, then (START) castTime.
-void PeekSpellCast(uint32_t msgId, void *msg) {
-    uint32_t &cursor = ReadCursor(msg);
-    const uint32_t saved = cursor;
+void OnSpellCastPacket(uint32_t msgId, void *msg) {
+    using namespace Net::DataStore;
     ReadPackedGuid(msg); // castItem
     const uint64_t caster = ReadPackedGuid(msg);
     const uint8_t castCount = ReadU8(msg);
     const uint32_t spellID = ReadU32(msg);
     ReadU32(msg); // castFlags
     const auto castTimeMs = static_cast<int32_t>(ReadU32(msg));
-    cursor = saved;
 
     const uint64_t player = PlayerGuid();
     if (player == 0 || caster != player || spellID == 0)
@@ -460,39 +428,20 @@ void PeekSpellCast(uint32_t msgId, void *msg) {
         OnSpellGo(spellID, castCount);
 }
 
-using SpellPacket_t = int(__cdecl *)(void *param, uint32_t msgId, uint32_t time, void *msg);
-SpellPacket_t g_spellCastPacketOriginal = nullptr;
-SpellPacket_t g_spellFailurePacketOriginal = nullptr;
-
-int __cdecl SpellCastPacket_h(void *param, uint32_t msgId, uint32_t time, void *msg) {
-    if ((msgId == Offsets::SMSG_SPELL_START || msgId == Offsets::SMSG_SPELL_GO) && msg != nullptr)
-        PeekSpellCast(msgId, msg);
-    return g_spellCastPacketOriginal(param, msgId, time, msg);
-}
-
 // SMSG_SPELL_FAILURE: packed caster, castCount, spellID. A cancelled cast
 // ends the pause too.
-int __cdecl SpellFailurePacket_h(void *param, uint32_t msgId, uint32_t time, void *msg) {
-    if (msg != nullptr && g_cast.valid) {
-        uint32_t &cursor = ReadCursor(msg);
-        const uint32_t saved = cursor;
-        const uint64_t caster = ReadPackedGuid(msg);
-        const uint8_t castCount = ReadU8(msg);
-        const uint32_t spellID = ReadU32(msg);
-        cursor = saved;
-        if (caster == PlayerGuid() && IsCurrentCast(castCount, spellID))
-            EndCast();
-    }
-    return g_spellFailurePacketOriginal(param, msgId, time, msg);
+void OnSpellFailurePacket(void *msg) {
+    if (!g_cast.valid)
+        return;
+    using namespace Net::DataStore;
+    const uint64_t caster = ReadPackedGuid(msg);
+    const uint8_t castCount = ReadU8(msg);
+    const uint32_t spellID = ReadU32(msg);
+    if (caster == PlayerGuid() && IsCurrentCast(castCount, spellID))
+        EndCast();
 }
 
-const Game::HookAutoRegister _spellCastPacketHook{
-    Offsets::FUN_PACKET_SPELL_CAST, reinterpret_cast<void *>(&SpellCastPacket_h),
-    reinterpret_cast<void **>(&g_spellCastPacketOriginal)};
-
-const Game::HookAutoRegister _spellFailurePacketHook{
-    Offsets::FUN_PACKET_SPELL_FAILURE, reinterpret_cast<void *>(&SpellFailurePacket_h),
-    reinterpret_cast<void **>(&g_spellFailurePacketOriginal)};
+namespace {
 
 // ---- PLAYER_SWING fire (once per type per frame) -------------------------
 

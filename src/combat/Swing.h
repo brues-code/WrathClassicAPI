@@ -38,4 +38,9 @@ bool HasWeapon(SwingType type);
 // Unit::IsWithinMeleeRange. False if either is null.
 bool InMeleeRange(void *player, void *target);
 
+// Net::SpellPacket observers: the player's cast starting, going off or
+// failing moves the swing timers. `msg` is read from its start.
+void OnSpellCastPacket(uint32_t msgId, void *msg);
+void OnSpellFailurePacket(void *msg);
+
 } // namespace Combat::Swing

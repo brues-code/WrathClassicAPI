@@ -36,6 +36,18 @@ inline void *ResolveToken(const char *token) {
     return reinterpret_cast<Fn>(Offsets::FUN_RESOLVE_UNIT_TOKEN)(token);
 }
 
+// The GUID a unit token names, or 0 — the engine's Script_GetGUIDFromToken.
+// Unlike ResolveToken it also names a group member outside the client's
+// object-sync range, from the group roster.
+inline uint64_t GuidForToken(const char *token) {
+    if (token == nullptr)
+        return 0;
+    using Fn = char(__cdecl *)(const char *token, uint64_t *out, char defaultToTarget);
+    uint64_t guid = 0;
+    reinterpret_cast<Fn>(Offsets::FUN_TOKEN_TO_GUID)(token, &guid, 0);
+    return guid;
+}
+
 // The unit's UpdateField descriptor (`obj + OFF_UNIT_DESCRIPTOR`) — the block the
 // per-field reads (race/class bytes, health, …) index into — or nullptr if `obj`
 // is null or its descriptor isn't populated yet (e.g. mid engine-init at first
@@ -94,16 +106,14 @@ inline Member ResolveMember(const char *token) {
     if (const uint8_t *desc = Descriptor(ResolveToken(token)))
         return {MemberSource::Object, desc};
 
-    uint32_t guid[2] = {0, 0};
-    using TokenToGuid_t = char(__cdecl *)(const char *token, uint32_t out[2], char flag);
-    reinterpret_cast<TokenToGuid_t>(Offsets::FUN_TOKEN_TO_GUID)(token, guid, 0);
+    const uint64_t guid = GuidForToken(token);
 
-    using RosterByGuid_t = const uint8_t *(__cdecl *)(const uint32_t guid[2]);
+    using RosterByGuid_t = const uint8_t *(__cdecl *)(const uint64_t *guid);
     if (const uint8_t *rec =
-            reinterpret_cast<RosterByGuid_t>(Offsets::FUN_PARTY_ROSTER_BY_GUID)(guid))
+            reinterpret_cast<RosterByGuid_t>(Offsets::FUN_PARTY_ROSTER_BY_GUID)(&guid))
         return {MemberSource::Party, rec};
     if (const uint8_t *rec =
-            reinterpret_cast<RosterByGuid_t>(Offsets::FUN_RAID_ROSTER_BY_GUID)(guid))
+            reinterpret_cast<RosterByGuid_t>(Offsets::FUN_RAID_ROSTER_BY_GUID)(&guid))
         return {MemberSource::Raid, rec};
     return {};
 }

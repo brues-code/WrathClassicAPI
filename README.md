@@ -60,7 +60,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Timer     | `C_Timer.After`, `C_Timer.NewTimer`, `C_Timer.NewTicker` |
 | Tooltip   | `GameTooltip:HasSpell`, `GameTooltip:HasItem`, `GameTooltip:HasUnit`, `GameTooltip:HasGameObject`, `GameTooltip:GetGameObject`, `OnTooltipSetGameObject` script |
 | UI Color  | `C_UIColor.GetColors` |
-| Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell`, `UnitSubName`, `UnitOwnerGUID`, `UnitCreatureID`, `UnitCreatureTypeID`, `UnitGUID("player")` during addon loading |
+| Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell`, `UnitSubName`, `UnitOwnerGUID`, `UnitCreatureID`, `UnitCreatureTypeID`, `UnitHasIncomingResurrection`, `UnitGUID("player")` during addon loading |
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetAuraSlots`, `C_UnitAuras.GetAuraDataBySlot`, `C_UnitAuras.UnitAuraBySlot`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
 | XML       | `C_XMLUtil.DoesTemplateExist`, `C_XMLUtil.GetTemplateInfo`, `C_XMLUtil.GetTemplates` |
 
@@ -82,6 +82,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | `CURSOR_CHANGED` | `isDefault, newCursorType, oldCursorType, oldCursorVirtualID` | When what the cursor holds changes, for every kind of cursor. The types are `Enum.UICursorType` values |
 | `WEAPON_SLOT_CHANGED` | *(none)* | When the item in the main hand, off hand or ranged slot changes, at most once a frame. Relic changes don't fire it |
 | `HEARTHSTONE_BOUND` | *(none)* | Each time you bind your hearthstone, including a rebind at the same inn. `GetBindLocation()` already returns the new location |
+| `INCOMING_RESURRECT_CHANGED` | `unitTarget` | When a resurrection cast at a unit starts or stops, once for each token that names the unit. `UnitHasIncomingResurrection` returns the new value |
 
 ### Client extensions
 

@@ -75,6 +75,7 @@ Conventions:
   - [`CURSOR_CHANGED` event](#cursor_changed-event)
   - [`WEAPON_SLOT_CHANGED` event](#weapon_slot_changed-event)
   - [`HEARTHSTONE_BOUND` event](#hearthstone_bound-event)
+  - [`INCOMING_RESURRECT_CHANGED` event](#incoming_resurrect_changed-event)
 - [Expansion](#expansion)
   - [`GetClassicExpansionLevel()`](#getclassicexpansionlevel)
   - [`ClassicExpansionAtLeast(level)`](#classicexpansionatleastlevel)
@@ -215,6 +216,7 @@ Conventions:
   - [`UnitOwnerGUID(unit)`](#unitownerguidunit)
   - [`UnitCreatureID(unit)`](#unitcreatureidunit)
   - [`UnitCreatureTypeID(unit)`](#unitcreaturetypeidunit)
+  - [`UnitHasIncomingResurrection(unit)`](#unithasincomingresurrectionunit)
   - [`UnitGUID("player")`](#unitguidplayer)
 - [Unit Auras](#unit-auras)
   - [`C_UnitAuras.GetAuraDataByIndex(unit, index[, filter])`](#c_unitaurasgetauradatabyindexunit-index-filter)
@@ -1193,6 +1195,30 @@ end)
 ```
 
 It doesn't fire at login or when you change maps.
+
+### `INCOMING_RESURRECT_CHANGED` event
+
+Payload: `unitTarget`
+
+Fires when a resurrection cast at a unit starts or stops. `unitTarget` is
+the unit token. The event gives no value.
+[`UnitHasIncomingResurrection`](#unithasincomingresurrectionunit) gives the
+new value.
+
+The event fires one time for each token that names the unit, for example
+`"party1"` and `"target"`. If the cast is at the corpse of a released player,
+`unitTarget` names that player.
+
+```lua
+local f = CreateFrame("Frame")
+f:RegisterEvent("INCOMING_RESURRECT_CHANGED")
+f:SetScript("OnEvent", function(self, event, unitTarget)
+    print(unitTarget, UnitHasIncomingResurrection(unitTarget))
+end)
+```
+
+To get the event for some units only, use
+[`Frame:RegisterUnitEvent`](#frameregisteruniteventevent-unit1--unit2-).
 
 ---
 
@@ -3298,6 +3324,32 @@ end
 
 A shapeshifted unit reports its form's type — a druid in Cat Form is a
 Beast. Players report their race's type.
+
+### `UnitHasIncomingResurrection(unit)`
+
+```
+hasIncomingResurrection = UnitHasIncomingResurrection(unit)
+```
+
+Returns true while somebody casts a resurrection spell at `unit`. Otherwise
+it returns false. If `unit` is a released player, the function also includes
+casts at the corpse of that player.
+
+```lua
+if UnitHasIncomingResurrection("party1") then
+    print(UnitName("party1"), "has an incoming resurrection")
+end
+```
+
+The value changes to true when the cast starts. It changes to false when the
+cast stops, for any reason. This includes a completed cast that the target
+did not accept yet.
+
+You see a cast only when its caster is near you. If the caster goes out of
+range during the cast, the value changes to false.
+
+[`INCOMING_RESURRECT_CHANGED`](#incoming_resurrect_changed-event) fires at
+each change.
 
 ### `UnitGUID("player")`
 
