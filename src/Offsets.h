@@ -3307,4 +3307,78 @@ enum Offsets {
     FUN_COMPONENT_RENDER_PREP = 0x004F1520,
     FUN_COMPONENT_APPLY_MONSTER_GEOSETS = 0x004E7790, // __cdecl(model, CreatureDisplayInfoRec *)
     FUN_COMPONENT_REPLACE_MONSTER_SKIN = 0x004F20C0,  // __cdecl(model, display, CreatureModelDataRec *)
+
+    // --- Cooldown (src/frame/Cooldown.cpp) -------------------------------------------------
+    //
+    // CGCooldown (WoW/Source/Ui/CGCooldown.{h,cpp} in the decompiled client),
+    // each address checked against Wow.exe. A CSimpleFrame subclass of 0x430
+    // bytes that draws its own sweep; the fields below follow the CSimpleFrame
+    // part. Its two vtables have CSimpleFrame's slot counts (57 and 19).
+    COOLDOWN_SIZE = 0x430,
+    VTBL_COOLDOWN = 0x00A1D100,
+    VTBL_COOLDOWN_LAYOUT = 0x00A1D0B0,
+    VTBL_COOLDOWN_SLOTS = 57,
+    VTBL_COOLDOWN_LAYOUT_SLOTS = 19,
+    VTBL_LAYOUT_ON_FRAME_SIZE_CHANGED = 0x48, // __thiscall(layout, const CRect &), ret 4
+    // CGCooldown::Create — `CSimpleFrame *__cdecl(CSimpleFrame *parent)`, the
+    // "Cooldown" factory FUN_00521040 registers. It takes the object from the
+    // class's CDataAllocator (0x00C24240), which the deleting destructor
+    // (0x005EBEF0) returns it to.
+    FUN_COOLDOWN_CREATE = 0x0051A380,
+    FUN_COOLDOWN_CONSTRUCTOR = 0x005ECAE0, // __thiscall(frame, CSimpleFrame *parent), ret 4
+    // ~CGCooldown — `__thiscall(frame)`: closes the star and edge textures,
+    // then CSimpleFrame's destructor body; no free.
+    FUN_COOLDOWN_DESTRUCTOR = 0x005EB040,
+    FUN_COOLDOWN_LOAD_XML = 0x005EB0C0,               // __thiscall(layout, XMLNode *, CStatus *), ret 8
+    FUN_COOLDOWN_RESET_VERTS = 0x005EBF20,            // __thiscall(frame)
+    FUN_COOLDOWN_REGISTER_SCRIPT_METHODS = 0x005EBE10, // __cdecl(L): Frame's, then its five
+    VAR_COOLDOWN_OBJECT_TYPE = 0x00C2423C,            // lazily ++VAR_SCRIPTOBJECT_TYPE_COUNTER
+    // The index lists OnFrameRender draws with: the star fan (eight triangles
+    // {v_k, v9, v_k+1} around the centre v9, 24 indices) and the flash and edge
+    // quads ({0, 2, 1, 1, 2, 3}).
+    VAR_COOLDOWN_STAR_INDICES = 0x00AD13E8,
+    VAR_COOLDOWN_FLASH_INDICES = 0x00AD13DC,
+    VAR_COOLDOWN_EDGE_INDICES = 0x00AD13D0,
+    OFF_COOLDOWN_START_TIME = 0x29C, // uint ms, OsGetAsyncTimeMs
+    OFF_COOLDOWN_DURATION = 0x2A0,   // uint ms
+    OFF_COOLDOWN_ELAPSED = 0x2A4,
+    OFF_COOLDOWN_FLASHING = 0x2A8,
+    OFF_COOLDOWN_REVERSE = 0x2AC,
+    OFF_COOLDOWN_STAR_TEXTURE = 0x2B0, // HTEXTURE
+    OFF_COOLDOWN_STAR_VERTS = 0x2B4,   // C3Vector[10]
+    OFF_COOLDOWN_STAR_TEXCOORDS = 0x32C, // C2Vector[10]
+    OFF_COOLDOWN_STAR_COLOR = 0x37C,   // CImVector, bytes b g r a
+    OFF_COOLDOWN_FLASH_VERTS = 0x380,  // C3Vector[4]
+    OFF_COOLDOWN_FLASH_TEXCOORDS = 0x3B0,
+    OFF_COOLDOWN_FLASH_COLOR = 0x3D0,
+    OFF_COOLDOWN_EDGE_TEXTURE = 0x3D4,
+    OFF_COOLDOWN_DRAW_EDGE = 0x3D8,
+    OFF_COOLDOWN_EDGE_VERTS = 0x3DC,
+    OFF_COOLDOWN_EDGE_TEXCOORDS = 0x40C,
+    OFF_COOLDOWN_EDGE_COLOR = 0x42C,
+    // CSimpleFrame's resolved rect, CRect {minY, minX, maxY, maxX} in DDC.
+    OFF_FRAME_RECT = 0x64,
+    // CSimpleFrame::Show / Hide — `int __thiscall(frame)`: m_isShown, then
+    // ShowThis / HideThis, refused (0) for a protected frame in combat.
+    FUN_SIMPLEFRAME_SHOW = 0x0048F660,
+    FUN_SIMPLEFRAME_HIDE = 0x0048F620,
+    // CRenderBatch::Queue — `__thiscall(batch, HTEXTURE, EGxBlend, int
+    // posCount, const C3Vector *, const C2Vector *, int colorCount, const
+    // CImVector *, int idxCount, const uint16_t *, CGxShader *)`, ret 0x28. The
+    // batch keeps the pointers, so the arrays are animated in place.
+    FUN_RENDERBATCH_QUEUE = 0x004846F0,
+    GXBLEND_OPAQUE = 0,
+    GXBLEND_ALPHA = 2,
+    GXBLEND_ADD = 3,
+    // CSimpleTexture::GetImageModePixelShader — `CGxShader *__cdecl(int mode)`.
+    FUN_IMAGE_MODE_PIXEL_SHADER = 0x00483290,
+    DRAWLAYER_OVERLAY = 3,
+    // StringToBOOL(L, index, default) — `int __cdecl`: a Lua flag argument as
+    // the engine's setters read one (none = default, strings as in XML).
+    FUN_LUA_TO_BOOL = 0x00815500,
+    // FrameScript_Object::ScriptIx::~ScriptIx — `__thiscall(ScriptIx *)`:
+    // unrefs its function.
+    FUN_SCRIPTIX_DESTRUCTOR = 0x00819810,
+    // TextureCreateSolid — `HTEXTURE __cdecl(const CImVector &)`.
+    FUN_TEXTURE_CREATE_SOLID = 0x004B9550,
 };

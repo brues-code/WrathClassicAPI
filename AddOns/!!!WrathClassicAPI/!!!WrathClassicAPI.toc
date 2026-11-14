@@ -10,6 +10,7 @@ Util\Constants.lua
 Util\Mixin.lua
 Util\TableUtil.lua
 Util\MathUtil.lua
+Util\Cooldown.lua
 Util\CallbackRegistry.lua
 Util\GlobalCallbackRegistry.lua
 Util\Color.lua
