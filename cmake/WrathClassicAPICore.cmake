@@ -97,4 +97,14 @@ function(wrathclassicapi_add_core target)
 
     target_compile_definitions(${target} PRIVATE
         WRATHCLASSICAPI_VERSION_VALUE=${WRATHCLASSICAPI_VERSION_VALUE})
+
+    # Compile every source file as its own parallel job (MSBuild's
+    # MultiToolTask; other generators ignore it). Offsets.h and Game.h reach
+    # nearly every file, so an edit to either rebuilds the whole target, and
+    # without this MSBuild compiles a project's files one after another. /MP
+    # alone would not do: it works only inside one batch of files with
+    # identical settings, and CMake gives each .cpp whose name repeats in
+    # another directory (Info.cpp, Methods.cpp, ...) its own object path,
+    # which leaves those in one-file batches.
+    set_target_properties(${target} PROPERTIES VS_GLOBAL_UseMultiToolTask true)
 endfunction()
