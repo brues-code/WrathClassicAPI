@@ -13,7 +13,8 @@
 
 #pragma once
 
-// What a StatusBar's fill shows when it is not its stored value: the ease of
+// What a StatusBar's fill shows when it is not its stored value: a timer
+// (bar:SetTimerDuration) and the ease of
 // Enum.StatusBarInterpolation.ExponentialEaseOut.
 namespace StatusBar::Display {
 

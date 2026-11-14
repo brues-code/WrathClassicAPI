@@ -33,6 +33,7 @@
 
 #include "Game.h"
 #include "Offsets.h"
+#include "time/Clock.h"
 
 #include <cstdint>
 #include <cstring>
@@ -90,10 +91,7 @@ bool SamePath(const char *a, const char *b) {
     }
 }
 
-uint32_t NowMs() {
-    using OsGetAsyncTimeMs_t = uint32_t(__cdecl *)();
-    return reinterpret_cast<OsGetAsyncTimeMs_t>(Offsets::FUN_OS_GET_ASYNC_TIME_MS)();
-}
+using Time::Clock::NowMs;
 
 // Notes a path as played. A path that plays again refreshes its slot rather
 // than taking a new one, so a repeating footstep can't push the rest out: the

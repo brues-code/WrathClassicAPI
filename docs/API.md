@@ -56,6 +56,9 @@ Conventions:
   - [`C_CVar.AreCVarsLoaded()`](#c_cvararecvarsloaded)
   - [`C_CVar.GetCVarBitfield(name, index)` / `C_CVar.SetCVarBitfield(name, index, value)`](#c_cvargetcvarbitfieldname-index--c_cvarsetcvarbitfieldname-index-value)
   - [`C_CVar.SetTempCVar(name, value)` / `C_CVar.RemoveTempCVar(name)`](#c_cvarsettempcvarname-value--c_cvarremovetempcvarname)
+- [Duration](#duration)
+  - [`C_DurationUtil.CreateDuration()`](#c_durationutilcreateduration)
+  - [`UnitCastingDuration(unit)` / `UnitChannelDuration(unit)`](#unitcastingdurationunit--unitchanneldurationunit)
 - [Encoding](#encoding)
   - [`C_EncodingUtil.EncodeHex` / `DecodeHex`](#c_encodingutilencodehex--decodehex)
   - [`C_EncodingUtil.EncodeBase64` / `DecodeBase64`](#c_encodingutilencodebase64--decodebase64)
@@ -182,6 +185,7 @@ Conventions:
 - [Status Bar](#status-bar)
   - [`StatusBar` fill methods](#statusbar-fill-methods)
   - [`StatusBar` easing](#statusbar-easing)
+  - [`StatusBar` timer](#statusbar-timer)
 - [String Util](#string-util)
   - [`C_StringUtil.CreateNumericRuleFormatter()`](#c_stringutilcreatenumericruleformatter)
 - [Swing Timer](#swing-timer)
@@ -865,6 +869,73 @@ without touching the user's saved settings.
 Both raise the same errors as `SetCVar`: for a name that isn't a cvar, and
 for a read-only cvar. A cvar that only takes effect after a restart can't be
 set for the session, so both raise an error for one of those too.
+
+---
+
+## Duration
+
+### `C_DurationUtil.CreateDuration()`
+
+Returns a new `LuaDurationObject`: a span of time with a start, a total
+length and a mod rate. A new object is a zero span at time `0`. Times are
+`GetTime()` seconds.
+
+```lua
+local d = C_DurationUtil.CreateDuration()
+d:SetTimeFromStart(GetTime(), 8)
+d:GetRemainingDuration()   -- 8, then less each frame
+d:GetElapsedPercent()      -- 0 to 1
+```
+
+| Method | Description |
+|---|---|
+| `SetTimeFromStart(startTime, duration [, modRate])` | Sets the span to `duration` seconds from `startTime`. |
+| `SetTimeFromEnd(endTime, duration [, modRate])` | Sets the span to `duration` seconds that end at `endTime`. |
+| `SetTimeSpan(startTime, endTime)` | Sets the span from `startTime` to `endTime`, with a mod rate of `1`. An end before the start gives a zero span at `startTime`. |
+| `Reset()` / `SetToDefaults()` | Makes the span a zero span at time `0`, with a mod rate of `1`. |
+| `Assign(other)` | Copies the span of another duration object into this one. |
+| `Copy()` | Returns a new duration object with the same span. A change to one does not change the other. |
+| `GetStartTime([modifier])` / `GetEndTime([modifier])` | Returns the start or the end. |
+| `GetTotalDuration([modifier])` | Returns the length. |
+| `GetElapsedDuration([modifier])` / `GetRemainingDuration([modifier])` | Returns the time gone and the time left. Before the start, nothing has gone. After the end, nothing is left. |
+| `GetElapsedPercent([modifier])` / `GetRemainingPercent([modifier])` | The same, as a part of the length, from `0` to `1`. A zero span is all gone. |
+| `HasStarted([modifier])` / `HasExpired([modifier])` / `IsActive([modifier])` | Returns `true` at or after the start, at or after the end, and between the two. A zero span has started and expired. |
+| `IsZero()` | Returns `true` when the length is `0`. |
+| `GetModRate()` | Returns the mod rate. |
+| `FormatElapsedDuration(formatter [, modifier])` / `FormatRemainingDuration(...)` / `FormatTotalDuration(...)` | Returns the time gone, the time left or the length as text, made by a `NumericRuleFormatter` (see [`C_StringUtil.CreateNumericRuleFormatter`](#c_stringutilcreatenumericruleformatter)). |
+| `GetClock()` | Returns `nil`: the span runs on `GetTime()`. |
+| `GetClockTime()` | Returns `GetTime()`. |
+| `HasSecretValues()` | Returns `false`. |
+
+`modifier` is an `Enum.DurationTimeModifier`: `RealTime` (`0`, the
+default) or `BaseTime` (`1`). The mod rate changes only `BaseTime`
+answers: in base time the length is the real length divided by the mod
+rate, from the same start. So at 1 second into a 4 second span with a
+mod rate of `2`, the base time length is 2 seconds and 1 second is left.
+
+A wrong argument raises an error that shows the method's usage. A mod
+rate must be more than `0`. `tostring(duration)` gives
+`"LuaDurationObject: <address>"`, and `getmetatable(duration)` is `false`.
+
+`StatusBar:SetTimerDuration` takes a duration object; see
+[`StatusBar` timer](#statusbar-timer).
+
+### `UnitCastingDuration(unit)` / `UnitChannelDuration(unit)`
+
+Returns a new duration object for the cast or the channel that
+`UnitCastingInfo(unit)` or `UnitChannelInfo(unit)` returns, or nothing
+when there is none. The span runs from the cast's start time to its end
+time, in seconds.
+
+The object does not change after you get it. When a cast is pushed back,
+call the function again for the new end.
+
+```lua
+local d = UnitCastingDuration("target")
+if d then
+    print(d:GetRemainingDuration())
+end
+```
 
 ---
 
@@ -3028,6 +3099,37 @@ ends an ease. A hidden bar holds its ease until it is shown again.
 
 ```lua
 bar:SetValue(UnitHealth("target"), Enum.StatusBarInterpolation.ExponentialEaseOut)
+```
+
+### `StatusBar` timer
+
+| Method | Description |
+|---|---|
+| `SetTimerDuration(duration [, interpolation [, direction]])` | Makes the bar fill by itself from a duration object, on each frame. |
+| `GetTimerDuration()` | Returns a new duration object for the bar's timer, or `nil` when the bar has no timer. |
+
+`direction` is an `Enum.StatusBarTimerDirection`: `ElapsedTime` (`0`, the
+default) fills the bar as the time goes, and `RemainingTime` (`1`) empties
+it. After the end, the bar stays full or empty and keeps its timer. With
+the `interpolation` `Enum.StatusBarInterpolation.ExponentialEaseOut`, the
+fill eases from where it is shown now to the timer's place, then follows
+the timer.
+
+The bar keeps the duration object you give it, not a copy. A change you
+make to the object later shows on the next frame. The object that
+`GetTimerDuration` returns is the same span: a change to it also changes
+the bar.
+
+While the timer runs, `GetValue` and `GetMinMaxValues` return `0`, and
+`OnValueChanged` does not run. `SetValue` does not stop the timer.
+`SetMinMaxValues` stops it. A hidden bar does not move; it shows the
+correct fill on the first frame it is shown again.
+
+```lua
+local d = UnitCastingDuration("player")
+if d then
+    castBar:SetTimerDuration(d)
+end
 ```
 
 ---

@@ -65,6 +65,7 @@
 #include "frame/Methods.h"
 #include "text/NumericFormatter.h"
 #include "texture/Load.h"
+#include "time/Clock.h"
 #include "ui/FrameObject.h"
 #include "xml/Node.h"
 
@@ -178,7 +179,7 @@ void *&SlotTexture(void *frame, TextureSlot slot) {
 // __thiscall entry points mirrored as __fastcall with a dummy EDX.
 using FrameCall_t = int(__fastcall *)(void *frame, void *);
 
-uint32_t NowMs() { return reinterpret_cast<uint32_t(__cdecl *)()>(Offsets::FUN_OS_GET_ASYNC_TIME_MS)(); }
+using Time::Clock::NowMs;
 // `now` is at or past `start`, on the wrapping millisecond clock.
 bool Reached(uint32_t now, uint32_t start) { return static_cast<int32_t>(now - start) >= 0; }
 

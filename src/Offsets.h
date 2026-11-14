@@ -2503,6 +2503,18 @@ enum Offsets {
     // and read by CGPlayer_C::ToggleSheathe to pick the next state.
     OFF_UNIT_SHEATH_STATE = 0xB5C,
 
+    // CGUnit_C's cast and channel: the Spell.dbc ID and the start and end on
+    // OsGetAsyncTimeMs's clock, uint32 each. Script_UnitCastingInfo
+    // (0x00611DF0) and Script_UnitChannelInfo (0x00612090) report a cast
+    // while the spell's record exists and `(int)(now - end) < 0`, and push
+    // these times as their startTime and endTime.
+    OFF_UNIT_CASTING_SPELL_ID = 0xA6C,
+    OFF_UNIT_CAST_START_MS = 0xA78,
+    OFF_UNIT_CAST_END_MS = 0xA7C,
+    OFF_UNIT_CHANNEL_SPELL_ID = 0xA80,
+    OFF_UNIT_CHANNEL_START_MS = 0xA84,
+    OFF_UNIT_CHANNEL_END_MS = 0xA88,
+
     // CGUnit_C::GetShapeshiftForm — `uint32_t __thiscall(this)`, no stack
     // args. Returns the SpellShapeshiftForm.dbc ID (byte 3 of
     // UNIT_FIELD_BYTES_2, descriptor +0x1D3), or 0 while
