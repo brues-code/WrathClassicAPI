@@ -54,6 +54,11 @@
 // texcoord; ours start at the rotation (SetRotation) and spread the swipe
 // texture over the frame, and move exactly as the engine's do (each half side
 // an eighth of the duration, the point linear along it).
+//
+// The countdown numbers are a font string each Cooldown makes for itself at
+// creation (one of its regions, destroyed with it), shown while the sweep
+// runs when the countdownForCooldowns CVar is on, the frame does not hide
+// them, and the cooldown is longer than its minimum.
 
 #include "Game.h"
 #include "Offsets.h"
@@ -64,8 +69,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 
 namespace Frame::Cooldown {
 
@@ -121,6 +128,14 @@ struct Fields {
     bool drawBling = true;
     float rotation = 0.0f;             // radians, clockwise from 12 o'clock
     ScriptIx onCooldownDone = {0, nullptr};
+
+    // The countdown numbers (retail defaults, from ClassicAPI's probes).
+    void *countdown = nullptr;           // the CSimpleFontString; the frame owns it
+    bool hideCountdownNumbers = false;
+    float abbrevThreshold = 120.0f;      // s: below it, m:ss in place of whole minutes
+    float millisecondsThreshold = 0.0f;  // s: below it, tenths
+    uint32_t minCountdownDuration = 2000; // ms: no numbers for a cooldown this short or shorter
+    char countdownText[16] = {};         // what the font string shows
 };
 
 constexpr size_t kObjectSize = Offsets::COOLDOWN_SIZE + sizeof(Fields *);
@@ -184,6 +199,16 @@ int TypeId() {
 // ---- colours ------------------------------------------------------------------------
 
 uint32_t Bgra(uint32_t r, uint32_t g, uint32_t b, uint32_t a) { return (a << 24) | (r << 16) | (g << 8) | b; }
+
+// A millisecond count into the uint32 range: below 0 (or NaN) is 0, past
+// UINT32_MAX is UINT32_MAX, where a bare cast is undefined.
+uint32_t ClampMs(double ms) {
+    if (!(ms > 0.0))
+        return 0;
+    if (ms >= 4294967295.0)
+        return UINT32_MAX;
+    return static_cast<uint32_t>(ms);
+}
 
 uint32_t ColorByte(double c) {
     if (!(c > 0.0))
@@ -348,20 +373,110 @@ void SetSlotTexture(void *frame, TextureSlot slot, const char *file, const uint3
     UpdateColors(frame);
 }
 
+// ---- the countdown numbers ----------------------------------------------------------
+
+// Retail's switch for the numbers on every Cooldown (CVar *), off by default.
+uint8_t *g_countdownCVar = nullptr;
+
+// Screen units (what Lua's SetFont and SetPoint take) to DDC.
+float ToDdc(float units) {
+    return units / (At<float>(reinterpret_cast<void *>(Offsets::VAR_ASPECT_COMPENSATION), 0) * 1024.0f) *
+           At<float>(reinterpret_cast<void *>(Offsets::VAR_DDC_WIDTH_SCALE), 0);
+}
+
+// The numbers' font string, as retail makes it (ClassicAPI's probe:
+// Fonts\FRIZQT__.TTF 16 OUTLINE whatever the frame size, its CENTER on the
+// frame's CENTER at (0, -1)), on the OVERLAY layer.
+void *CreateCountdown(void *frame) {
+    using GetData_t = void *(__fastcall *)(void *heap, void *, int, const char *, int);
+    using Constructor_t = void *(__fastcall *)(void *fs, void *, void *frame, uint32_t layer, int show);
+    using SetFont_t = int(__fastcall *)(void *fs, void *, const char *path, float height, uint32_t flags, int force);
+    using SetPoint_t = void(__fastcall *)(void *layout, void *, int point, void *relative, int relativePoint, float x,
+                                          float y, int flag);
+    void *block = reinterpret_cast<GetData_t>(Offsets::FUN_DATA_ALLOCATOR_GET)(
+        reinterpret_cast<void *>(Offsets::VAR_FONTSTRING_HEAP), nullptr, 0,
+        reinterpret_cast<const char *>(Offsets::VAR_FONTSTRING_TYPE_NAME), -2);
+    if (block == nullptr)
+        return nullptr;
+    void *fs = reinterpret_cast<Constructor_t>(Offsets::FUN_FONTSTRING_CONSTRUCTOR)(block, nullptr, frame,
+                                                                                    Offsets::DRAWLAYER_OVERLAY, 1);
+    const uint32_t flags = reinterpret_cast<uint32_t(__cdecl *)(const char *)>(Offsets::FUN_STRING_TO_FONT_FLAGS)("OUTLINE");
+    if (reinterpret_cast<SetFont_t>(Offsets::FUN_FONTSTRING_SET_FONT)(fs, nullptr, "Fonts\\FRIZQT__.TTF", ToDdc(16.0f),
+                                                                      flags, 0))
+        At<uint32_t>(fs, Offsets::OFF_FONTSTRING_FONTABLE_FLAGS) &= ~1u;
+    reinterpret_cast<SetPoint_t>(Offsets::FUN_LAYOUT_SET_POINT)(
+        static_cast<uint8_t *>(fs) + Offsets::OFF_REGION_LAYOUT, nullptr, Offsets::FRAMEPOINT_CENTER,
+        static_cast<uint8_t *>(frame) + Offsets::OFF_FRAME_LAYOUT, Offsets::FRAMEPOINT_CENTER, 0.0f, ToDdc(-1.0f), 1);
+    return fs;
+}
+
+// Retail's text for `ms` left (ClassicAPI's probes: 2 s "2", 57 s "57",
+// 116 s "1:56", 123 s "3m", 3698 s "2h", 89998 s "2d"; 6.49 s "7"): whole
+// units rounded up; m:ss below the abbreviation threshold, which applies only
+// from one minute to one hour; below the milliseconds threshold, tenths
+// rounded up (threshold 5: 4.973 s "5.0", 3.24 s "3.3", 0.039 s "0.1").
+//
+// The ceilings are integer: in doubles 700 ms / 1000 * 10 rounds up to "0.8".
+// The unit is picked on the rounded-up seconds, so 59.4 s reads "1:00", not
+// "60", and 86399.5 s "1d", not "24h".
+void FormatCountdown(char (&out)[16], uint32_t ms, float abbrevThreshold, float millisecondsThreshold) {
+    auto ceilDiv = [](uint32_t n, uint32_t d) { return n / d + (n % d != 0 ? 1u : 0u); };
+    if (ms / 1000.0 < millisecondsThreshold) {
+        const uint32_t tenths = ceilDiv(ms, 100);
+        std::snprintf(out, sizeof(out), "%u.%u", tenths / 10, tenths % 10);
+        return;
+    }
+    const uint32_t s = ceilDiv(ms, 1000);
+    if (s >= 86400)
+        std::snprintf(out, sizeof(out), "%ud", ceilDiv(s, 86400));
+    else if (s >= 3600)
+        std::snprintf(out, sizeof(out), "%uh", ceilDiv(s, 3600));
+    else if (s >= 60 && s >= std::fmin(abbrevThreshold, 3600.0f))
+        std::snprintf(out, sizeof(out), "%um", ceilDiv(s, 60));
+    else if (s >= 60)
+        std::snprintf(out, sizeof(out), "%u:%02u", s / 60, s % 60);
+    else
+        std::snprintf(out, sizeof(out), "%u", s);
+}
+
+// The numbers while the sweep runs, nothing otherwise; SetText only when the
+// text changes.
+void UpdateCountdown(void *frame) {
+    Fields &f = F(frame);
+    if (f.countdown == nullptr)
+        return;
+    const uint32_t duration = Duration(frame);
+    const uint32_t elapsed = Elapsed(frame);
+    const bool shown = !f.hideCountdownNumbers && !Flashing(frame) && !f.done && duration > f.minCountdownDuration &&
+                       elapsed < duration && g_countdownCVar != nullptr &&
+                       At<int32_t>(g_countdownCVar, Offsets::OFF_CVAR_INT_VALUE) != 0;
+    char text[16] = "";
+    if (shown)
+        FormatCountdown(text, duration - elapsed, f.abbrevThreshold, f.millisecondsThreshold);
+    if (std::strcmp(text, f.countdownText) == 0)
+        return;
+    std::memcpy(f.countdownText, text, sizeof(text));
+    reinterpret_cast<void(__fastcall *)(void *, void *, const char *, int)>(Offsets::FUN_FONTSTRING_SET_TEXT)(
+        f.countdown, nullptr, text, 1);
+}
+
 // ---- the timer ----------------------------------------------------------------------
 
 // CGCooldown::SetCooldown (0x005ECD70). A paused frame holds at the moment of
-// the call, which CooldownFrame_SetDisplayAsPercentage relies on.
+// the call, which CooldownFrame_SetDisplayAsPercentage relies on. The
+// elapsed time is set as of now, so the numbers are right before the first
+// update.
 void SetCooldown(void *frame, uint32_t start, uint32_t duration, float modRate) {
     Fields &f = F(frame);
+    const uint32_t now = NowMs();
     StartTime(frame) = start;
     Duration(frame) = duration;
-    Elapsed(frame) = 0;
+    Elapsed(frame) = Reached(now, start) ? now - start : 0;
     Flashing(frame) = 0;
     f.modRate = modRate;
     f.done = false;
     if (f.paused)
-        f.pausedAt = NowMs();
+        f.pausedAt = now;
     for (uint32_t slot = 0; slot < SLOT_COUNT; ++slot)
         if (!(f.texturesSet & (1u << slot)) && SlotTexture(frame, static_cast<TextureSlot>(slot)) == nullptr) {
             SlotTexture(frame, static_cast<TextureSlot>(slot)) = Texture::LoadFile(kSlotDefaultFile[slot]);
@@ -369,6 +484,7 @@ void SetCooldown(void *frame, uint32_t start, uint32_t duration, float modRate) 
         }
     UpdateColors(frame);
     ResetVerts(frame);
+    UpdateCountdown(frame);
     Show(frame);
 }
 
@@ -379,6 +495,7 @@ void Clear(void *frame) {
     Elapsed(frame) = 0;
     Flashing(frame) = 0;
     F(frame).done = true;
+    UpdateCountdown(frame);
     Hide(frame);
 }
 
@@ -488,6 +605,7 @@ void __fastcall OnLayerUpdate(void *self, void *, float elapsedSec) {
         }
     }
     AnimateVerts(self);
+    UpdateCountdown(self);
     // Last: the handler may start another cooldown on this frame.
     if (finished)
         RunOnCooldownDone(self);
@@ -557,6 +675,9 @@ void __fastcall LoadXML(void *layout, void *, const void *node, void *status) {
     Fields &f = F(frame);
     FlagAttr(node, "drawSwipe", f.drawSwipe);
     FlagAttr(node, "drawBling", f.drawBling);
+    FlagAttr(node, "hideCountdownNumbers", f.hideCountdownNumbers);
+    if (const char *minimum = Xml::Attr(node, "minimumCountdownDuration"); minimum != nullptr && *minimum != '\0')
+        f.minCountdownDuration = ClampMs(std::strtod(minimum, nullptr));
     if (const char *rotation = Xml::Attr(node, "rotation"); rotation != nullptr && *rotation != '\0')
         f.rotation = reinterpret_cast<float(__stdcall *)(const char *)>(Offsets::FUN_SSTR_TO_FLOAT)(rotation) *
                      (3.14159265f / 180.0f);
@@ -612,6 +733,7 @@ void *__cdecl Create(void *parent) {
     f->base[SLOT_EDGE] = Bgra(0xFF, 0xFF, 0xFF, 0xFF);
     f->base[SLOT_BLING] = Bgra(0x50, 0xA0, 0xFF, 0xFF);
     FieldsOf(frame) = f;
+    f->countdown = CreateCountdown(frame);
     return frame;
 }
 
@@ -837,6 +959,57 @@ int __cdecl Script_GetRotation(void *L) {
     return 1;
 }
 
+int __cdecl Script_GetCountdownFontString(void *L) {
+    void *frame = Self(L);
+    if (frame == nullptr)
+        return 0;
+    if (void *fs = F(frame).countdown)
+        UI::FrameObject::Push(L, fs);
+    else
+        Game::Lua::PushNil(L);
+    return 1;
+}
+
+int __cdecl Script_SetHideCountdownNumbers(void *L) {
+    if (void *frame = Self(L))
+        F(frame).hideCountdownNumbers = Flag(L, 2);
+    return 0;
+}
+
+int __cdecl Script_GetHideCountdownNumbers(void *L) {
+    void *frame = Self(L);
+    if (frame == nullptr)
+        return 0;
+    Game::Lua::PushBool(L, F(frame).hideCountdownNumbers);
+    return 1;
+}
+
+// A number setter and getter over one Fields member.
+template <auto Member, const char *Usage> int __cdecl Script_SetNumber(void *L) {
+    void *frame = Self(L);
+    if (frame == nullptr || !NumberArgs(L, frame, 2, 1, Usage))
+        return 0;
+    const double value = Game::Lua::ToNumber(L, 2);
+    auto &field = F(frame).*Member;
+    if constexpr (std::is_same_v<std::remove_reference_t<decltype(field)>, uint32_t>)
+        field = ClampMs(value);
+    else
+        field = static_cast<float>(value);
+    return 0;
+}
+
+template <auto Member> int __cdecl Script_GetNumber(void *L) {
+    void *frame = Self(L);
+    if (frame == nullptr)
+        return 0;
+    Game::Lua::PushNumber(L, static_cast<double>(F(frame).*Member));
+    return 1;
+}
+
+constexpr char kUsageAbbrev[] = "SetCountdownAbbrevThreshold(seconds)";
+constexpr char kUsageMilliseconds[] = "SetCountdownMillisecondsThreshold(seconds)";
+constexpr char kUsageMinimum[] = "SetMinimumCountdownDuration(milliseconds)";
+
 // After CGCooldown's own five, so SetCooldown and SetDrawEdge replace the engine's.
 const Frame::Methods::Entry kMethods[] = {
     {"SetCooldown", &Script_SetCooldown},
@@ -862,6 +1035,15 @@ const Frame::Methods::Entry kMethods[] = {
     {"SetBlingTexture", &Script_SetTexture<SLOT_BLING>},
     {"SetRotation", &Script_SetRotation},
     {"GetRotation", &Script_GetRotation},
+    {"GetCountdownFontString", &Script_GetCountdownFontString},
+    {"SetHideCountdownNumbers", &Script_SetHideCountdownNumbers},
+    {"GetHideCountdownNumbers", &Script_GetHideCountdownNumbers},
+    {"SetCountdownAbbrevThreshold", &Script_SetNumber<&Fields::abbrevThreshold, kUsageAbbrev>},
+    {"GetCountdownAbbrevThreshold", &Script_GetNumber<&Fields::abbrevThreshold>},
+    {"SetCountdownMillisecondsThreshold", &Script_SetNumber<&Fields::millisecondsThreshold, kUsageMilliseconds>},
+    {"GetCountdownMillisecondsThreshold", &Script_GetNumber<&Fields::millisecondsThreshold>},
+    {"SetMinimumCountdownDuration", &Script_SetNumber<&Fields::minCountdownDuration, kUsageMinimum>},
+    {"GetMinimumCountdownDuration", &Script_GetNumber<&Fields::minCountdownDuration>},
 };
 
 void __cdecl RegisterScriptMethods(void *L) {
@@ -871,6 +1053,14 @@ void __cdecl RegisterScriptMethods(void *L) {
 }
 
 void RegisterLuaFunctions() {
+    // As Lua's RegisterCVar registers one; a value already set (Config.wtf,
+    // or this session before a /reload) stays.
+    using Register_t = uint8_t *(__cdecl *)(const char *, const char *, uint32_t, const char *, void *, uint32_t, bool,
+                                            void *, bool);
+    g_countdownCVar = reinterpret_cast<Register_t>(Offsets::FUN_CVAR_REGISTER)(
+        "countdownForCooldowns",
+        "Whether to use number countdown instead of radial swipe for action button cooldowns or not.", 0, "0",
+        nullptr, Offsets::CVAR_CATEGORY_GAME, true, nullptr, true);
     using CreateMeta_t = int(__cdecl *)(void *, void(__cdecl *)(void *));
     g_metaTable = reinterpret_cast<CreateMeta_t>(Offsets::FUN_FRAMESCRIPT_CREATE_SCRIPT_META_TABLE)(
         Game::Lua::State(), &RegisterScriptMethods);

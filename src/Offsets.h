@@ -3381,4 +3381,37 @@ enum Offsets {
     FUN_SCRIPTIX_DESTRUCTOR = 0x00819810,
     // TextureCreateSolid — `HTEXTURE __cdecl(const CImVector &)`.
     FUN_TEXTURE_CREATE_SOLID = 0x004B9550,
+
+    // The Cooldown's countdown numbers: a CSimpleFontString made as
+    // Script_CreateFontString (0x004A2240) makes one, then set up as
+    // Script_SetFont (0x0048D5B0) and Script_SetPoint (0x0049DB10) do.
+    //
+    // CDataAllocator::GetData — `void *__thiscall(heap, int, const char *name,
+    // int)`, ret 0xC: the font-string block, from the class's heap.
+    FUN_DATA_ALLOCATOR_GET = 0x0095D110,
+    VAR_FONTSTRING_HEAP = 0x00B47960,
+    VAR_FONTSTRING_TYPE_NAME = 0x00AC1800, // typeid(CSimpleFontString).raw_name()
+    // CSimpleFontString(frame, drawLayer, show) — `__thiscall`, ret 0xC: the
+    // region joins the frame's, which destroys it with itself.
+    FUN_FONTSTRING_CONSTRUCTOR = 0x00485240,
+    // SetFont — `int __thiscall(fs, const char *path, float height, uint
+    // flags, bool force)`, ret 0x10; on success Script_SetFont clears bit 0 of
+    // the fontable flags (+0xDC), the font no longer a font object's.
+    FUN_FONTSTRING_SET_FONT = 0x00483750,
+    OFF_FONTSTRING_FONTABLE_FLAGS = 0xDC,
+    FUN_FONTSTRING_SET_TEXT = 0x00483910, // __thiscall(fs, const char *, int), ret 8
+    FUN_STRING_TO_FONT_FLAGS = 0x008151A0, // uint __cdecl(const char *): "OUTLINE", ...
+    // CLayoutFrame::SetPoint — `__thiscall(layout, FRAMEPOINT, CLayoutFrame
+    // *relative, FRAMEPOINT, float x, float y, int)`, ret 0x18; a region's
+    // layout is region + OFF_REGION_LAYOUT. Offsets in DDC.
+    FUN_LAYOUT_SET_POINT = 0x0048A260,
+    FRAMEPOINT_CENTER = 4,
+
+    // CVar::Register — `CVar *__cdecl(const char *name, const char *help, uint
+    // flags, const char *value, callback, uint category, bool setCommand, void
+    // *arg, bool)`. A name registered already keeps its value. Lua's
+    // RegisterCVar passes (name, null, 0, value, null, 4, true, null, true).
+    FUN_CVAR_REGISTER = 0x00767FC0,
+    OFF_CVAR_INT_VALUE = 0x30,
+    CVAR_CATEGORY_GAME = 4,
 };
