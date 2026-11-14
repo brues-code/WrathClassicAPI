@@ -124,6 +124,9 @@ Conventions:
 - [Mixins](#mixins)
   - [`Mixin(object, ...)` / `CreateFromMixins(...)`](#mixinobject--createfrommixins)
   - [`CreateAndInitFromMixin(mixin, ...)`](#createandinitfrommixinmixin-)
+- [Model Scene](#model-scene)
+  - [`ModelScene` frame methods](#modelscene-frame-methods)
+  - [`ModelSceneActor` methods](#modelsceneactor-methods)
 - [Player Info](#player-info)
   - [`C_PlayerInfo.CanUseItem(item)`](#c_playerinfocanuseitemitem)
   - [`GetSheathState()`](#getsheathstate)
@@ -1853,6 +1856,127 @@ Creates an object from a single `mixin` (via `CreateFromMixins`), calls its
 ```lua
 local obj = CreateAndInitFromMixin(SomeMixin, arg1, arg2)
 -- local o = CreateFromMixins(SomeMixin); o:Init(arg1, arg2); return o
+```
+
+---
+
+## Model Scene
+
+A `ModelScene` is a frame that shows any number of 3D models, called
+actors, through a camera you place yourself. It has its own light and
+fog. Create one with `CreateFrame("ModelScene")` or a `<ModelScene>`
+XML element.
+
+```lua
+local scene = CreateFrame("ModelScene", nil, UIParent)
+scene:SetSize(400, 300)
+scene:SetPoint("CENTER")
+
+-- A camera 14 yards back and 2 yards up, looking at the origin.
+scene:SetCameraPosition(-14, 0, 2)
+scene:SetCameraOrientationByYawPitchRoll(0, 0.1, 0)
+
+local horse = scene:CreateActor()
+horse:SetModelByCreatureDisplayID(2404)  -- Brown Horse
+horse:SetYaw(math.pi / 4)
+```
+
+Coordinates are yards, with +Z up. The camera starts at the origin and
+looks along +X.
+
+### `ModelScene` frame methods
+
+A `ModelScene` has every `Frame` method. `IsObjectType("Model")` is
+false: it has none of the `Model` methods.
+
+| Method | Description |
+|---|---|
+| `CreateActor([name [, template]])` | Adds an actor and returns it. `name` makes a global; `"$parent"` in it stands for the scene's name. `template` names an `<Actor virtual="true">` template. |
+| `GetNumActors()` | Returns how many actors the scene has. |
+| `GetActorAtIndex(index)` | Returns an actor, in creation order. |
+| `SetCameraPosition(x, y, z)` / `GetCameraPosition()` | Moves the camera. |
+| `SetCameraOrientationByYawPitchRoll(yaw, pitch, roll)` | Points the camera. Yaw turns about +Z; a positive pitch looks down. |
+| `SetCameraOrientationByAxisVectors(fx, fy, fz, rx, ry, rz, ux, uy, uz)` | Points the camera by its forward, right and up axes. |
+| `GetCameraForward()` / `GetCameraRight()` / `GetCameraUp()` | Return the camera's axes. |
+| `SetCameraFieldOfView(fov)` / `GetCameraFieldOfView()` | Field of view in radians. Default `0.9424778`. |
+| `SetCameraNearClip(near)` / `GetCameraNearClip()` | Default `0.2`. |
+| `SetCameraFarClip(far)` / `GetCameraFarClip()` | Default `100`. |
+| `Project3DPointTo2D(x, y, z)` | Returns `x, y, depth`: where a scene point appears, from the frame's bottom-left, in the frame's units times its effective scale. Returns nothing for a point at the camera. |
+| `SetDrawLayer(layer)` / `GetDrawLayer()` | The layer the models draw on. Default `"ARTWORK"`. |
+| `SetPaused(paused)` | Stops or restarts every actor's animation. |
+| `SetViewInsets(left, right, top, bottom)` / `GetViewInsets()` | Fits the camera's picture into the frame less these insets. Models still draw to the frame's edges. |
+| `SetViewTranslation(x, y)` / `GetViewTranslation()` | Moves the camera's picture in the frame. |
+| `SetAllowOverlappedModels(allow)` / `GetAllowOverlappedModels()` | Stored for compatibility. Default `false`. |
+| `SetLightType(type)` / `GetLightType()` | `0` directional (default), `1` point. |
+| `SetLightVisible(visible)` / `IsLightVisible()` | Default `true`. |
+| `SetLightDirection(x, y, z)` / `GetLightDirection()` | Default `(0, 1, 0)`. |
+| `SetLightPosition(x, y, z)` / `GetLightPosition()` | Used by a point light. |
+| `SetLightAmbientColor(r, g, b)` / `GetLightAmbientColor()` | Default `0.698` for each channel. |
+| `SetLightDiffuseColor(r, g, b)` / `GetLightDiffuseColor()` | Default `(0.8, 0.8, 0.639)`. |
+| `SetFogColor(r, g, b)` / `GetFogColor()` | Sets the fog colour and turns the fog on. |
+| `SetFogNear(near)` / `GetFogNear()` / `SetFogFar(far)` / `GetFogFar()` | Fog distances. The defaults are too far away to fog anything. |
+| `ClearFog()` | Turns the fog off. |
+
+XML attributes: `drawLayer`, `fogNear`, `fogFar`. Child elements:
+`<FogColor r="" g="" b=""/>` and `<ViewInsets left="" right="" top="" bottom=""/>`.
+
+### `ModelSceneActor` methods
+
+`GetObjectType()` returns `"ModelSceneActor"`. `GetParent()` returns the
+scene. An actor is not a `Frame` or a `Region`.
+
+| Method | Description |
+|---|---|
+| `SetModelByCreatureDisplayID(displayID)` | Shows a creature display, dressed as the world dresses it. Returns `true` on success. |
+| `SetModelByPath(path)` | Shows a model file, such as `"Creature\\Murloc\\Murloc.m2"`. Returns `true` on success. |
+| `ClearModel()` | Removes the model. |
+| `IsLoaded()` | `true` once the model is ready to show. |
+| `GetModelPath()` | The model's file, or `""`. |
+| `SetPosition(x, y, z)` / `GetPosition()` | Where the actor stands. |
+| `SetYaw(yaw)` / `SetPitch(pitch)` / `SetRoll(roll)` and their getters | Radians. Yaw turns about +Z. |
+| `SetScale(scale)` / `GetScale()` | Default `1`. |
+| `SetAlpha(alpha)` / `GetAlpha()` | `0` to `1`, times the scene's alpha. |
+| `SetUseCenterForOrigin(x, y, z)` / `IsUsingCenterForOrigin()` | For each axis, centres the model's current bounding box on the actor's position. |
+| `Show()` / `Hide()` / `SetShown(shown)` / `IsShown()` | |
+| `IsVisible()` | Shown, and the scene is visible. |
+| `SetAnimation(animID [, variation [, speed [, offsetSeconds]]])` | Plays an animation. It loops. |
+| `GetAnimation()` / `GetAnimationVariation()` | The variation reads `4294967295` when none was given. |
+| `SetAnimationBlendOperation(op)` / `GetAnimationBlendOperation()` | `Enum.ModelBlendOperation`: `None` (0) or `Anim` (1, default), whether a new animation blends from the old one. |
+| `SetPaused(paused [, affectsGlobalPause])` / `GetPaused()` | Holds the animation on its current frame. `GetPaused` returns the actor's flag, then the global one. |
+| `GetActiveBoundingBox()` | Six numbers, bottom `x, y, z` then top `x, y, z`, of the current animation, in model space. Nothing until the model loads. |
+| `GetMaxBoundingBox()` | The same for the whole model. |
+| `GetObjectType()` / `IsObjectType(type)` / `GetName()` / `GetParent()` | |
+| `HasScript(type)` / `GetScript(type)` / `SetScript(type, func)` / `HookScript(type, func)` | |
+
+Actor scripts: `OnLoad`, `OnUpdate(self, elapsed)`, `OnModelLoading`
+(a model was set), `OnModelLoaded`, `OnModelCleared` and
+`OnAnimFinished` (each time the animation reaches its end).
+
+```lua
+local murloc = scene:CreateActor()
+murloc:SetScript("OnModelLoaded", function(self)
+    local bx, by, bz, tx, ty, tz = self:GetActiveBoundingBox()
+    print("height", tz - bz)
+end)
+murloc:SetModelByPath("Creature\\Murloc\\Murloc.m2")
+murloc:SetAnimation(4)  -- walk
+```
+
+An actor template is a top-level `<Actor>` element. It takes `name`,
+`virtual="true"`, `inherits`, `alpha`, `scale` and `file`, and a
+`<Scripts>` child. A script element has a body or a
+`function="GlobalName"` attribute.
+
+```xml
+<Actor name="MyActorTemplate" virtual="true" scale="1.5">
+    <Scripts>
+        <OnLoad>self:SetAlpha(0.8)</OnLoad>
+    </Scripts>
+</Actor>
+```
+
+```lua
+local actor = scene:CreateActor(nil, "MyActorTemplate")
 ```
 
 ---

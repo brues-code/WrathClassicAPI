@@ -2855,4 +2855,264 @@ enum Offsets {
 
     // OsGetAsyncTimeMs — `uint __cdecl()`, the clock GetTime() reads.
     FUN_OS_GET_ASYNC_TIME_MS = 0x0086AE20,
+
+    // --- ModelScene (src/model/Scene.cpp, src/model/SceneActor.cpp) -------------------------
+    //
+    // Every address below is a function or global of the decompiled 3.3.5 client
+    // (C:\Git\wowdecomp, `// OFFSET:` tags), each checked against Wow.exe for its
+    // calling convention (the `ret N` of its epilogue).
+    //
+    // CSimpleModel ("Model" frames, Engine/Source/Frame/CSimpleModel.cpp). The
+    // object is 0x368 bytes: the CSimpleFrame part, then the fields below. Its
+    // CLayoutFrame sub-object (and second vtable) sits at +0x20, which is also the
+    // `this` of the layout vtable's slots (LoadXML, GetWidth, ...).
+    SIMPLEMODEL_SIZE = 0x368,
+    VTBL_SIMPLEMODEL = 0x00A9F208,        // 63 slots, 0x00..0xF8
+    VTBL_SIMPLEMODEL_LAYOUT = 0x00A9F1B8, // 19 slots, 0x00..0x48
+    VTBL_SIMPLEMODEL_SLOTS = 63,
+    VTBL_SIMPLEMODEL_LAYOUT_SLOTS = 19,
+    FUN_SIMPLEMODEL_CONSTRUCTOR = 0x0095F680, // __thiscall(frame, CSimpleFrame *parent), ret 4
+    FUN_SIMPLEMODEL_DESTRUCTOR = 0x0095F3A0,  // __thiscall(frame): the body, no free
+    FUN_SIMPLEMODEL_GET_SCENE = 0x0095F650,   // CM2Scene *__thiscall(frame): made on first use
+    FUN_SIMPLEMODEL_SET_CAMERA = 0x0095F4F0,  // __thiscall(frame, CCamera *), ret 4: duplicates the handle
+    // CSimpleModel::LightingCallback — `void __cdecl(CM2Model *, CM2Lighting *, frame)`:
+    // the frame's fog (when SIMPLEMODEL_FOGGED) and its light (when visible).
+    FUN_SIMPLEMODEL_LIGHTING_CALLBACK = 0x00960070,
+    OFF_SIMPLEMODEL_CAMERA = 0x2A4,
+    OFF_SIMPLEMODEL_LIGHT = 0x2B0, // a CM2Light (0x6C bytes)
+    OFF_SIMPLEMODEL_FLAGS = 0x330,
+    SIMPLEMODEL_FOGGED = 0x1,
+    OFF_SIMPLEMODEL_FOG_COLOR = 0x334, // CImVector, bytes b g r a
+    OFF_SIMPLEMODEL_FOG_NEAR = 0x338,
+    OFF_SIMPLEMODEL_FOG_FAR = 0x33C,
+
+    // Frame vtable slots (byte offsets) the ModelScene overrides.
+    VTBL_FRAME_DELETING_DESTRUCTOR = 0x00, // __thiscall(this, uint flags)
+    VTBL_FRAME_GET_SCRIPT_META_TABLE = 0x08,
+    VTBL_FRAME_GET_SCRIPT_BY_NAME = 0x0C,
+    VTBL_FRAME_IS_A = 0x10,
+    VTBL_FRAME_IS_A_NAME = 0x18,
+    VTBL_FRAME_GET_OBJECT_TYPE_NAME = 0x1C,
+    VTBL_FRAME_GET_SCRIPT_TIME = 0x58,
+    VTBL_FRAME_ON_LAYER_UPDATE = 0x78,
+    VTBL_FRAME_ON_FRAME_RENDER = 0x84, // __thiscall(this, CRenderBatch *, uint layer)
+    VTBL_FRAME_UPDATE_ALPHA = 0xD4,
+    VTBL_LAYOUT_DELETING_DESTRUCTOR = 0x00, // `this` = the layout sub-object
+    VTBL_LAYOUT_LOAD_XML = 0x04,            // __thiscall(layout, XMLNode *, CStatus *)
+    OFF_FRAME_LAYOUT = 0x20,
+    OFF_FRAME_LAYOUT_SCALE = 0x7C, // CLayoutFrame::m_layoutScale (layout +0x5C)
+    OFF_FRAME_ALPHA = 0xBC,        // uint8_t m_alpha
+    OFF_FRAME_PARENT_ALPHA = 0xBD, // uint8_t m_parentAlpha
+    OFF_FRAME_IS_VISIBLE = 0xE0,
+
+    // CSimpleFrame's own versions of the slots above, for the base calls.
+    FUN_SIMPLEFRAME_GET_SCRIPT_BY_NAME = 0x0048E680, // __thiscall(frame, name, ScriptData *), ret 8
+    FUN_SIMPLEFRAME_IS_A = 0x004926C0,               // bool __thiscall(frame, int type), ret 4
+    FUN_SIMPLEFRAME_IS_A_NAME = 0x004926F0,          // bool __thiscall(frame, const char *), ret 4
+    FUN_SIMPLEFRAME_GET_SCRIPT_TIME = 0x00490D80,    // __thiscall(frame, L, double *, uint *, int), ret 0x10
+    FUN_SIMPLEFRAME_ON_LAYER_UPDATE = 0x00490770,    // __thiscall(frame, float elapsedSec), ret 4
+    FUN_SIMPLEFRAME_ON_FRAME_RENDER = 0x00490840,    // __thiscall(frame, CRenderBatch *, uint layer), ret 8
+    FUN_SIMPLEFRAME_UPDATE_ALPHA = 0x00491680,       // __thiscall(frame)
+    FUN_SIMPLEFRAME_LOAD_XML = 0x004932C0,           // __thiscall(layout, XMLNode *, CStatus *), ret 8
+    FUN_SIMPLEFRAME_NOTIFY_DRAW_LAYER_CHANGED = 0x00490270, // __thiscall(frame, uint layer), ret 4
+    // CSimpleFrame::RegisterScriptMethods — `void __cdecl(L)`. It is the walker
+    // src/frame/Methods.cpp hooks, so a table it fills also gets our Frame methods.
+    FUN_SIMPLEFRAME_REGISTER_SCRIPT_METHODS = 0x0049E540,
+    // CScriptObject::RegisterScriptMethods — `void __cdecl(L)`: GetObjectType,
+    // IsObjectType, GetName, GetParent, each through the object's own virtuals.
+    FUN_SCRIPTOBJECT_REGISTER_SCRIPT_METHODS = 0x004A8190,
+    // CScriptObject::CreateName — `void __thiscall(object, const char *source,
+    // char *dest, uint destSize)`, ret 0xC: "$parent" becomes the nearest named
+    // ancestor's name (GetScriptObjectParent), "Top" when none.
+    FUN_SCRIPTOBJECT_CREATE_NAME = 0x0048B540,
+    // FrameScript_Object::CreateScriptMetaTable — `int __cdecl(L, void (*)(L))`:
+    // { __index = { filled by the function } }, luaL_ref'd into the registry.
+    FUN_FRAMESCRIPT_CREATE_SCRIPT_META_TABLE = 0x00816790,
+    // FrameScript_Object::UnregisterScriptObject — `__thiscall(object, const
+    // char *name)`, ret 4: the reverse of FUN_FRAMESCRIPT_OBJECT_SCRIPT_REGISTER.
+    // At the last registration it clears the table's [0] and frees its ref;
+    // with a name it also clears that global.
+    FUN_FRAMESCRIPT_OBJECT_UNREGISTER = 0x008199C0,
+    // CScriptObject's type id (the one its own methods resolve self with).
+    VAR_SCRIPTOBJECT_OBJECT_TYPE = 0x00B4997C,
+    // FrameScript_Object::RunScript — `__thiscall(object, const ScriptIx *,
+    // int argCount, const char *taint)`, ret 0xC: self, then the argCount values.
+    FUN_FRAMESCRIPT_OBJECT_RUN_SCRIPT = 0x0081A2C0,
+    // FrameScript_CompileFunction — `int __cdecl(const char *name, const char
+    // *wrapper, const char *body, CStatus *)`: the registry ref, or -1.
+    FUN_FRAMESCRIPT_COMPILE_FUNCTION = 0x008190C0,
+    // FrameScript_HookWrapper — the C closure HookScript chains with: upvalue 1
+    // the old script, upvalue 2 the hook, both called with the same arguments.
+    FUN_FRAMESCRIPT_HOOK_WRAPPER = 0x00817050,
+    VAR_LUA_TAINTED = 0x00D4139C, // const char *lua_tainted
+    LUA_RAW_GETI = 0x0084E670,    // void lua_rawgeti(L, idx, n)
+    LUAL_REF = 0x0084F6C0,        // int luaL_ref(L, t)
+    LUAL_UNREF = 0x0084F7A0,      // void luaL_unref(L, t, ref)
+
+    // FrameXML (Engine/Source/FrameXML/FrameXML.cpp).
+    // FrameXML_RegisterFactory — `int __cdecl(const char *type, CSimpleFrame
+    // *(__cdecl *)(CSimpleFrame *parent), bool unique)`. The factory hash lives
+    // for the process (cleared only at client close), and a name already there
+    // is kept, so registering again after a /reload does nothing.
+    FUN_FRAMEXML_REGISTER_FACTORY = 0x00813D20,
+    // FrameXML_AcquireHashNode / ReleaseHashNode — `XMLNode *__cdecl(const char
+    // *name, const char *&taint, bool &locked)` / `void __cdecl(name)`: a
+    // virtual top-level node by name (any tag), locked while in use.
+    FUN_FRAMEXML_ACQUIRE_HASH_NODE = 0x00812CE0,
+    FUN_FRAMEXML_RELEASE_HASH_NODE = 0x00812D20,
+    FUN_XML_LOAD_COLOR = 0x00815C30,       // int __cdecl(XMLNode *, CImVector &, CStatus *)
+    FUN_STRING_TO_DRAW_LAYER = 0x00814F60, // int __cdecl(const char *, uint &layer)
+    FUN_DRAW_LAYER_TO_STRING = 0x00814FB0, // const char *__cdecl(uint layer)
+    OFF_XML_NODE_BODY = 0x18,
+    DRAWLAYER_ARTWORK = 2,
+
+    // The paint reads its rect with FUN_LAYOUT_GET_RECT: CRect is {minY, minX,
+    // maxY, maxX} in DDC (Engine/Source/Tempest/CRect.h).
+    //
+    // CRenderBatch::QueueCallback — `__thiscall(batch, void (__cdecl *)(void *),
+    // void *)`, ret 8: the callback runs at the batch's place in the draw.
+    FUN_RENDERBATCH_QUEUE_CALLBACK = 0x004858E0,
+    // Coordinate.cpp: DDC is NDC scaled by (0.8, 0.6). A frame-unit length u is
+    // u * VAR_DDC_WIDTH_SCALE * layoutScale / (VAR_ASPECT_COMPENSATION * 1024)
+    // in DDC, on both axes (Script_GetLeft / GetTop / GetWidth).
+    FUN_DDC_TO_NDC = 0x0047C020, // void __cdecl(float x, float y, float *ndcX, float *ndcY)
+    VAR_DDC_WIDTH_SCALE = 0x00AC0CB4,
+    VAR_ASPECT_COMPENSATION = 0x00AC0CBC,
+    VAR_RENDER_MODEL_MIN_EXTENT = 0x009EA27C, // RenderModel's degenerate-rect test
+
+    // The Gx device (g_theGxDevicePtr) and the transforms RenderModel saves.
+    OFF_GX_DEVICE_PROJECTION = 0xF88,     // C44Matrix
+    OFF_GX_DEVICE_VIEW_LEVEL = 0x1AF8,    // the view stack's level
+    OFF_GX_DEVICE_VIEW_STACK = 0x1B00,    // C44Matrix[level]
+    VTBL_GX_DEVICE_SET_PROJECTION = 0xA0, // __thiscall(device, const C44Matrix *)
+    VTBL_GX_DEVICE_SET_VIEW = 0xA4,       // __thiscall(device, const C44Matrix *)
+    FUN_GX_XFORM_VIEWPORT = 0x00408070,   // __cdecl(float *minX, *maxX, *minY, *maxY, *minZ, *maxZ)
+    FUN_GX_XFORM_SET_VIEWPORT = 0x00681F60, // __cdecl(minX, maxX, minY, maxY, minZ, maxZ)
+    FUN_GX_SCENE_CLEAR = 0x006813B0,      // __cdecl(uint mask, CImVector color); 2 = depth
+    FUN_SHADER_EFFECT_UPDATE_PROJ_MATRIX = 0x00872C10, // __cdecl()
+
+    // Camera service (Engine/Source/Services/Camera.cpp). CameraCreate gives a
+    // handle (one reference; HandleClose drops it). CameraSetupWorldProjection
+    // builds the projection from the rect's aspect, and a view from the origin
+    // toward target - eye with up = (sin yaw sin roll, -cos yaw sin roll, cos roll).
+    FUN_CAMERA_CREATE = 0x004BFCA0,                 // CCamera *__cdecl()
+    FUN_CAMERA_SET_COORD = 0x004C12B0,              // __cdecl(camera, uint prop, const C3Vector &, uint keepMask)
+    FUN_CAMERA_SET_FLOAT = 0x004C1360,              // __cdecl(camera, uint prop, float)
+    FUN_CAMERA_GET_COORD = 0x004C1290,              // __cdecl(camera, uint prop, C3Vector *)
+    FUN_CAMERA_SETUP_WORLD_PROJECTION = 0x004BF0C0, // __cdecl(camera, const CRect &, uint flags)
+    FUN_HANDLE_CLOSE = 0x0047BF30,                  // __cdecl(HOBJECT)
+    CAMERA_PROP_FAR_CLIP = 2,
+    CAMERA_PROP_NEAR_CLIP = 3,
+    CAMERA_PROP_FOV = 4,
+    CAMERA_PROP_ROLL = 5,
+    CAMERA_PROP_YAW = 6,
+    CAMERA_PROP_EYE = 7,
+    CAMERA_PROP_TARGET = 8,
+
+    // CM2Light (Engine/Source/Model2/M2Light.h). The setters are
+    // __thiscall(light, value), ret 4.
+    OFF_M2LIGHT_AMBIENT = 0x30, // C3Vector
+    OFF_M2LIGHT_DIFFUSE = 0x3C, // C3Vector
+    FUN_M2LIGHT_SET_DIRECTION = 0x00834AE0, // normalizes
+    FUN_M2LIGHT_SET_LIGHT_TYPE = 0x00835640, // 0 directional, 1 point
+    FUN_M2LIGHT_SET_POSITION = 0x00835690,
+    FUN_M2LIGHT_SET_VISIBLE = 0x008356F0,
+
+    // CM2Scene (Engine/Source/Model2/M2Scene.cpp), all __thiscall.
+    FUN_M2SCENE_CREATE_MODEL = 0x0081F8F0, // CM2Model *(scene, const char *path, uint flags), ret 8; one reference
+    FUN_M2SCENE_ADVANCE_TIME = 0x0081C9C0, // (scene, uint deltaMs), ret 4
+    FUN_M2SCENE_ANIMATE = 0x00821A20,      // (scene, const C3Vector *cameraPos), ret 4
+    FUN_M2SCENE_DRAW = 0x00823CB0,         // (scene, uint pass), ret 4
+
+    // CM2Model (Engine/Source/Model2/M2Model.cpp), all __thiscall.
+    FUN_M2MODEL_RELEASE = 0x00824ED0,             // (model)
+    FUN_M2MODEL_IS_LOADED = 0x00824F00,           // uint (model, int wait, int recursive), ret 8
+    FUN_M2MODEL_SET_ANIMATING = 0x00823F10,       // (model, int), ret 4: the scene's animate list
+    FUN_M2MODEL_SET_WORLD_TRANSFORM = 0x004D8630, // (model, const C44Matrix *): the placement
+    // SetBoneSequence — (model, uint boneId, uint sequenceId, uint variation,
+    // uint timeMs, float speed, int blend, int primary), ret 0x1C. Sequences loop
+    // by their duration; each lap's end is reported to the sequence callback.
+    FUN_M2MODEL_SET_BONE_SEQUENCE = 0x00832AB0,
+    FUN_M2MODEL_SET_BONE_SEQUENCE_TIME = 0x00826ED0, // (model, uint boneId, uint timeMs), ret 8
+    // SetSequenceCallback — (model, callback, uint64 param), ret 0xC. The
+    // callback is `void __cdecl(CM2Model *, uint boneId, uint sequenceId, int
+    // interrupted, uint time, uint64 param)`, run from the model's own advance
+    // (ProcessCallbacks); the root bone reports boneId 0xFFFFFFFF.
+    FUN_M2MODEL_SET_SEQUENCE_CALLBACK = 0x00823FE0,
+    FUN_M2MODEL_GET_BOUNDING_BOX = 0x004F5E20, // CAaBox *(model, CAaBox *out), ret 4: model space
+    FUN_M2MODEL_DETACH_FROM_PARENT = 0x008274F0,
+    OFF_M2MODEL_FFLAGS = 0x10, // bit 0 loaded; 0x8 and 0x10000 drawn this frame
+    M2MODEL_FFLAGS_DRAWN = 0x10008,
+    OFF_M2MODEL_SHARED = 0x2C,
+    OFF_M2MODEL_ATTACH_PARENT = 0x48,
+    OFF_M2MODEL_BONES = 0x94, // M2ModelBone[]; bone 0's sequence at +0x40
+    OFF_M2MODEL_FADE_ALPHA = 0x178,
+    OFF_M2MODEL_LIGHTING_CALLBACK = 0x2AC,
+    OFF_M2MODEL_LIGHTING_ARG = 0x2B0,
+    OFF_M2BONE_SEQUENCE_CURRENT_TIME = 0x40, // M2ModelBoneSeq::m_currentTime
+    OFF_M2BONE_SEQUENCE_INDEX = 0x48,        // M2ModelBoneSeq::m_sequenceIndex (uint16)
+    OFF_M2SHARED_DATA = 0x150,               // M2Data *
+    // M2Array<M2Sequence>: count, then an absolute pointer once the file is
+    // loaded (GetCurrentBoundingBox 0x00825750 reads [data + 0x20] as one). The
+    // decomp stores an offset from the array instead — an x64 port artifact.
+    OFF_M2DATA_SEQUENCES = 0x1C,
+    M2SEQUENCE_SIZE = 0x40,
+    OFF_M2SEQUENCE_BOUNDS = 0x20, // CAaBox: bottom xyz, top xyz
+
+    // Creature displays (WoW/Source/DB): WowClientDB stores, max ID +0x0C, min
+    // ID +0x10, records by ID +0x20 (the ChrRaces store's shape).
+    VAR_CREATUREDISPLAYINFO_DBC_MAX_INDEX = 0x00AD34C4,
+    VAR_CREATUREDISPLAYINFO_DBC_MIN_INDEX = 0x00AD34C8,
+    VAR_CREATUREDISPLAYINFO_DBC_INDEX_TABLE = 0x00AD34D8,
+    VAR_CREATUREDISPLAYINFOEXTRA_DBC_MAX_INDEX = 0x00AD34A0,
+    VAR_CREATUREDISPLAYINFOEXTRA_DBC_MIN_INDEX = 0x00AD34A4,
+    VAR_CREATUREDISPLAYINFOEXTRA_DBC_INDEX_TABLE = 0x00AD34B4,
+    VAR_CREATUREMODELDATA_DBC_MAX_INDEX = 0x00AD350C,
+    VAR_CREATUREMODELDATA_DBC_MIN_INDEX = 0x00AD3510,
+    VAR_CREATUREMODELDATA_DBC_INDEX_TABLE = 0x00AD3520,
+    OFF_CREATUREDISPLAYINFO_MODEL_ID = 0x04,
+    OFF_CREATUREDISPLAYINFO_EXTRA_ID = 0x0C,
+    OFF_CREATUREDISPLAYINFOEXTRA_RACE = 0x04,
+    OFF_CREATUREDISPLAYINFOEXTRA_SEX = 0x08,
+    OFF_CREATUREDISPLAYINFOEXTRA_SKIN = 0x0C,
+    OFF_CREATUREDISPLAYINFOEXTRA_FACE = 0x10,
+    OFF_CREATUREDISPLAYINFOEXTRA_HAIR_STYLE = 0x14,
+    OFF_CREATUREDISPLAYINFOEXTRA_HAIR_COLOR = 0x18,
+    OFF_CREATUREDISPLAYINFOEXTRA_FACIAL_HAIR = 0x1C,
+    OFF_CREATUREDISPLAYINFOEXTRA_ITEMS = 0x20, // int[11] ItemDisplayInfo IDs, by ITEM_SLOT
+    CREATUREDISPLAYINFOEXTRA_ITEM_COUNT = 11,
+    OFF_CREATUREDISPLAYINFOEXTRA_BAKE_NAME = 0x50,
+    OFF_CREATUREMODELDATA_MODEL_NAME = 0x08,
+
+    // CCharacterComponent (WoW/Common/ComponentCore/CharacterComponent.cpp): an
+    // NPC's dress, built as CGUnit_C::InitializeComponent (0x00730100) builds
+    // one for a display with a CreatureDisplayInfoExtra row, once the model has
+    // loaded. ComponentData is 0x178 bytes: CharacterPreferences (race, sex,
+    // class, hair colour, skin, face, facial hair, hair style) at +0x00, the
+    // model +0x20 (the component releases one reference), flags +0x24 (bit 0:
+    // the baked NPC texture at +0x28 is the skin).
+    COMPONENT_DATA_SIZE = 0x178,
+    OFF_COMPONENT_PREF_RACE = 0x00,
+    OFF_COMPONENT_PREF_SEX = 0x04,
+    OFF_COMPONENT_PREF_CLASS = 0x08,
+    OFF_COMPONENT_PREF_HAIR_COLOR = 0x0C,
+    OFF_COMPONENT_PREF_SKIN = 0x10,
+    OFF_COMPONENT_PREF_FACE = 0x14,
+    OFF_COMPONENT_PREF_FACIAL_HAIR = 0x18,
+    OFF_COMPONENT_PREF_HAIR_STYLE = 0x1C,
+    OFF_COMPONENT_DATA_MODEL = 0x20,
+    OFF_COMPONENT_DATA_FLAGS = 0x24,
+    OFF_COMPONENT_DATA_NPC_SKIN = 0x28,
+    COMPONENT_DATA_NPC_SKIN_SIZE = 260,
+    OFF_M2MODEL_REFCOUNT = 0x00,
+    FUN_COMPONENT_DATA_CONSTRUCTOR = 0x004DFDA0, // __thiscall(data)
+    FUN_COMPONENT_ALLOC = 0x004F0980,            // CCharacterComponent *__cdecl()
+    FUN_COMPONENT_FREE = 0x004F16C0,             // __cdecl(component)
+    FUN_COMPONENT_INIT = 0x004F24D0,             // bool __thiscall(component, ComponentData *, const char *), ret 8
+    FUN_COMPONENT_ADD_ITEM = 0x004F2830,         // __thiscall(component, ITEM_SLOT, int displayID, int visual), ret 0xC
+    // RenderPrep — bool __thiscall(component, int wait), ret 4: bit 0 once the
+    // composite is ready; DressUpModel shows its model only then (0x00597F40).
+    FUN_COMPONENT_RENDER_PREP = 0x004F1520,
+    FUN_COMPONENT_APPLY_MONSTER_GEOSETS = 0x004E7790, // __cdecl(model, CreatureDisplayInfoRec *)
+    FUN_COMPONENT_REPLACE_MONSTER_SKIN = 0x004F20C0,  // __cdecl(model, display, CreatureModelDataRec *)
 };
