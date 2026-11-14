@@ -13,7 +13,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 add_subdirectory(external/minhook)
 
-# The loader-agnostic core (sources, generated addon header, tinycbor, version
+# The loader-agnostic core (sources, embedded addon resource, tinycbor, version
 # define) is defined once in cmake/WrathClassicAPICore.cmake and shared with the
 # WXL-extension front-end in the wxl-wrathclassicapi repository. This repository
 # supplies only the LichLoader front-end entry unit (src/DllMain.cpp) and the

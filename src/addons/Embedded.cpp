@@ -18,9 +18,10 @@
 //
 // How:
 //
-//   1. The CMake build embeds every file under `AddOns/!!!WrathClassicAPI/`
-//      into a generated header (`embedded_wrathclassicapi.h`) as a byte
-//      array per file plus a `{path, data, size}` manifest.
+//   1. The CMake build packs every file under `AddOns/!!!WrathClassicAPI/`
+//      into one gzipped RCDATA resource, plus a generated `{path, index}`
+//      manifest (`embedded_resources.h`). The pack is inflated on the first
+//      file read that needs it (src/embed/Resource.cpp).
 //
 //   2. We hook the engine's file reader `FUN_FILE_READ`. For any path under
 //      `Interface\AddOns\!!!WrathClassicAPI\`, we choose disk vs embedded ONCE
@@ -47,12 +48,13 @@
 //      detail library, not a user-toggleable addon) via the engine's own
 //      name->entry lookup.
 
-#include "embedded_wrathclassicapi.h"
+#include "embedded_resources.h"
 
 #include "Game.h"
 #include "Offsets.h"
 #include "addons/EngineIO.h"
 #include "addons/TocRewrite.h"
+#include "embed/Resource.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -105,12 +107,14 @@ const char *StripAddonPrefix(const char *path) {
     return p;
 }
 
-const WrathClassicAPIFiles::File *LookupEmbedded(const char *suffix) {
-    for (size_t i = 0; i < WrathClassicAPIFiles::kFileCount; ++i) {
-        if (PathEqualsCI(suffix, WrathClassicAPIFiles::kFiles[i].path))
-            return &WrathClassicAPIFiles::kFiles[i];
+// The embedded bytes for `suffix`, a path relative to the addon folder;
+// `data` is NULL when it is not embedded.
+Embed::Bytes LookupEmbedded(const char *suffix) {
+    for (const Manifest::File &file : Manifest::kFiles) {
+        if (PathEqualsCI(suffix, file.path))
+            return Embed::File(Manifest::kResourceId, file.index);
     }
-    return nullptr;
+    return {nullptr, 0};
 }
 
 // Engine file reader + Storm allocator/free — shapes centralized in EngineIO.h
@@ -179,15 +183,10 @@ char g_embeddedVersion[64] = "";
 
 void EnsureEmbeddedVersionExtracted() {
     if (g_embeddedVersion[0] != '\0') return;
-    for (size_t i = 0; i < WrathClassicAPIFiles::kFileCount; ++i) {
-        if (PathEqualsCI(kAddonTocFile, WrathClassicAPIFiles::kFiles[i].path)) {
-            ExtractTocVersion(
-                reinterpret_cast<const char *>(WrathClassicAPIFiles::kFiles[i].data),
-                WrathClassicAPIFiles::kFiles[i].size, g_embeddedVersion,
-                sizeof(g_embeddedVersion));
-            return;
-        }
-    }
+    const Embed::Bytes toc = LookupEmbedded(kAddonTocFile);
+    if (toc.data != nullptr)
+        ExtractTocVersion(reinterpret_cast<const char *>(toc.data), toc.size,
+                          g_embeddedVersion, sizeof(g_embeddedVersion));
 }
 
 // True iff the on-disk addon folder contains the `.wrathclassicapi-dev` marker.
@@ -279,21 +278,21 @@ int __stdcall FileRead_h(int unused, const char *path, void **outBuf,
     }
 
     // Source::Embedded, or Source::Disk with this file missing.
-    const auto *entry = LookupEmbedded(suffix);
-    if (entry == nullptr) {
+    const Embed::Bytes entry = LookupEmbedded(suffix);
+    if (entry.data == nullptr) {
         // Not in the embedded set either — let the engine try disk once more.
         return FileRead_o(unused, path, outBuf, outSize, extraBytes, flag1, flag2);
     }
 
     auto SMemAlloc = reinterpret_cast<SMemAllocFn>(Offsets::FUN_STORM_SMEM_ALLOC);
-    const size_t totalSize = entry->size + extraBytes;
+    const size_t totalSize = entry.size + extraBytes;
     void *buf = SMemAlloc(totalSize, __FILE__, __LINE__, 0);
     if (buf == nullptr) return 0;
-    std::memcpy(buf, entry->data, entry->size);
+    std::memcpy(buf, entry.data, entry.size);
     if (extraBytes > 0)
-        std::memset(static_cast<uint8_t *>(buf) + entry->size, 0, extraBytes);
+        std::memset(static_cast<uint8_t *>(buf) + entry.size, 0, extraBytes);
     if (outBuf != nullptr) *outBuf = buf;
-    if (outSize != nullptr) *outSize = entry->size;  // caller may pass NULL
+    if (outSize != nullptr) *outSize = entry.size;  // caller may pass NULL
     return 1;
 }
 

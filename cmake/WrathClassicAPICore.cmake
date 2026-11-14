@@ -19,12 +19,16 @@
 # rather than in the caller's own tree.
 get_filename_component(WRATHCLASSICAPI_CORE_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
+# The embedded addon is compiled into the front-end DLL as a resource script.
+enable_language(RC)
+include("${CMAKE_CURRENT_LIST_DIR}/embed_resources.cmake")
+
 # --- version derivation ---------------------------------------------------------------------------
 # Dev builds use the "DEV" sentinel, which the embedded addon's version-precedence
 # check treats as OLDER than every real release — so a locally-built DLL never
 # shadows an on-disk working copy. CI release builds pass -DWRATHCLASSICAPI_TAG=vX.Y.Z,
 # which drives BOTH the compiled WRATH_CLASSIC_API_VERSION int AND the embedded
-# addon's `## Version:` toc line (stamped in-memory by embed_addon.cmake).
+# addon's `## Version:` toc line (stamped into the embedded copy by embed_resources.cmake).
 set(WRATHCLASSICAPI_VERSION_VALUE 1)
 set(WRATHCLASSICAPI_TOC_VERSION "DEV")
 set(WRATHCLASSICAPI_TAG "" CACHE STRING "Release tag like v1.2.3")
@@ -63,31 +67,19 @@ function(wrathclassicapi_add_core target)
     file(GLOB_RECURSE _core_headers CONFIGURE_DEPENDS "${WRATHCLASSICAPI_CORE_ROOT}/src/*.h")
     list(FILTER _core_sources EXCLUDE REGEX "/DllMain\\.cpp$")
 
-    # Bundle AddOns/!!!WrathClassicAPI/ into a generated header so the DLL can
-    # surface the addon to the engine even without an on-disk copy. Generated
-    # into the caller's own binary dir.
-    set(_embedded_src "${WRATHCLASSICAPI_CORE_ROOT}/AddOns/!!!WrathClassicAPI")
-    set(_embedded_header "${CMAKE_BINARY_DIR}/generated/embedded_wrathclassicapi.h")
-    file(GLOB_RECURSE _embedded_files CONFIGURE_DEPENDS "${_embedded_src}/*")
-    add_custom_command(
-        OUTPUT "${_embedded_header}"
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC_DIR=${_embedded_src}
-            -DOUT_HEADER=${_embedded_header}
-            -DADDON_NAME=WrathClassicAPI
-            -DADDON_VERSION=${WRATHCLASSICAPI_TOC_VERSION}
-            -P "${WRATHCLASSICAPI_CORE_ROOT}/cmake/embed_addon.cmake"
-        DEPENDS
-            ${_embedded_files}
-            "${WRATHCLASSICAPI_CORE_ROOT}/cmake/embed_addon.cmake"
-        COMMENT "Embedding !!!WrathClassicAPI addon into ${_embedded_header}"
-        VERBATIM)
+    # Pack AddOns/!!!WrathClassicAPI/ into a gzipped RCDATA resource so the
+    # DLL can surface the addon to the engine even without an on-disk copy.
+    # Generated into the caller's own binary dir.
+    embed_resources(
+        TARGET ${target}
+        ADDON_DIR "${WRATHCLASSICAPI_CORE_ROOT}/AddOns/!!!WrathClassicAPI"
+        ADDON_VERSION "${WRATHCLASSICAPI_TOC_VERSION}"
+        OUT_DIR "${CMAKE_BINARY_DIR}/generated")
 
     target_sources(${target} PRIVATE
         ${_core_sources}
         ${_core_headers}
-        ${WRATHCLASSICAPI_TINYCBOR_SOURCES}
-        "${_embedded_header}")
+        ${WRATHCLASSICAPI_TINYCBOR_SOURCES})
 
     target_include_directories(${target} PRIVATE
         "${WRATHCLASSICAPI_CORE_ROOT}/src"
