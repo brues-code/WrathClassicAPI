@@ -299,6 +299,7 @@ void Actor::RunScript(int index, int nargs) {
 void Actor::ReleaseModel() {
     if (model == nullptr)
         return;
+    DropKit(); // the kit stays, for the next model
     SetSequenceCallback(model, nullptr);
     FreeDress(component); // drops the dress's reference on the model
     At<const void *>(model, Offsets::OFF_M2MODEL_LIGHTING_CALLBACK) = nullptr;
@@ -353,7 +354,7 @@ void Actor::PlayAnimation() {
 
 void Actor::ApplyAlpha() {
     if (model != nullptr)
-        At<float>(model, Offsets::OFF_M2MODEL_FADE_ALPHA) = alpha * FrameAlpha(frame_);
+        At<float>(model, Offsets::OFF_M2MODEL_FADE_ALPHA) = alpha * kitAlpha * FrameAlpha(frame_);
 }
 
 void Actor::Link() {
@@ -379,9 +380,11 @@ void Actor::Update(float elapsedSec) {
             ready = false;
         if (ready && IsLoaded(model, true)) {
             loaded = true;
+            ApplyKit();
             RunScript(S_ONMODELLOADED, 0);
         }
     }
+    DrainKit();
     if (model != nullptr && loaded && (paused || globalPaused)) {
         if (heldTimeMs < 0)
             heldTimeMs = At<uint32_t>(At<void *>(model, Offsets::OFF_M2MODEL_BONES), Offsets::OFF_M2BONE_SEQUENCE_CURRENT_TIME);
@@ -821,6 +824,38 @@ int __cdecl Script_GetAnimationVariation(void *L) {
     return 1;
 }
 
+// SetSpellVisualKit([spellVisualKitID [, oneShot]]): 0 or none removes the kit.
+int __cdecl Script_SetSpellVisualKit(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    const auto kitID = Game::Lua::IsNumber(L, 2) ? static_cast<uint32_t>(Game::Lua::ToNumber(L, 2)) : 0u;
+    actor->SetSpellVisualKit(kitID, Game::Lua::ToBoolean(L, 3) != 0);
+    return 0;
+}
+
+int __cdecl Script_GetSpellVisualKit(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    Game::Lua::PushNumber(L, actor->spellVisualKit);
+    return 1;
+}
+
+// This client has no animation kits (AnimKit data is a later client's):
+// there is nothing to play or stop.
+int __cdecl Script_PlayAnimationKit(void *L) {
+    Actor *actor = Self(L);
+    if (actor != nullptr)
+        NumberArgs(L, 2, 1, actor->DisplayName(), "PlayAnimationKit(animationKit [, isLooping])");
+    return 0;
+}
+
+int __cdecl Script_StopAnimationKit(void *L) {
+    Self(L);
+    return 0;
+}
+
 int __cdecl Script_SetAnimationBlendOperation(void *L) {
     Actor *actor = Self(L);
     if (actor == nullptr || !NumberArgs(L, 2, 1, actor->DisplayName(), "SetAnimationBlendOperation(blendOperation)"))
@@ -927,6 +962,10 @@ const Method kMethods[] = {
     {"GetAnimationBlendOperation", &Script_GetAnimationBlendOperation},
     {"SetPaused", &Script_SetPaused},
     {"GetPaused", &Script_GetPaused},
+    {"SetSpellVisualKit", &Script_SetSpellVisualKit},
+    {"GetSpellVisualKit", &Script_GetSpellVisualKit},
+    {"PlayAnimationKit", &Script_PlayAnimationKit},
+    {"StopAnimationKit", &Script_StopAnimationKit},
 };
 
 // CScriptObject's methods (GetObjectType, IsObjectType, GetName, GetParent),

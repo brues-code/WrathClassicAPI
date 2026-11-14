@@ -1946,6 +1946,8 @@ scene. An actor is not a `Frame` or a `Region`.
 | `GetAnimation()` / `GetAnimationVariation()` | The variation reads `4294967295` when none was given. |
 | `SetAnimationBlendOperation(op)` / `GetAnimationBlendOperation()` | `Enum.ModelBlendOperation`: `None` (0) or `Anim` (1, default), whether a new animation blends from the old one. |
 | `SetPaused(paused [, affectsGlobalPause])` / `GetPaused()` | Holds the animation on its current frame. `GetPaused` returns the actor's flag, then the global one. |
+| `SetSpellVisualKit([kitID [, oneShot]])` / `GetSpellVisualKit()` | Shows a spell visual kit's effects on the model, at the model's attachment points, with the kit's tint and alpha. With `oneShot` the effects play once; without it they stay until the kit or the model changes. `0` or no ID removes the kit. A new model shows the same kit. |
+| `PlayAnimationKit(animationKit [, isLooping])` / `StopAnimationKit()` | Have no effect: this client has no animation kits. |
 | `GetActiveBoundingBox()` | Six numbers, bottom `x, y, z` then top `x, y, z`, of the current animation, in model space. Nothing until the model loads. |
 | `GetMaxBoundingBox()` | The same for the whole model. |
 | `GetObjectType()` / `IsObjectType(type)` / `GetName()` / `GetParent()` | |

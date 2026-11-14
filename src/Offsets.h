@@ -3070,6 +3070,61 @@ enum Offsets {
     OFF_M2MODEL_FADE_ALPHA = 0x178,
     OFF_M2MODEL_LIGHTING_CALLBACK = 0x2AC,
     OFF_M2MODEL_LIGHTING_ARG = 0x2B0,
+
+    // Spell visual kits on an actor (src/model/SceneKit.cpp), as the engine
+    // shows one on a bare model: CGlueMgr::AttachCharacterSelectVisuals
+    // 0x004E2CE0, the char-select ghost, which hangs each effect column's
+    // model at its attachment (ProcessAttachment 0x004E2C30) and applies the
+    // tint and alpha procedures. The stores are WowClientDB's shape.
+    VAR_SPELLVISUALKIT_DBC_MAX_INDEX = 0x00AD4A48,
+    VAR_SPELLVISUALKIT_DBC_MIN_INDEX = 0x00AD4A4C,
+    VAR_SPELLVISUALKIT_DBC_INDEX_TABLE = 0x00AD4A5C,
+    VAR_SPELLVISUALEFFECTNAME_DBC_MAX_INDEX = 0x00AD4A24,
+    VAR_SPELLVISUALEFFECTNAME_DBC_MIN_INDEX = 0x00AD4A28,
+    VAR_SPELLVISUALEFFECTNAME_DBC_INDEX_TABLE = 0x00AD4A38,
+    // SpellVisualKitRec: effect IDs head +0x0C, chest +0x10, base +0x14, left
+    // hand +0x18, right hand +0x1C, breath +0x20, special[3] +0x2C (the
+    // ghost's columns; the weapon columns +0x24 / +0x28 are not among them);
+    // charProc[4] (int kinds) +0x44, charParamZero[4] (float) +0x54.
+    OFF_SPELLVISUALKIT_HEAD_EFFECT = 0x0C,
+    OFF_SPELLVISUALKIT_CHEST_EFFECT = 0x10,
+    OFF_SPELLVISUALKIT_BASE_EFFECT = 0x14,
+    OFF_SPELLVISUALKIT_LEFT_HAND_EFFECT = 0x18,
+    OFF_SPELLVISUALKIT_RIGHT_HAND_EFFECT = 0x1C,
+    OFF_SPELLVISUALKIT_BREATH_EFFECT = 0x20,
+    OFF_SPELLVISUALKIT_SPECIAL_EFFECTS = 0x2C,
+    OFF_SPELLVISUALKIT_PROC_KIND = 0x44,
+    OFF_SPELLVISUALKIT_PROC_VALUE = 0x54,
+    SPELLVISUALKIT_PROC_COUNT = 4,
+    SPELLVISUALKIT_PROC_TINT = 1,   // value: 0xRRGGBB
+    SPELLVISUALKIT_PROC_ALPHA = 14, // value: alpha, clamped to 0..1
+    OFF_SPELLVISUALEFFECTNAME_FILE = 0x08,
+    OFF_SPELLVISUALEFFECTNAME_SCALE = 0x10,
+    // The ghost's attachment IDs (M2 attachment points).
+    M2_ATTACH_HEAD = 20,
+    M2_ATTACH_CHEST = 34,
+    M2_ATTACH_BASE = 19,
+    M2_ATTACH_LEFT_HAND = 21,
+    M2_ATTACH_RIGHT_HAND = 22,
+    M2_ATTACH_BREATH = 17,
+    M2_ATTACH_SPECIAL_1 = 23,
+    // CM2Model, __thiscall: HasAttachment (uint id) ret 4; AttachToParent
+    // (CM2Model *parent, uint id, const C3Vector *pos, int toRoot) ret 0x10;
+    // SetEmittersEnabled (int) ret 4.
+    FUN_M2MODEL_HAS_ATTACHMENT = 0x008273D0,
+    FUN_M2MODEL_ATTACH_TO_PARENT = 0x00831630,
+    FUN_M2MODEL_SET_EMITTERS_ENABLED = 0x008279F0,
+    // The model's own transform (C44Matrix); with fFlags 0x8000 an attached
+    // model's is applied under the attachment (the ghost: its effect scale).
+    OFF_M2MODEL_LOCAL_TRANSFORM = 0xB4,
+    M2MODEL_FFLAGS_LOCAL_TRANSFORM = 0x8000,
+    // An effect's stop (CEffect::MoveToDestroyList 0x006F87C0, attached
+    // model): clear 0x80, set 0x20000, emitters off. The effect is freed once
+    // 0x400 clears; each particle pass sets it again while particles live.
+    M2MODEL_FFLAGS_STOP_CLEAR_ATTACHED = 0x80,
+    M2MODEL_FFLAGS_STOP_SET_ATTACHED = 0x20000,
+    M2MODEL_FFLAGS_LIVE_PARTICLES = 0x400,
+    OFF_M2MODEL_DIFFUSE_TINT = 0x180, // float r, g, b; 1 by default
     OFF_M2BONE_SEQUENCE_CURRENT_TIME = 0x40, // M2ModelBoneSeq::m_currentTime
     OFF_M2BONE_SEQUENCE_INDEX = 0x48,        // M2ModelBoneSeq::m_sequenceIndex (uint16)
     OFF_M2SHARED_DATA = 0x150,               // M2Data *

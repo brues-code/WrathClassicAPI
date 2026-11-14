@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace Model::Scene {
 
@@ -131,6 +132,24 @@ class Actor {
     bool paused = false;
     bool globalPaused = false;
     int32_t heldTimeMs = -1; // the paused frame, once read from a loaded model
+
+    // The spell visual kit shown (model/SceneKit.cpp), 0 for none. It is
+    // applied once the model has loaded, and again on each new model.
+    void SetSpellVisualKit(uint32_t kitID, bool oneShot);
+    // Puts the kit on the loaded model.
+    void ApplyKit();
+    // Takes the kit's effects off the model and undoes its tint and alpha.
+    void DropKit();
+    // Frees the stopped one-shot effects whose particles are gone.
+    void DrainKit();
+    uint32_t spellVisualKit = 0;
+    bool kitOneShot = false;
+    float kitAlpha = 1.0f; // the kit's alpha procedure, times the actor's alpha
+    struct KitEffect {
+        void *model; // one reference of ours
+        bool stopped;
+    };
+    std::vector<KitEffect> kitEffects;
 
   private:
     void *frame_;
