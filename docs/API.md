@@ -179,6 +179,8 @@ Conventions:
   - [`C_Spell.IsSpellHarmful` / `IsSpellHelpful`](#c_spellisspellharmfulspellidentifier--isspellhelpfulspellidentifier)
   - [`C_Spell.IsSelfBuff(spellIdentifier)`](#c_spellisselfbuffspellidentifier)
   - [`CanDualWield()`](#candualwield)
+- [Status Bar](#status-bar)
+  - [`StatusBar` fill methods](#statusbar-fill-methods)
 - [String Util](#string-util)
   - [`C_StringUtil.CreateNumericRuleFormatter()`](#c_stringutilcreatenumericruleformatter)
 - [Swing Timer](#swing-timer)
@@ -2958,6 +2960,50 @@ spec switch — turns it off.
 
 ```lua
 CanDualWield()   -- true on a rogue; false on a mage
+```
+
+---
+
+## Status Bar
+
+### `StatusBar` fill methods
+
+| Method | Description |
+|---|---|
+| `SetReverseFill(isReverseFill)` / `GetReverseFill()` | Fills the bar from the right, or from the top when it is vertical. Default `false`. |
+| `SetFillStyle(fillStyle)` / `GetFillStyle()` | How the bar fills as its value grows: an `Enum.StatusBarFillStyle` value, or one of the names `"STANDARD"`, `"STANDARD_NO_RANGE_FILL"`, `"CENTER"` and `"REVERSE"`. Default `Standard`. |
+| `SetColorFill(r, g, b [, a])` | Fills the bar texture with a solid colour. A bar with no texture gets one. |
+| `SetStatusBarDesaturated(desaturated)` / `IsStatusBarDesaturated()` | Draws the bar texture in grey. A bar with no texture is not desaturated. |
+| `SetRotatesTexture(rotates)` | Draws the bar texture turned a quarter. A bar with no texture keeps the setting. |
+
+`Enum.StatusBarFillStyle`:
+
+| Name | Value | Fill |
+|---|---|---|
+| `Standard` | `0` | From the left, or from the bottom when vertical. |
+| `StandardNoRangeFill` | `1` | As `Standard`, but a bar whose minimum equals its maximum shows full, unless both are `0`. |
+| `Center` | `2` | From the middle out to both ends. |
+| `Reverse` | `3` | As `SetReverseFill(true)`. |
+
+The bar texture is stretched over the filled part, and hidden while the
+bar is empty.
+
+```lua
+local bar = CreateFrame("StatusBar", nil, UIParent)
+bar:SetSize(200, 16)
+bar:SetPoint("CENTER")
+bar:SetColorFill(0.8, 0.1, 0.1)
+bar:SetFillStyle(Enum.StatusBarFillStyle.Center)
+bar:SetMinMaxValues(0, 100)
+bar:SetValue(40)
+```
+
+XML attributes: `reverseFill` and `fillStyle` (one of the names above).
+
+```xml
+<StatusBar name="MyBar" reverseFill="true" minValue="0" maxValue="100">
+    <BarTexture file="Interface\TargetingFrame\UI-StatusBar"/>
+</StatusBar>
 ```
 
 ---

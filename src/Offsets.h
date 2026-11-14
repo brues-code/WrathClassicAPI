@@ -3414,7 +3414,11 @@ enum Offsets {
     // *relative, FRAMEPOINT, float x, float y, int)`, ret 0x18; a region's
     // layout is region + OFF_REGION_LAYOUT. Offsets in DDC.
     FUN_LAYOUT_SET_POINT = 0x0048A260,
+    FRAMEPOINT_TOPLEFT = 0,
+    FRAMEPOINT_TOPRIGHT = 2,
     FRAMEPOINT_CENTER = 4,
+    FRAMEPOINT_BOTTOMLEFT = 6,
+    FRAMEPOINT_BOTTOMRIGHT = 8,
 
     // CVar::Register — `CVar *__cdecl(const char *name, const char *help, uint
     // flags, const char *value, callback, uint category, bool setCommand, void
@@ -3423,4 +3427,59 @@ enum Offsets {
     FUN_CVAR_REGISTER = 0x00767FC0,
     OFF_CVAR_INT_VALUE = 0x30,
     CVAR_CATEGORY_GAME = 4,
+
+    // --- StatusBar (src/statusbar/Fill.cpp) -------------------------------------------------
+    //
+    // CSimpleStatusBar (Engine/Source/Frame/CSimpleStatusBar.{h,cpp} in the
+    // decompiled client), each address checked against Wow.exe. Nameplates
+    // build them directly too, and CGSimpleHealthBar derives from it, so the
+    // class's own functions are hooked, not its factory.
+    //
+    // Bits at +0x29C: 0 m_changed (lay the fill out again), 1 m_rangeSet,
+    // 2 m_valueSet, 3 m_rotatesTexture.
+    OFF_STATUSBAR_BITS = 0x29C,
+    STATUSBAR_CHANGED = 0x1,
+    STATUSBAR_RANGE_SET = 0x2,
+    STATUSBAR_VALUE_SET = 0x4,
+    STATUSBAR_ROTATES_TEXTURE = 0x8,
+    OFF_STATUSBAR_MIN = 0x2A0,
+    OFF_STATUSBAR_MAX = 0x2A4,
+    OFF_STATUSBAR_BAR_TEXTURE = 0x2AC, // CSimpleTexture *
+    OFF_STATUSBAR_ORIENTATION = 0x2B0, // 0 horizontal, 1 vertical
+    VAR_STATUSBAR_OBJECT_TYPE = 0x00DCE440,
+    // GetAnimValue — `float __thiscall(bar)`: the filled fraction, 0 for an empty range.
+    VTBL_STATUSBAR_GET_ANIM_VALUE = 0xEC,
+    // OnLayerUpdate — `__thiscall(bar, float elapsedSec)`, ret 4: with m_changed,
+    // shows the bar texture and moves its four points in by the empty part (the
+    // whole image stretched over the filled part; no texture coordinates), or
+    // hides it at 0.
+    FUN_STATUSBAR_ON_LAYER_UPDATE = 0x00961B80,
+    FUN_STATUSBAR_LOAD_XML = 0x00961E30,          // __thiscall(layout, XMLNode *, CStatus *), ret 8
+    FUN_STATUSBAR_SET_BAR_TEXTURE = 0x00961720,   // __thiscall(bar, CSimpleTexture *, uint layer), ret 8
+    FUN_STATUSBAR_SET_ROTATES_TEXTURE = 0x00961D70, // __thiscall(bar, int), ret 4; needs a bar texture
+    FUN_STATUSBAR_REGISTER_SCRIPT_METHODS = 0x009711B0, // __cdecl(L): Frame's, then its own
+    // The two ways a StatusBar dies: its deleting destructor (`__thiscall(bar,
+    // uint flags)`, ret 4, the body inlined), and the body alone
+    // (`__thiscall(bar)`), which CGSimpleHealthBar's destructor calls.
+    FUN_STATUSBAR_DELETING_DESTRUCTOR = 0x00961A70,
+    FUN_STATUSBAR_DESTRUCTOR = 0x009615C0,
+    // The layout's GetSize — `__thiscall(layout, float *width, float *height,
+    // int)`, ret 0xC, at layout vtable +0x30.
+    VTBL_LAYOUT_GET_SIZE = 0x30,
+    // A region's ShowThis — `__thiscall(region)`, after OFF_REGION_SHOWN_FLAGS'
+    // REGION_SHOWN_BIT is set (the hide pair is FUN_REGION_HIDE_UPDATE).
+    FUN_REGION_SHOW_UPDATE = 0x00487C40,
+    // A CSimpleTexture made as SetStatusBarTexture-by-path makes one: a block
+    // from the class heap, then the constructor `__thiscall(texture, CSimpleFrame
+    // *frame, uint layer, int show)`, ret 0xC.
+    VAR_SIMPLETEXTURE_HEAP = 0x00B4794C,
+    VAR_SIMPLETEXTURE_TYPE_NAME = 0x00AC0F4C,
+    FUN_SIMPLETEXTURE_CONSTRUCTOR = 0x00484470,
+    FUN_SIMPLETEXTURE_SET_COLOR = 0x00481590,  // SetTexture(const CImVector &) — __thiscall, ret 4: a solid fill
+    FUN_SIMPLETEXTURE_SET_SHADER = 0x00481700, // __thiscall(texture, CGxShader *), ret 4
+    OFF_SIMPLETEXTURE_SHADER = 0xDC,
+    IMAGE_MODE_DESATURATE = 1,
+    // CImVector::Set — `__thiscall(color, float a, float r, float g, float b)`,
+    // ret 0x10: each channel rounded to 0..255.
+    FUN_CIMVECTOR_SET = 0x0048BD20,
 };
