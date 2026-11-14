@@ -2367,6 +2367,26 @@ enum Offsets {
     // for the template table; the returned node's def is at +0x18. FUN_0055F4D0.
     FUN_STORM_HASH_LOOKUP = 0x0055F4D0,
 
+    // --- XML loader features (src/xml/) -----------------------------------------
+    //
+    // CStatus::Add — vtable slot +0x0C, `void __cdecl(status, int level, const
+    // char *fmt, ...)`; the loaders log their warnings at level 1 ("Couldn't
+    // find inherited node: %s", CSimpleFrame::LoadXML 0x004932C0).
+    VTBL_XML_STATUS_ADD = 0x0C,
+    XML_STATUS_WARNING = 1,
+    // SStrToFloat — `float __stdcall(const char *)`, ret 4: the loaders' number
+    // read (CSimpleFrame::LoadXML's `alpha`, `depth`).
+    FUN_SSTR_TO_FLOAT = 0x0076FB80,
+    // CSimpleFrame::LoadXML (FUN_SIMPLEFRAME_LOAD_XML) is the base every frame
+    // type's loader calls first. For each `inherits` name it loads the template
+    // through the layout's own LoadXML (VTBL_LAYOUT_LOAD_XML), so the hook sees
+    // every node of a frame, the templates' before the frame's own. The frame
+    // is the layout - OFF_FRAME_LAYOUT. Its <Scripts> go through
+    // CSimpleFrame::LoadXML_Scripts 0x0048FEF0: for each element,
+    // GetScriptByName (VTBL_FRAME_GET_SCRIPT_BY_NAME) gives the slot, the old
+    // ref is unref'd, and the slot gets the body's or `function`'s ref (0 for
+    // neither) with taint 0.
+
     // --- Combat log (src/combatlog/CurrentEventInfo.cpp) -----------------------
     //
     // Backing for `CombatLogGetCurrentEventInfo()`. 3.3.5 fires
@@ -2888,6 +2908,7 @@ enum Offsets {
 
     // Frame vtable slots (byte offsets) the ModelScene overrides.
     VTBL_FRAME_DELETING_DESTRUCTOR = 0x00, // __thiscall(this, uint flags)
+    VTBL_FRAME_GET_NAME = 0x04,            // const char *__thiscall(this), null when unnamed
     VTBL_FRAME_GET_SCRIPT_META_TABLE = 0x08,
     VTBL_FRAME_GET_SCRIPT_BY_NAME = 0x0C,
     VTBL_FRAME_IS_A = 0x10,

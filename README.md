@@ -63,7 +63,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | UI Color  | `C_UIColor.GetColors` |
 | Unit      | `UnitClassID`, `UnitRaceID`, `UnitRaceBase`, `UnitPosition`, `UnitDistanceSquared`, `UnitHealthMissing`, `UnitPowerMissing`, `UnitTokenFromGUID`, `UnitNameFromGUID`, `UnitCreatedBySpell`, `UnitSubName`, `UnitOwnerGUID`, `UnitCreatureID`, `UnitCreatureTypeID`, `UnitHasIncomingResurrection`, `UnitGUID("player")` during addon loading |
 | Unit Auras | `C_UnitAuras.GetAuraDataByIndex`, `C_UnitAuras.GetBuffDataByIndex`, `C_UnitAuras.GetDebuffDataByIndex`, `C_UnitAuras.GetAuraSlots`, `C_UnitAuras.GetAuraDataBySlot`, `C_UnitAuras.UnitAuraBySlot`, `C_UnitAuras.GetUnitAuraBySpellID`, `C_UnitAuras.GetPlayerAuraBySpellID`, `C_UnitAuras.GetUnitAuras`, `C_UnitAuras.GetAuraDispelTypeColor` |
-| XML       | `C_XMLUtil.DoesTemplateExist`, `C_XMLUtil.GetTemplateInfo`, `C_XMLUtil.GetTemplates` |
+| XML       | `mixin=`, `<KeyValues>` and `method=` script handlers on frames and actors; `C_XMLUtil.DoesTemplateExist`, `C_XMLUtil.GetTemplateInfo`, `C_XMLUtil.GetTemplates` |
 
 ### Events
 

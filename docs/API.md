@@ -232,6 +232,9 @@ Conventions:
   - [`C_UnitAuras.GetAuraDispelTypeColor(type)`](#c_unitaurasgetauradispeltypecolortype)
   - [`AuraData` table shape](#auradata-table-shape)
 - [XML Templates](#xml-templates)
+  - [`mixin="Name, ..."`](#mixinname-)
+  - [`<KeyValues>`](#keyvalues)
+  - [`<Scripts>` `method="Name"`](#scripts-methodname)
   - [`C_XMLUtil.DoesTemplateExist(templateName)`](#c_xmlutildoestemplateexisttemplatename)
   - [`C_XMLUtil.GetTemplateInfo(templateName)`](#c_xmlutilgettemplateinfotemplatename)
   - [`C_XMLUtil.GetTemplates()`](#c_xmlutilgettemplates)
@@ -1963,9 +1966,10 @@ murloc:SetAnimation(4)  -- walk
 ```
 
 An actor template is a top-level `<Actor>` element. It takes `name`,
-`virtual="true"`, `inherits`, `alpha`, `scale` and `file`, and a
-`<Scripts>` child. A script element has a body or a
-`function="GlobalName"` attribute.
+`virtual="true"`, `inherits`, `mixin`, `alpha`, `scale` and `file`, and
+`<KeyValues>` and `<Scripts>` children. A script element has a body, a
+`function="GlobalName"` attribute or a `method="Name"` attribute (see
+[XML Templates](#xml-templates)).
 
 ```xml
 <Actor name="MyActorTemplate" virtual="true" scale="1.5">
@@ -3740,9 +3744,61 @@ don't exist here.
 
 ## XML Templates
 
-Introspection of the virtual frame templates (`<Frame virtual="true">`
-and friends) that `inherits=` and `CreateFrame`'s template argument
-resolve against.
+Frames and actors take three more things in XML: a `mixin` attribute,
+`<KeyValues>` and `method` script handlers. Frames include every frame
+type, whether it comes from an XML file or from `CreateFrame` with a
+template. All three work through `inherits`, and a template's settings
+apply to every frame made from it.
+
+### `mixin="Name, ..."`
+
+Each name is a global table. Its fields are copied onto the frame's table,
+as `Mixin(frame, Name, ...)` does. The copy happens before any part of the
+frame loads, so `<KeyValues>`, script handlers and `OnLoad` can use the
+mixin's methods. The templates' mixins go first, in `inherits` order, and
+the frame's own go last. A name that is not a global table is skipped, and
+a warning goes to the XML log.
+
+### `<KeyValues>`
+
+Sets fields on the frame's table when the frame loads, before `OnLoad`.
+The template's values apply first, so the frame's own values win.
+
+```xml
+<Frame name="MyFrame" mixin="MyFrameMixin">
+    <KeyValues>
+        <KeyValue key="layoutIndex" value="3" type="number"/>
+        <KeyValue key="showTooltip" value="true" type="boolean"/>
+        <KeyValue key="tooltipFrame" value="GameTooltip" type="global"/>
+    </KeyValues>
+</Frame>
+```
+
+| Attribute | Notes |
+|-----------|-------|
+| `key` | The field name. Required. |
+| `value` | The value as text. Required unless `type="nil"`. |
+| `type` | `string` (the default), `number`, `boolean`, `nil` or `global`. `global` looks the text up as a global; a dotted path such as `"MyMixin.Modes.Large"` walks one field at a time, and gives `nil` where a step is not a table. |
+| `keyType` | The key's type, from the same list. The default is `string`. |
+
+### `<Scripts>` `method="Name"`
+
+The handler is the frame's own field `self.Name`. This is usually a
+function from its mixin. The field must hold a function when the frame
+loads, or the handler stays empty and a warning goes to the XML log.
+
+```xml
+<Frame name="MyFrame" mixin="MyFrameMixin">
+    <Scripts>
+        <OnLoad method="OnLoad"/>
+        <OnShow method="OnShow"/>
+    </Scripts>
+</Frame>
+```
+
+The functions below look up the virtual frame templates
+(`<Frame virtual="true">` and others) that `inherits=` and the template
+argument of `CreateFrame` use.
 
 ### `C_XMLUtil.DoesTemplateExist(templateName)`
 
@@ -3764,7 +3820,7 @@ that name exists. Case-insensitive.
 | `type` | string | The template's frame type — `"Frame"`, `"Button"`, `"CheckButton"`, `"StatusBar"`, etc. |
 | `width` | number | Declared `<Size>` width, or `0` if the template declares no size. |
 | `height` | number | Declared `<Size>` height, or `0` if the template declares no size. |
-| `keyValues` | table | Always an empty table. |
+| `keyValues` | table | The template's own `<KeyValues>` entries, an array of `{ key, keyType, type, value }`, each as written in the XML. The array is empty when the template has none. |
 | `inherits` | string\|nil | The comma-delimited `inherits=` list, or `nil` if the template inherits nothing. |
 
 Most templates declare no `<Size>` (they're sized by whatever consumes

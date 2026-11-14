@@ -81,6 +81,7 @@
 #include "Game.h"
 #include "Offsets.h"
 #include "ui/FrameObject.h"
+#include "xml/Node.h"
 
 #include <cmath>
 #include <cstdint>
@@ -569,10 +570,10 @@ void __fastcall UpdateAlpha(void *self, void *) {
 
 // ---- XML ----------------------------------------------------------------------------
 
-const char *Attr(const void *node, const char *name) {
-    return reinterpret_cast<const char *(__fastcall *)(const void *, void *, const char *)>(
-        Offsets::FUN_XML_NODE_GET_ATTRIBUTE)(node, nullptr, name);
-}
+using Xml::Attr;
+using Xml::FirstChild;
+using Xml::NextSibling;
+using Xml::TagIs;
 
 bool FloatAttr(const void *node, const char *name, float &out) {
     const char *value = Attr(node, name);
@@ -580,15 +581,6 @@ bool FloatAttr(const void *node, const char *name, float &out) {
         return false;
     out = static_cast<float>(std::atof(value));
     return true;
-}
-
-const void *FirstChild(const void *node) { return At<const void *>(const_cast<void *>(node), Offsets::OFF_XML_NODE_CHILD); }
-const void *NextSibling(const void *node) {
-    return At<const void *>(const_cast<void *>(node), Offsets::OFF_XML_NODE_SIBLING);
-}
-bool TagIs(const void *node, const char *tag) {
-    const char *name = At<const char *>(const_cast<void *>(node), Offsets::OFF_XML_NODE_TAG);
-    return name != nullptr && _stricmp(name, tag) == 0;
 }
 
 bool DrawLayerFromName(const char *name, uint32_t &layer) {

@@ -59,6 +59,10 @@
 #include "Offsets.h"
 #include "dbc/Store.h"
 #include "ui/FrameObject.h"
+#include "xml/KeyValues.h"
+#include "xml/Method.h"
+#include "xml/Mixin.h"
+#include "xml/Node.h"
 
 #include <cmath>
 #include <cstdint>
@@ -433,10 +437,11 @@ void Actor::Place() {
 
 namespace {
 
-const char *Attr(const void *node, const char *name) {
-    return reinterpret_cast<const char *(__fastcall *)(const void *, void *, const char *)>(
-        Offsets::FUN_XML_NODE_GET_ATTRIBUTE)(node, nullptr, name);
-}
+using Xml::Attr;
+using Xml::FirstChild;
+using Xml::NextSibling;
+using Xml::Tag;
+
 bool FloatAttr(const void *node, const char *name, float &out) {
     const char *value = Attr(node, name);
     if (value == nullptr || *value == '\0')
@@ -444,18 +449,13 @@ bool FloatAttr(const void *node, const char *name, float &out) {
     out = static_cast<float>(std::atof(value));
     return true;
 }
-const void *FirstChild(const void *node) { return At<const void *>(node, Offsets::OFF_XML_NODE_CHILD); }
-const void *NextSibling(const void *node) { return At<const void *>(node, Offsets::OFF_XML_NODE_SIBLING); }
-const char *Tag(const void *node) { return At<const char *>(node, Offsets::OFF_XML_NODE_TAG); }
 
-// The node's <Scripts>: each element's body compiled with its wrapper, or the
-// global function its `function` attribute names.
-void LoadScripts(Actor &actor, const void *node) {
-    void *L = Game::Lua::State();
-    if (L == nullptr)
-        return;
+// The node's <Scripts>: each handler is the actor's own method (`method`),
+// the global function `function` names, or the body compiled with its
+// wrapper. `index` is the actor's table.
+void LoadScripts(void *L, int index, Actor &actor, const void *node) {
     for (const void *scriptsNode = FirstChild(node); scriptsNode != nullptr; scriptsNode = NextSibling(scriptsNode)) {
-        if (_stricmp(Tag(scriptsNode), "Scripts") != 0)
+        if (!Xml::TagIs(scriptsNode, "Scripts"))
             continue;
         for (const void *c = FirstChild(scriptsNode); c != nullptr; c = NextSibling(c)) {
             ScriptData data{nullptr};
@@ -463,11 +463,12 @@ void LoadScripts(Actor &actor, const void *node) {
             if (slot == nullptr)
                 continue;
             int ref = -1;
-            if (const char *function = Attr(c, "function"); function != nullptr && *function != '\0') {
+            if (const char *method = Attr(c, "method"); method != nullptr && *method != '\0') {
+                ref = Xml::Method::Ref(L, index, method, nullptr, actor.DisplayName(), Tag(c));
+            } else if (const char *function = Attr(c, "function"); function != nullptr && *function != '\0') {
                 Game::Lua::GetGlobal(L, function);
                 ref = LuaRef(L);
-            } else if (const char *body = At<const char *>(c, Offsets::OFF_XML_NODE_BODY);
-                       body != nullptr && *body != '\0') {
+            } else if (const char *body = Xml::Body(c); body != nullptr && *body != '\0') {
                 const std::string name = std::string(actor.DisplayName()) + ":" + Tag(c);
                 ref = reinterpret_cast<int(__cdecl *)(const char *, const char *, const char *, void *)>(
                     Offsets::FUN_FRAMESCRIPT_COMPILE_FUNCTION)(name.c_str(), data.wrapper, body, nullptr);
@@ -478,22 +479,20 @@ void LoadScripts(Actor &actor, const void *node) {
     }
 }
 
-void LoadNode(Actor &actor, const void *node) {
+// One node of the template chain, its inherits first. `index` is the actor's
+// table; the chain's mixins are already on it.
+void LoadNode(void *L, int index, Actor &actor, const void *node) {
     using Acquire_t = const void *(__cdecl *)(const char *, const char *&, bool &);
     using Release_t = void(__cdecl *)(const char *);
-    if (const char *inherits = Attr(node, "inherits"); inherits != nullptr && *inherits != '\0') {
-        std::string list = inherits;
-        for (char *save = nullptr, *name = strtok_s(list.data(), ", ", &save); name != nullptr;
-             name = strtok_s(nullptr, ", ", &save)) {
-            const char *taint = nullptr;
-            bool wasLocked = false;
-            const void *base = reinterpret_cast<Acquire_t>(Offsets::FUN_FRAMEXML_ACQUIRE_HASH_NODE)(name, taint, wasLocked);
-            if (base == nullptr || wasLocked)
-                continue; // unknown, or a cycle
-            LoadNode(actor, base);
-            reinterpret_cast<Release_t>(Offsets::FUN_FRAMEXML_RELEASE_HASH_NODE)(name);
-        }
-    }
+    Xml::ForEachName(Attr(node, "inherits"), [&](const char *name) {
+        const char *taint = nullptr;
+        bool wasLocked = false;
+        const void *base = reinterpret_cast<Acquire_t>(Offsets::FUN_FRAMEXML_ACQUIRE_HASH_NODE)(name, taint, wasLocked);
+        if (base == nullptr || wasLocked)
+            return; // unknown, or a cycle
+        LoadNode(L, index, actor, base);
+        reinterpret_cast<Release_t>(Offsets::FUN_FRAMEXML_RELEASE_HASH_NODE)(name);
+    });
     float value = 0.0f;
     if (FloatAttr(node, "alpha", value)) {
         actor.alpha = value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
@@ -503,13 +502,22 @@ void LoadNode(Actor &actor, const void *node) {
         actor.scale = value;
     if (const char *file = Attr(node, "file"); file != nullptr && *file != '\0')
         actor.SetModel(CreateM2(actor.SceneFrame(), file, 1), file, nullptr);
-    LoadScripts(actor, node);
+    Xml::KeyValues::Apply(L, index, node, nullptr, actor.DisplayName());
+    LoadScripts(L, index, actor, node);
 }
 
 } // namespace
 
+// The template's mixins first (Xml::Mixin), then its nodes, then OnLoad.
 void Actor::LoadXml(const void *node) {
-    LoadNode(*this, node);
+    void *L = Game::Lua::State();
+    if (L == nullptr)
+        return;
+    const int top = Game::Lua::GetTop(L);
+    UI::FrameObject::Push(L, this);
+    Xml::Mixin::ApplyChain(L, top + 1, node, nullptr, DisplayName());
+    LoadNode(L, top + 1, *this, node);
+    Game::Lua::SetTop(L, top);
     RunScript(S_ONLOAD, 0);
 }
 
