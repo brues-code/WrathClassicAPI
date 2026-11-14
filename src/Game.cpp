@@ -49,7 +49,12 @@ namespace Lua {
     F(PCall,       lua_pcall,       LUA_PCALL)        \
     F(RawSetI,     lua_rawseti,     LUA_RAW_SETI)     \
     F(Next,        lua_next,        LUA_NEXT)         \
-    F(CheckStack,  lua_checkstack,  LUA_CHECK_STACK)
+    F(CheckStack,  lua_checkstack,  LUA_CHECK_STACK)  \
+    F(GetTable,    lua_gettable,    LUA_GET_TABLE)    \
+    F(NewUserdata, lua_newuserdata, LUA_NEW_USERDATA) \
+    F(GetMetatable,lua_getmetatable,LUA_GET_METATABLE)\
+    F(SetMetatable,lua_setmetatable,LUA_SET_METATABLE)\
+    F(ToPointer,   lua_topointer,   LUA_TO_POINTER)
 
 #define WRATHCLASSICAPI_BIND_LUA(Name, Typedef, Offset) \
     const Typedef##_t Name = reinterpret_cast<Typedef##_t>(Offsets::Offset);

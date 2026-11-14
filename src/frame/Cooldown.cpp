@@ -63,6 +63,7 @@
 #include "Game.h"
 #include "Offsets.h"
 #include "frame/Methods.h"
+#include "text/NumericFormatter.h"
 #include "texture/Load.h"
 #include "ui/FrameObject.h"
 #include "xml/Node.h"
@@ -72,6 +73,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 namespace Frame::Cooldown {
@@ -135,7 +137,8 @@ struct Fields {
     float abbrevThreshold = 120.0f;      // s: below it, m:ss in place of whole minutes
     float millisecondsThreshold = 0.0f;  // s: below it, tenths
     uint32_t minCountdownDuration = 2000; // ms: no numbers for a cooldown this short or shorter
-    char countdownText[16] = {};         // what the font string shows
+    Text::NumericFormatter::Formatter *countdownFormatter = nullptr; // one reference, or null
+    std::string countdownText;           // what the font string shows; a formatter's text has no bound
 };
 
 constexpr size_t kObjectSize = Offsets::COOLDOWN_SIZE + sizeof(Fields *);
@@ -441,7 +444,15 @@ void FormatCountdown(char (&out)[16], uint32_t ms, float abbrevThreshold, float 
 
 // The numbers while the sweep runs, nothing otherwise; SetText only when the
 // text changes.
+//
+// A countdown formatter replaces FormatCountdown and both thresholds, and
+// gets the seconds left unrounded; the gates stay (retail probe: "%.3f"
+// showed "28.118" 1.882 s into a 30 s cooldown with the milliseconds
+// threshold at 100, and nothing on a 1.5 s one). A format error shows no
+// numbers. The formatter is held for the call: the format can collect, and
+// a finalizer can replace this frame's formatter.
 void UpdateCountdown(void *frame) {
+    namespace Formatters = Text::NumericFormatter;
     Fields &f = F(frame);
     if (f.countdown == nullptr)
         return;
@@ -450,14 +461,28 @@ void UpdateCountdown(void *frame) {
     const bool shown = !f.hideCountdownNumbers && !Flashing(frame) && !f.done && duration > f.minCountdownDuration &&
                        elapsed < duration && g_countdownCVar != nullptr &&
                        At<int32_t>(g_countdownCVar, Offsets::OFF_CVAR_INT_VALUE) != 0;
-    char text[16] = "";
-    if (shown)
-        FormatCountdown(text, duration - elapsed, f.abbrevThreshold, f.millisecondsThreshold);
-    if (std::strcmp(text, f.countdownText) == 0)
-        return;
-    std::memcpy(f.countdownText, text, sizeof(text));
-    reinterpret_cast<void(__fastcall *)(void *, void *, const char *, int)>(Offsets::FUN_FONTSTRING_SET_TEXT)(
-        f.countdown, nullptr, text, 1);
+    char numbers[16] = "";
+    const char *text = numbers;
+    void *L = nullptr;
+    int top = 0;
+    Formatters::Formatter *formatter = f.countdownFormatter;
+    if (shown && formatter != nullptr && (L = Game::Lua::State()) != nullptr) {
+        top = Game::Lua::GetTop(L);
+        Formatters::Retain(formatter);
+        text = Formatters::Format(L, formatter, (duration - elapsed) / 1000.0);
+        Formatters::Release(formatter);
+        if (text == nullptr)
+            text = "";
+    } else if (shown) {
+        FormatCountdown(numbers, duration - elapsed, f.abbrevThreshold, f.millisecondsThreshold);
+    }
+    if (f.countdownText != text) {
+        f.countdownText.assign(text);
+        reinterpret_cast<void(__fastcall *)(void *, void *, const char *, int)>(Offsets::FUN_FONTSTRING_SET_TEXT)(
+            f.countdown, nullptr, text, 1);
+    }
+    if (L != nullptr)
+        Game::Lua::SetTop(L, top);
 }
 
 // ---- the timer ----------------------------------------------------------------------
@@ -540,6 +565,7 @@ VTable<Offsets::VTBL_COOLDOWN_LAYOUT_SLOTS> g_layoutVtable;
 void *__fastcall DeletingDestructor(void *self, void *, uint32_t flags) {
     if (Fields *f = FieldsOf(self)) {
         Texture::ReleaseHandle(f->blingTexture);
+        Text::NumericFormatter::Release(f->countdownFormatter);
         reinterpret_cast<void(__fastcall *)(ScriptIx *, void *)>(Offsets::FUN_SCRIPTIX_DESTRUCTOR)(&f->onCooldownDone,
                                                                                                nullptr);
         delete f;
@@ -1006,6 +1032,41 @@ template <auto Member> int __cdecl Script_GetNumber(void *L) {
     return 1;
 }
 
+// The frame shares the formatter: a later SetBreakpoints on it shows (retail
+// probe). The text follows at the next update.
+int __cdecl Script_SetCountdownFormatter(void *L) {
+    namespace Formatters = Text::NumericFormatter;
+    void *frame = Self(L);
+    if (frame == nullptr)
+        return 0;
+    Formatters::Formatter *formatter = nullptr;
+    if (Game::Lua::Type(L, 2) > Game::Lua::TYPE_NIL) {
+        formatter = Formatters::ToFormatter(L, 2);
+        if (formatter == nullptr) {
+            Game::Lua::Error(L, "Usage: %s:SetCountdownFormatter([formatter])", FrameName(frame));
+            return 0;
+        }
+        Formatters::Retain(formatter);
+    }
+    Fields &f = F(frame);
+    Formatters::Release(f.countdownFormatter);
+    f.countdownFormatter = formatter;
+    return 0;
+}
+
+// A new Lua object for the formatter each call, as retail's (probe:
+// rawequal(GetCountdownFormatter(), formatter) is false).
+int __cdecl Script_GetCountdownFormatter(void *L) {
+    void *frame = Self(L);
+    if (frame == nullptr)
+        return 0;
+    if (Text::NumericFormatter::Formatter *formatter = F(frame).countdownFormatter)
+        Text::NumericFormatter::Push(L, formatter);
+    else
+        Game::Lua::PushNil(L);
+    return 1;
+}
+
 constexpr char kUsageAbbrev[] = "SetCountdownAbbrevThreshold(seconds)";
 constexpr char kUsageMilliseconds[] = "SetCountdownMillisecondsThreshold(seconds)";
 constexpr char kUsageMinimum[] = "SetMinimumCountdownDuration(milliseconds)";
@@ -1044,6 +1105,8 @@ const Frame::Methods::Entry kMethods[] = {
     {"GetCountdownMillisecondsThreshold", &Script_GetNumber<&Fields::millisecondsThreshold>},
     {"SetMinimumCountdownDuration", &Script_SetNumber<&Fields::minCountdownDuration, kUsageMinimum>},
     {"GetMinimumCountdownDuration", &Script_GetNumber<&Fields::minCountdownDuration>},
+    {"SetCountdownFormatter", &Script_SetCountdownFormatter},
+    {"GetCountdownFormatter", &Script_GetCountdownFormatter},
 };
 
 void __cdecl RegisterScriptMethods(void *L) {

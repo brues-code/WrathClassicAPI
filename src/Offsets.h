@@ -932,7 +932,7 @@ enum Offsets {
     //     a malformed Table object in scope and crashed the next
     //     `_G` rehash in `luaH_resize → numusearray`.
     //   * `lua_rawget`/`lua_rawset` at 0x0084E600/0x0084E970 vs
-    //     `lua_gettable`/`lua_settable` at 0x0084E590/0x0084E8D0 —
+    //     `lua_gettable`/`lua_settable` at 0x0084E560/0x0084E8D0 —
     //     the metamethod-aware pair is at the lower addresses.
     LUA_GET_TOP       = 0x0084DBD0, // int  lua_gettop(L)
     LUA_SET_TOP       = 0x0084DBF0, // void lua_settop(L, idx)
@@ -977,6 +977,15 @@ enum Offsets {
     // lua_xmove (0x0084DB10) / lua_newthread (0x0084DB90), matching
     // lapi.c's declaration order.
     LUA_CHECK_STACK   = 0x0084DAB0, // int  lua_checkstack(L, size) — 0 = can't grow
+    // The decompiled client's lapi.c (`// OFFSET:` tags), checked against Wow.exe.
+    LUA_GET_TABLE     = 0x0084E560, // void lua_gettable(L, idx) — metamethod-aware
+    LUA_NEW_USERDATA  = 0x0084F0F0, // void *lua_newuserdata(L, size)
+    LUA_GET_METATABLE = 0x0084E730, // int  lua_getmetatable(L, idx)
+    LUA_SET_METATABLE = 0x0084EA90, // int  lua_setmetatable(L, idx)
+    LUA_TO_POINTER    = 0x0084E210, // const void *lua_topointer(L, idx)
+    // str_format (lstrlib.c) — string.format's C function, called directly
+    // so a replaced string.format cannot change what it writes.
+    FUN_LUA_STR_FORMAT = 0x00853C50,
 
     // `FrameScript_FireOnUpdate` — engine's per-frame dispatcher that
     // fires every Lua-bound `OnUpdate` handler. Cross-checked against

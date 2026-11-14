@@ -87,6 +87,11 @@ using lua_pcall_t = int(__cdecl *)(void *L, int nargs, int nresults, int errfunc
 using lua_rawseti_t = void(__cdecl *)(void *L, int idx, int n);
 using lua_next_t = int(__cdecl *)(void *L, int idx);
 using lua_checkstack_t = int(__cdecl *)(void *L, int size);
+using lua_gettable_t = void(__cdecl *)(void *L, int idx);
+using lua_newuserdata_t = void *(__cdecl *)(void *L, unsigned int size);
+using lua_getmetatable_t = int(__cdecl *)(void *L, int idx);
+using lua_setmetatable_t = int(__cdecl *)(void *L, int idx);
+using lua_topointer_t = const void *(__cdecl *)(void *L, int idx);
 
 extern const lua_isnumber_t IsNumber;
 extern const lua_isstring_t IsString;
@@ -161,6 +166,17 @@ extern const lua_next_t Next;
 // LUA_MINSTACK (20) free slots, so call this before pushing a count the
 // caller controls (e.g. the slot list `C_UnitAuras.GetAuraSlots` returns).
 extern const lua_checkstack_t CheckStack;
+
+// Metamethod-aware `t[k]` (lua_gettable): pops the key, pushes the value.
+extern const lua_gettable_t GetTable;
+// A new full userdata of `size` bytes, pushed.
+extern const lua_newuserdata_t NewUserdata;
+// Pushes the value's metatable and returns 1, or pushes nothing and returns 0.
+extern const lua_getmetatable_t GetMetatable;
+// Pops a table and makes it the metatable of the value at `idx`.
+extern const lua_setmetatable_t SetMetatable;
+// The value's address (tables, functions, userdata, threads), else null.
+extern const lua_topointer_t ToPointer;
 
 // lua_tostring is implemented in 5.1 as `lua_tolstring(L, idx, NULL)`.
 // Wrap it so callers can write `Game::Lua::ToString(L, n)`.
