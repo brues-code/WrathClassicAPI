@@ -3500,6 +3500,45 @@ enum Offsets {
     FUN_SIMPLETEXTURE_SET_SHADER = 0x00481700, // __thiscall(texture, CGxShader *), ret 4
     OFF_SIMPLETEXTURE_SHADER = 0xDC,
     IMAGE_MODE_DESATURATE = 1,
+
+    // --- Partial desaturation (src/texture/Desaturation.cpp) -----------------
+    //
+    // CRenderBatch::QueueTexture — `__thiscall(batch, CSimpleTexture *)`, ret 4:
+    // a texture's draw, which queues one entry (FUN_RENDERBATCH_QUEUE) with the
+    // texture's HTEXTURE, blend (+0xD8), corners, texcoords (+0x140, final once
+    // it returns), colors and shader (+0xDC). It queues nothing while the
+    // texture has no renderable yet.
+    FUN_RENDERBATCH_QUEUE_TEXTURE = 0x004847A0,
+    OFF_SIMPLETEXTURE_BLEND = 0xD8,
+    OFF_SIMPLETEXTURE_TEXCOORDS = 0x140,
+    // The qsort comparator CRenderBatch::Finish (0x00484450) sorts a rebuilt
+    // batch's entries with — `int __cdecl(const entry *, const entry *)`: by
+    // renderable (+0x04), then blend (+0x08, Alpha at least when the entry has
+    // colors, +0x1C), then pixel shader address (+0x0C).
+    FUN_RENDERBATCH_SORT_BY_TEXTURE = 0x00482770,
+    OFF_RENDER_ENTRY_RENDERABLE = 0x04,
+    OFF_RENDER_ENTRY_BLEND = 0x08,
+    OFF_RENDER_ENTRY_COLORS = 0x1C,
+    // CSimpleRegion's vertex colors: a count (0 = white, 1 = one for every
+    // corner, 4 = one each) and 4 CImVector (BGRA), the alpha already scaled
+    // by the frame's.
+    OFF_REGION_COLOR_COUNT = 0xA8,
+    OFF_REGION_COLORS = 0xAC,
+    // CSimpleRegion::OnColorChanged — `__thiscall(region, bool changed)`, ret 4.
+    // Every write of the colors goes through it (SetVertexColor, gradients,
+    // the frame's UpdateAlpha 0x00491680); a fade rewrites the alphas in place
+    // without rebuilding the batch, which reads them through its pointer.
+    FUN_REGION_ON_COLOR_CHANGED = 0x00487D70,
+    // CSimpleRegion::OnRegionChanged — `__thiscall(region)`: marks the
+    // region's draw layer for a rebuild.
+    FUN_REGION_ON_REGION_CHANGED = 0x00487CA0,
+    // CSimpleTexture::SetTexture(fileName, wrapU, wrapV, filter, imageMode) —
+    // `__thiscall`, ret 0x14. A new, non-empty file sets the shader back to the
+    // image mode's (Script SetTexture passes Normal), dropping SetDesaturated.
+    FUN_SIMPLETEXTURE_SET_TEXTURE_FILE = 0x004859E0,
+    // CSimpleTexture::s_objectType, set lazily from VAR_SCRIPTOBJECT_TYPE_COUNTER
+    // (Script_IsDesaturated 0x0048CA30).
+    VAR_SIMPLETEXTURE_OBJECT_TYPE = 0x00B4793C,
     // CImVector::Set — `__thiscall(color, float a, float r, float g, float b)`,
     // ret 0x10: each channel rounded to 0..255.
     FUN_CIMVECTOR_SET = 0x0048BD20,

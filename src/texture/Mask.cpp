@@ -44,14 +44,16 @@
 // from a separate, never-atlased load of the same file (MaskHandle).
 //
 // Mask state is keyed by the CSimpleTexture pointer, which is also what a
-// batch entry's positions pointer resolves to. A destructor co-hook drops a
+// batch entry's positions pointer resolves to. texture/Lifetime drops a
 // region's state (as base and as mask) when it dies, so pooled memory can
 // never inherit a stale mask. An SEH latch turns the feature off on a draw fault.
 
 #include "Game.h"
 #include "Offsets.h"
 #include "frame/Methods.h"
+#include "texture/Lifetime.h"
 #include "texture/Load.h"
+#include "texture/Methods.h"
 
 #include <windows.h>
 
@@ -95,10 +97,6 @@ std::unordered_map<void *, MaskLoad> g_maskLoads;
 // --- engine entry points -----------------------------------------------------
 
 using BatchDraw_t = void(__cdecl *)(void *batch);
-using Walker_t = void(__cdecl *)(void *L);
-using RegisterFrameMethods_t = void(__cdecl *)(void *L, const void *table, int count);
-// __thiscall(this, uint8_t flags) as a dummy-EDX __fastcall.
-using Dtor_t = void *(__fastcall *)(void *self, void *edx, uint8_t flags);
 
 using LayoutIsDirty_t = uint32_t(__fastcall *)(void *layout);
 using LayoutResolve_t = void(__fastcall *)(void *layout, void *edx, int now);
@@ -114,8 +112,6 @@ using GxStateOp_t = void(__fastcall *)(void *dev);
 using GxTexMtxPushLoad_t = void(__fastcall *)(void *dev, void *edx, int unit, const float *m16);
 
 BatchDraw_t g_batchDrawOriginal = nullptr;
-Walker_t g_textureWalkerOriginal = nullptr;
-Dtor_t g_dtorOriginal = nullptr;
 
 // --- textures and rects ------------------------------------------------------
 
@@ -411,15 +407,12 @@ void Forget(void *region) {
     }
 }
 
-void *__fastcall Dtor_h(void *self, void *edx, uint8_t flags) {
-    if (self != nullptr && (!g_pathMasks.empty() || !g_baseMasks.empty() || !g_maskLoads.empty()))
-        Forget(self);
-    return g_dtorOriginal(self, edx, flags);
+void OnDestroyed(const void *region) {
+    if (!g_pathMasks.empty() || !g_baseMasks.empty() || !g_maskLoads.empty())
+        Forget(const_cast<void *>(region));
 }
 
-static const Game::HookAutoRegister _dtorHook{Offsets::FUN_SIMPLETEXTURE_DTOR,
-                                              reinterpret_cast<void *>(&Dtor_h),
-                                              reinterpret_cast<void **>(&g_dtorOriginal)};
+static const Texture::Lifetime::OnDestroyed _destroyed{&OnDestroyed};
 
 void PrepareForReload() {
     for (auto &kv : g_pathMasks)
@@ -584,15 +577,8 @@ const Frame::Methods::Entry kFrameMethods[] = {
     {"CreateMaskTexture", &Script_CreateMaskTexture},
 };
 
-void __cdecl TextureWalker_h(void *L) {
-    g_textureWalkerOriginal(L);
-    reinterpret_cast<RegisterFrameMethods_t>(Offsets::FUN_REGISTER_FRAME_METHODS)(
-        L, kTextureMethods, static_cast<int>(std::size(kTextureMethods)));
-}
-
-static const Game::HookAutoRegister _textureWalkerHook{
-    Offsets::FUN_TEXTURE_METHODS_WALKER, reinterpret_cast<void *>(&TextureWalker_h),
-    reinterpret_cast<void **>(&g_textureWalkerOriginal)};
+static const Texture::Methods::AutoRegister _textureMethods{
+    kTextureMethods, static_cast<int>(std::size(kTextureMethods))};
 
 static const Frame::Methods::AutoRegister _frameMethods{
     kFrameMethods, static_cast<int>(std::size(kFrameMethods))};

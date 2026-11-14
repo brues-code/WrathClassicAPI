@@ -202,6 +202,7 @@ Conventions:
   - [`Texture:GetNumMaskTextures()`](#texturegetnummasktextures)
   - [`Texture:GetMaskTexture(index)`](#texturegetmasktextureindex)
   - [`Texture:SetMask(path)`](#texturesetmaskpath)
+  - [`Texture:SetDesaturation(amount)` / `Texture:GetDesaturation()`](#texturesetdesaturationamount--texturegetdesaturation)
 - [Time](#time)
   - [`GetServerTime()`](#getservertime)
   - [`C_DateAndTime.GetCurrentCalendarTime()`](#c_dateandtimegetcurrentcalendartime)
@@ -3045,8 +3046,12 @@ CanDualWield()   -- true on a rogue; false on a mage
 | `SetReverseFill(isReverseFill)` / `GetReverseFill()` | Fills the bar from the right, or from the top when it is vertical. Default `false`. |
 | `SetFillStyle(fillStyle)` / `GetFillStyle()` | How the bar fills as its value grows: an `Enum.StatusBarFillStyle` value, or one of the names `"STANDARD"`, `"STANDARD_NO_RANGE_FILL"`, `"CENTER"` and `"REVERSE"`. Default `Standard`. |
 | `SetColorFill(r, g, b [, a])` | Fills the bar texture with a solid colour. A bar with no texture gets one. |
-| `SetStatusBarDesaturated(desaturated)` / `IsStatusBarDesaturated()` | Draws the bar texture in grey. A bar with no texture is not desaturated. |
+| `SetStatusBarDesaturation(desaturation)` / `GetStatusBarDesaturation()` | How much colour the bar texture loses, from `0` (full colour) to `1` (grey): [`SetDesaturation`](#texturesetdesaturationamount--texturegetdesaturation) on the bar texture. A new bar image starts with full colour. |
+| `SetStatusBarDesaturated(desaturated)` / `IsStatusBarDesaturated()` | Sets the desaturation to `1` or `0`. `IsStatusBarDesaturated` returns `true` while it is more than `0`. |
 | `SetRotatesTexture(rotates)` | Draws the bar texture turned a quarter. A bar with no texture keeps the setting. |
+
+A bar with no texture ignores the desaturation setters, and its getters
+return `0` and `false`.
 
 `Enum.StatusBarFillStyle`:
 
@@ -3313,8 +3318,8 @@ hidden. These are real methods (`:call`) on every Frame and Texture.
 A texture takes up to 7 masks at once, and every mask is applied
 together. Masks follow the mask's position and size every frame, so
 moving, resizing or animating a mask moves the clip with it. Masks do
-not follow `SetRotation`. A masked texture ignores `SetDesaturated`
-while it has masks.
+not follow `SetRotation`. A masked texture ignores `SetDesaturated` and
+`SetDesaturation` while it has masks.
 
 ### `Frame:CreateMaskTexture([name[, layer[, inherits]]])`
 
@@ -3366,6 +3371,31 @@ mask counts toward the 7-mask limit and applies together with any
 ```lua
 icon:SetMask("Interface\\Minimap\\UI-Minimap-Background")
 ```
+
+### `Texture:SetDesaturation(amount)` / `Texture:GetDesaturation()`
+
+Removes some or all of the colour from a texture. `amount` is a number
+from `0` (full colour) to `1` (grey). Values outside this range are
+clamped. `GetDesaturation` returns the amount.
+
+```lua
+icon:SetDesaturation(0.5)   -- half of the colour is gone
+icon:GetDesaturation()      -- 0.5
+```
+
+`SetDesaturated(true)` is the same as `SetDesaturation(1)`, and
+`SetDesaturated(false)` is the same as `SetDesaturation(0)`. All of these
+change the same setting, so `SetDesaturated(false)` also clears a partial
+amount. `IsDesaturated()` returns `1` while the amount is more than `0`,
+and `nil` at `0`.
+
+- A new image file (`SetTexture(path)`) sets the amount back to `0`, as it
+  does for `SetDesaturated`. A solid colour (`SetTexture(r, g, b)`) keeps it.
+- The grey part does not take the `SetVertexColor` tint, as with
+  `SetDesaturated(true)`. At `0.5`, a tinted texture is half tinted colour
+  and half plain grey.
+- With the `ADD` or `MOD` blend modes, the texture is grey from `0.5` and
+  up, and in full colour below `0.5`.
 
 ---
 

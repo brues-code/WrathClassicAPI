@@ -14,7 +14,9 @@
 // The StatusBar fill: `bar:SetReverseFill` / `GetReverseFill`,
 // `SetFillStyle` / `GetFillStyle` and `Enum.StatusBarFillStyle`, the XML
 // `reverseFill` and `fillStyle` attributes, `SetColorFill`, and
-// `SetStatusBarDesaturated` / `IsStatusBarDesaturated`
+// `SetStatusBarDesaturated` / `IsStatusBarDesaturated` and
+// `SetStatusBarDesaturation` / `GetStatusBarDesaturation` (the bar texture's,
+// through texture/Desaturation)
 // (SimpleStatusBarAPIDocumentation.lua; the port of ClassicAPI's
 // src/statusbar/Fill.cpp and BarTexture.cpp).
 //
@@ -49,6 +51,7 @@
 #include "statusbar/Display.h"
 #include "statusbar/Lifetime.h"
 #include "statusbar/Methods.h"
+#include "texture/Desaturation.h"
 #include "ui/FrameObject.h"
 #include "xml/Node.h"
 
@@ -364,36 +367,45 @@ int __cdecl Script_SetColorFill(void *L) {
     return 0;
 }
 
-void *DesaturateShader() {
-    return reinterpret_cast<void *(__cdecl *)(int)>(Offsets::FUN_IMAGE_MODE_PIXEL_SHADER)(
-        Offsets::IMAGE_MODE_DESATURATE);
-}
-
-// Script_SetDesaturated (0x0048C9A0) on the bar texture; a bar with no
-// texture does nothing.
+// The bar texture's desaturation (texture/Desaturation). A bar with no
+// texture ignores the setters and reads 0.
 int __cdecl Script_SetStatusBarDesaturated(void *L) {
     void *bar = Self(L);
     if (bar == nullptr)
         return 0;
-    void *texture = BarTexture(bar);
-    if (texture == nullptr)
-        return 0;
-    void *shader = Flag(L, 2) ? DesaturateShader()
-                              : reinterpret_cast<void *(__cdecl *)(int)>(Offsets::FUN_IMAGE_MODE_PIXEL_SHADER)(0);
-    reinterpret_cast<void(__fastcall *)(void *, void *, void *)>(Offsets::FUN_SIMPLETEXTURE_SET_SHADER)(texture, nullptr,
-                                                                                                     shader);
+    if (void *texture = BarTexture(bar))
+        Texture::Desaturation::Set(texture, Flag(L, 2) ? 1.0 : 0.0);
     return 0;
 }
 
-// Script_IsDesaturated (0x0048CA30) on the bar texture; false with none.
 int __cdecl Script_IsStatusBarDesaturated(void *L) {
     void *bar = Self(L);
     if (bar == nullptr)
         return 0;
     void *texture = BarTexture(bar);
-    void *shader = DesaturateShader();
-    Game::Lua::PushBool(L, texture != nullptr && shader != nullptr &&
-                               At<void *>(texture, Offsets::OFF_SIMPLETEXTURE_SHADER) == shader);
+    Game::Lua::PushBool(L, texture != nullptr && Texture::Desaturation::Get(texture) > 0.0);
+    return 1;
+}
+
+int __cdecl Script_SetStatusBarDesaturation(void *L) {
+    void *bar = Self(L);
+    if (bar == nullptr)
+        return 0;
+    if (!Game::Lua::IsNumber(L, 2)) {
+        Game::Lua::Error(L, "Usage: %s:SetStatusBarDesaturation(desaturation)", FrameName(bar));
+        return 0;
+    }
+    if (void *texture = BarTexture(bar))
+        Texture::Desaturation::Set(texture, Game::Lua::ToNumber(L, 2));
+    return 0;
+}
+
+int __cdecl Script_GetStatusBarDesaturation(void *L) {
+    void *bar = Self(L);
+    if (bar == nullptr)
+        return 0;
+    void *texture = BarTexture(bar);
+    Game::Lua::PushNumber(L, texture != nullptr ? Texture::Desaturation::Get(texture) : 0.0);
     return 1;
 }
 
@@ -407,6 +419,8 @@ const Frame::Methods::Entry kMethods[] = {
     {"SetColorFill", &Script_SetColorFill},
     {"SetStatusBarDesaturated", &Script_SetStatusBarDesaturated},
     {"IsStatusBarDesaturated", &Script_IsStatusBarDesaturated},
+    {"SetStatusBarDesaturation", &Script_SetStatusBarDesaturation},
+    {"GetStatusBarDesaturation", &Script_GetStatusBarDesaturation},
 };
 
 const StatusBar::Methods::AutoRegister _methods{kMethods,
