@@ -181,6 +181,7 @@ Conventions:
   - [`CanDualWield()`](#candualwield)
 - [Status Bar](#status-bar)
   - [`StatusBar` fill methods](#statusbar-fill-methods)
+  - [`StatusBar` easing](#statusbar-easing)
 - [String Util](#string-util)
   - [`C_StringUtil.CreateNumericRuleFormatter()`](#c_stringutilcreatenumericruleformatter)
 - [Swing Timer](#swing-timer)
@@ -3004,6 +3005,29 @@ XML attributes: `reverseFill` and `fillStyle` (one of the names above).
 <StatusBar name="MyBar" reverseFill="true" minValue="0" maxValue="100">
     <BarTexture file="Interface\TargetingFrame\UI-StatusBar"/>
 </StatusBar>
+```
+
+### `StatusBar` easing
+
+`SetValue` and `SetMinMaxValues` take an optional `interpolation`, an
+`Enum.StatusBarInterpolation`. With `ExponentialEaseOut` the fill slides
+to its new place over a few tenths of a second instead of jumping there.
+
+| Method | Description |
+|---|---|
+| `SetValue(value [, interpolation])` | Sets the value. With `ExponentialEaseOut`, the fill eases from where it is shown now. `GetValue` returns the new value at once, and `OnValueChanged` runs once, with it. |
+| `SetMinMaxValues(min, max [, interpolation])` | Sets the range. With `ExponentialEaseOut`, the fill keeps the part of the bar it shows, then eases to its place in the new range. |
+| `GetInterpolatedValue()` | Returns the value the fill shows now: while easing, a value between the old one and the new one. |
+| `IsInterpolating()` | Returns `true` while the fill eases. |
+| `SetToTargetValue()` | Ends the ease and shows the value at once. |
+
+`Enum.StatusBarInterpolation`: `Immediate` (`0`, the default) and
+`ExponentialEaseOut` (`1`). Any other `interpolation` value is treated as
+`Immediate`. A `SetValue` or `SetMinMaxValues` without `ExponentialEaseOut`
+ends an ease. A hidden bar holds its ease until it is shown again.
+
+```lua
+bar:SetValue(UnitHealth("target"), Enum.StatusBarInterpolation.ExponentialEaseOut)
 ```
 
 ---

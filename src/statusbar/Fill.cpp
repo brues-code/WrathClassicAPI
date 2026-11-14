@@ -35,7 +35,10 @@
 //
 // The modes live in a table by bar, for every StatusBar however it was made
 // (nameplates build theirs directly, and CGSimpleHealthBar derives from the
-// class), and leave it from the class's two destructor paths.
+// class), and leave it when the bar dies (statusbar/Lifetime).
+//
+// The update hook first advances the bar's ease (statusbar/Display), whose
+// fraction GetAnimValue answers, so an easing bar keeps its fill mode.
 //
 // SetRotatesTexture is the engine's, made safe for a bar with no texture
 // (the engine's dereferences it): the flag is stored, and the bar lays out
@@ -43,7 +46,9 @@
 
 #include "Game.h"
 #include "Offsets.h"
-#include "frame/Methods.h"
+#include "statusbar/Display.h"
+#include "statusbar/Lifetime.h"
+#include "statusbar/Methods.h"
 #include "ui/FrameObject.h"
 #include "xml/Node.h"
 
@@ -164,6 +169,7 @@ void LayOut(void *bar, void *texture, const Mode &mode) {
 }
 
 void __fastcall OnLayerUpdate_h(void *bar, void *, float elapsedSec) {
+    StatusBar::Display::Advance(bar, elapsedSec);
     const Mode *mode = Find(bar);
     if (mode == nullptr || mode->IsDefault()) {
         g_onLayerUpdate(bar, nullptr, elapsedSec);
@@ -182,28 +188,9 @@ const Game::HookAutoRegister _onLayerUpdateHook{Offsets::FUN_STATUSBAR_ON_LAYER_
                                                 reinterpret_cast<void *>(&OnLayerUpdate_h),
                                                 reinterpret_cast<void **>(&g_onLayerUpdate)};
 
-// ---- the bar's lifetime -------------------------------------------------------------
+void Forget(const void *bar) { g_modes.erase(bar); }
 
-using DeletingDestructor_t = void *(__fastcall *)(void *bar, void *, uint32_t flags);
-using Destructor_t = void(__fastcall *)(void *bar, void *);
-DeletingDestructor_t g_deletingDestructor = nullptr;
-Destructor_t g_destructor = nullptr;
-
-void *__fastcall DeletingDestructor_h(void *bar, void *, uint32_t flags) {
-    g_modes.erase(bar);
-    return g_deletingDestructor(bar, nullptr, flags);
-}
-
-void __fastcall Destructor_h(void *bar, void *) {
-    g_modes.erase(bar);
-    g_destructor(bar, nullptr);
-}
-
-const Game::HookAutoRegister _deletingDestructorHook{Offsets::FUN_STATUSBAR_DELETING_DESTRUCTOR,
-                                                     reinterpret_cast<void *>(&DeletingDestructor_h),
-                                                     reinterpret_cast<void **>(&g_deletingDestructor)};
-const Game::HookAutoRegister _destructorHook{Offsets::FUN_STATUSBAR_DESTRUCTOR, reinterpret_cast<void *>(&Destructor_h),
-                                             reinterpret_cast<void **>(&g_destructor)};
+const StatusBar::Lifetime::OnDestroyed _destroyed{&Forget};
 
 // ---- XML ----------------------------------------------------------------------------
 
@@ -422,17 +409,8 @@ const Frame::Methods::Entry kMethods[] = {
     {"IsStatusBarDesaturated", &Script_IsStatusBarDesaturated},
 };
 
-using Walker_t = void(__cdecl *)(void *L);
-Walker_t g_walker = nullptr;
-
-void __cdecl Walker_h(void *L) {
-    g_walker(L);
-    reinterpret_cast<void(__cdecl *)(void *, const Frame::Methods::Entry *, int)>(Offsets::FUN_REGISTER_FRAME_METHODS)(
-        L, kMethods, static_cast<int>(sizeof(kMethods) / sizeof(kMethods[0])));
-}
-
-const Game::HookAutoRegister _walkerHook{Offsets::FUN_STATUSBAR_REGISTER_SCRIPT_METHODS,
-                                         reinterpret_cast<void *>(&Walker_h), reinterpret_cast<void **>(&g_walker)};
+const StatusBar::Methods::AutoRegister _methods{kMethods,
+                                                static_cast<int>(sizeof(kMethods) / sizeof(kMethods[0]))};
 
 void RegisterLuaFunctions() {
     Game::Lua::RegisterIntegerEnum("Enum", "StatusBarFillStyle", kFillStyles,

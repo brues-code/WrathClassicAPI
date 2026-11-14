@@ -3445,10 +3445,19 @@ enum Offsets {
     OFF_STATUSBAR_MIN = 0x2A0,
     OFF_STATUSBAR_MAX = 0x2A4,
     OFF_STATUSBAR_BAR_TEXTURE = 0x2AC, // CSimpleTexture *
+    OFF_STATUSBAR_VALUE = 0x2A8,
     OFF_STATUSBAR_ORIENTATION = 0x2B0, // 0 horizontal, 1 vertical
     VAR_STATUSBAR_OBJECT_TYPE = 0x00DCE440,
     // GetAnimValue — `float __thiscall(bar)`: the filled fraction, 0 for an empty range.
     VTBL_STATUSBAR_GET_ANIM_VALUE = 0xEC,
+    FUN_STATUSBAR_GET_ANIM_VALUE = 0x00961940, // CGSimpleHealthBar keeps it
+    // SetValue — `__thiscall(bar, float)`, ret 4: clamps to the range, and on a
+    // change stores it, marks m_changed and runs OnValueChanged. CGSimpleHealthBar
+    // overrides it (0x00990150).
+    VTBL_STATUSBAR_SET_VALUE = 0xE4,
+    // SetMinMaxValues — `__thiscall(bar, float min, float max)`, ret 8: on a change,
+    // stores it, runs OnMinMaxChanged and applies the value again.
+    FUN_STATUSBAR_SET_MIN_MAX_VALUES = 0x00961800,
     // OnLayerUpdate — `__thiscall(bar, float elapsedSec)`, ret 4: with m_changed,
     // shows the bar texture and moves its four points in by the empty part (the
     // whole image stretched over the filled part; no texture coordinates), or
