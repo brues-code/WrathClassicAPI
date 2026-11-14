@@ -588,7 +588,7 @@ void Actor::LoadXml(const void *node) {
 
 namespace {
 
-Actor *Self(void *L) { return static_cast<Actor *>(ResolveSelf(L, ActorTypeId())); }
+Actor *Self(void *L) { return static_cast<Actor *>(UI::FrameObject::ResolveSelf(L, ActorTypeId())); }
 
 // HasScript / GetScript / SetScript / HookScript, as the engine's animation
 // objects have them (CSimpleAnimGroup_Scripts.cpp 0x004A7480..0x004A7780).

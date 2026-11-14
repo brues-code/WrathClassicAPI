@@ -661,7 +661,7 @@ void *__cdecl CreateModelScene(void *parent) {
 
 // ---- the methods ------------------------------------------------------------------
 
-void *Self(void *L) { return ResolveSelf(L, TypeId()); }
+void *Self(void *L) { return UI::FrameObject::ResolveSelf(L, TypeId()); }
 
 const char *FrameName(void *frame) {
     const char *name =
@@ -1094,27 +1094,6 @@ float FrameAlpha(void *sceneFrame) {
     const uint32_t alpha = At<uint8_t>(sceneFrame, Offsets::OFF_FRAME_ALPHA);
     const uint32_t parentAlpha = At<uint8_t>(sceneFrame, Offsets::OFF_FRAME_PARENT_ALPHA);
     return static_cast<float>(static_cast<uint8_t>(alpha * parentAlpha / 255)) / 255.0f;
-}
-
-void *ResolveSelf(void *L, int typeId) {
-    using IsA_t = bool(__fastcall *)(void *object, void *, int type);
-    if (Game::Lua::Type(L, 1) != Game::Lua::TYPE_TABLE) {
-        Game::Lua::Error(L, "Attempt to find 'this' in non-table object (used '.' instead of ':' ?)");
-        return nullptr;
-    }
-    Game::Lua::RawGetI(L, 1, 0);
-    void *object = Game::Lua::ToUserdata(L, -1);
-    Game::Lua::SetTop(L, -2);
-    if (object == nullptr) {
-        Game::Lua::Error(L, "Attempt to find 'this' in non-framescript object");
-        return nullptr;
-    }
-    auto isA = reinterpret_cast<IsA_t>(At<const void *const *>(object, 0)[Offsets::VTBL_OFF_SCRIPTOBJECT_IS_A / 4]);
-    if (!isA(object, nullptr, typeId)) {
-        Game::Lua::Error(L, "Wrong object type for member function");
-        return nullptr;
-    }
-    return object;
 }
 
 bool NumberArgs(void *L, int first, int count, const char *owner, const char *usage) {

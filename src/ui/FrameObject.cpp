@@ -84,4 +84,26 @@ void Push(void *L, void *frame) {
     Game::Lua::RawGetI(L, Game::Lua::REGISTRY_INDEX, refKey);
 }
 
+void *ResolveSelf(void *L, int typeId) {
+    using IsA_t = bool(__fastcall *)(void *object, void *, int type);
+    if (Game::Lua::Type(L, 1) != Game::Lua::TYPE_TABLE) {
+        Game::Lua::Error(L, "Attempt to find 'this' in non-table object (used '.' instead of ':' ?)");
+        return nullptr;
+    }
+    Game::Lua::RawGetI(L, 1, 0);
+    void *object = Game::Lua::ToUserdata(L, -1);
+    Game::Lua::SetTop(L, -2);
+    if (object == nullptr) {
+        Game::Lua::Error(L, "Attempt to find 'this' in non-framescript object");
+        return nullptr;
+    }
+    const void *const *vtable = *static_cast<const void *const *const *>(object);
+    auto isA = reinterpret_cast<IsA_t>(vtable[Offsets::VTBL_OFF_SCRIPTOBJECT_IS_A / 4]);
+    if (!isA(object, nullptr, typeId)) {
+        Game::Lua::Error(L, "Wrong object type for member function");
+        return nullptr;
+    }
+    return object;
+}
+
 } // namespace UI::FrameObject

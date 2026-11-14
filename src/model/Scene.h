@@ -231,10 +231,6 @@ int ActorMetaTable();
 void CreateActorMetaTable();
 void ReleaseActorMetaTable();
 
-// The script object at stack index 1 when it is of `typeId` (its IsA), else
-// the engine's errors, as FrameScript_GetObjectThis raises them, and null.
-void *ResolveSelf(void *L, int typeId);
-
 // True when the `count` arguments from `first` are numbers; else the
 // engine's usage error, "Usage: <owner>:<usage>".
 bool NumberArgs(void *L, int first, int count, const char *owner, const char *usage);

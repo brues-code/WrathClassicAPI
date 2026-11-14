@@ -33,4 +33,10 @@ namespace UI::FrameObject {
 // in-game Lua state (the same global state ScriptRegister builds into).
 void Push(void *L, void *frame);
 
+// The script object at stack index 1 when it is of `typeId` (its IsA
+// virtual), else null after the engine's own errors, as
+// FrameScript_GetObjectThis (0x004A81B0) raises them. That helper takes L in
+// ESI, so its body is reproduced here instead of called.
+void *ResolveSelf(void *L, int typeId);
+
 } // namespace UI::FrameObject
