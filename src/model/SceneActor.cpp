@@ -56,8 +56,10 @@
 #include "model/Scene.h"
 
 #include "Game.h"
+#include "Guid.h"
 #include "Offsets.h"
 #include "dbc/Store.h"
+#include "item/Arg.h"
 #include "ui/FrameObject.h"
 #include "xml/KeyValues.h"
 #include "xml/Method.h"
@@ -244,9 +246,11 @@ Actor::Actor(void *sceneFrame, const char *name) : frame_(sceneFrame) {
     }
     reinterpret_cast<ScriptRegister_t>(Offsets::FUN_FRAMESCRIPT_OBJECT_SCRIPT_REGISTER)(
         this, nullptr, name_.empty() ? nullptr : name_.c_str());
+    serial = AddLiveActor(this);
 }
 
 Actor::~Actor() {
+    RemoveLiveActor(serial);
     ReleaseModel();
     for (ScriptIx &slot : scripts)
         AssignScript(slot, 0, nullptr);
@@ -313,6 +317,11 @@ void Actor::ReleaseModel() {
     loaded = false;
     animFinished = false;
     heldTimeMs = -1;
+    unitGuid[0] = unitGuid[1] = 0;
+    dressable = false;
+    mainHand = offHand = HandLane{};
+    nextHand = 15;
+    mainHandItemID = offHandItemID = 0;
 }
 
 void Actor::ClearModel() {
@@ -322,7 +331,7 @@ void Actor::ClearModel() {
     RunScript(S_ONMODELCLEARED, 0);
 }
 
-void Actor::SetModel(void *newModel, const char *path, const uint8_t *dressRecord) {
+void Actor::SetModel(void *newModel, const char *path, const uint8_t *dressRecord, const UnitSource *unit) {
     ClearModel();
     ReleaseModel(); // OnModelCleared may have set one: the caller's new model wins
     if (newModel == nullptr)
@@ -336,6 +345,8 @@ void Actor::SetModel(void *newModel, const char *path, const uint8_t *dressRecor
     SetSequenceCallback(model, this);
     ApplyAlpha();
     PlayAnimation();
+    if (unit != nullptr)
+        ShowUnit(*unit);
     // Last: the script may clear or replace the model.
     RunScript(S_ONMODELLOADING, 0);
 }
@@ -824,6 +835,151 @@ int __cdecl Script_GetAnimationVariation(void *L) {
     return 1;
 }
 
+// An optional boolean argument: `fallback` when absent or nil.
+bool OptBool(void *L, int index, bool fallback) {
+    return Game::Lua::Type(L, index) <= Game::Lua::TYPE_NIL ? fallback : Game::Lua::ToBoolean(L, index) != 0;
+}
+
+// SetModelByUnit(unit [, sheatheWeapons [, autoDress [, hideWeapons [,
+// usePlayerNativeForm]]]]) -> success
+int __cdecl Script_SetModelByUnit(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    if (!Game::Lua::IsString(L, 2)) {
+        Game::Lua::Error(L, "Usage: %s:SetModelByUnit(unit [, sheatheWeapons, autoDress, hideWeapons, usePlayerNativeForm])",
+                         actor->DisplayName());
+        return 0;
+    }
+    Game::Lua::PushBool(L, actor->SetModelByUnit(Game::Lua::ToString(L, 2), OptBool(L, 3, false), OptBool(L, 4, true),
+                                                 OptBool(L, 5, false), OptBool(L, 6, true)));
+    return 1;
+}
+
+// GetModelUnitGUID() -> the shown unit's GUID, or nil.
+int __cdecl Script_GetModelUnitGUID(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr || (actor->unitGuid[0] == 0 && actor->unitGuid[1] == 0))
+        return 0;
+    char buf[Guid::STRING_SIZE];
+    Game::Lua::PushString(L, Guid::Format({actor->unitGuid[0], actor->unitGuid[1]}, buf, sizeof buf));
+    return 1;
+}
+
+// IsGeoReady() -> whether the model and its outfit are ready to show.
+int __cdecl Script_IsGeoReady(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    Game::Lua::PushBool(L, actor->loaded);
+    return 1;
+}
+
+// TryOn(itemLinkOrID [, handSlotName [, spellEnchantmentID]]) -> reason. The
+// item as DressUpModel's TryOn takes it (an ID, a link or `item:` string, a
+// trade-skill `enchant:` link for the item its recipe makes, or the name of a
+// cached item); the hand "MAINHANDSLOT" or "SECONDARYHANDSLOT"; the enchant
+// whose glow a weapon shows, the link's by default.
+int __cdecl Script_TryOn(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    // Read first: resolving an item name can use the stack.
+    int hand = -1;
+    if (Game::Lua::Type(L, 3) == Game::Lua::TYPE_STRING) {
+        const char *name = Game::Lua::ToString(L, 3);
+        if (_stricmp(name, "MAINHANDSLOT") == 0)
+            hand = 15;
+        else if (_stricmp(name, "SECONDARYHANDSLOT") == 0)
+            hand = 16;
+    }
+    uint32_t enchants[12] = {};
+    const bool enchantGiven = Game::Lua::IsNumber(L, 4) != 0;
+    if (enchantGiven)
+        enchants[0] = static_cast<uint32_t>(Game::Lua::ToNumber(L, 4));
+    int itemID = 0;
+    const char *text = Game::Lua::Type(L, 2) == Game::Lua::TYPE_STRING ? Game::Lua::ToString(L, 2) : nullptr;
+    if (const char *enchant = text != nullptr ? std::strstr(text, "enchant:") : nullptr) {
+        // A trade-skill link: the item the recipe spell makes (Script_TryOn
+        // 0x00598830: attribute 0x20, the first effect's item).
+        uint8_t spell[Offsets::SPELL_DBC_RECORD_SIZE];
+        const int spellID = std::atoi(enchant + 8);
+        if (spellID > 0 &&
+            reinterpret_cast<int(__thiscall *)(void *, int, void *)>(Offsets::FUN_DBC_COPY_RECORD)(
+                reinterpret_cast<void *>(Offsets::VAR_SPELL_DBC_DESC), spellID, spell) != 0 &&
+            (At<uint32_t>(spell, Offsets::OFF_SPELL_RECORD_ATTRIBUTES) & 0x20) != 0)
+            itemID = At<int32_t>(spell, Offsets::OFF_SPELL_EFFECT_ITEM_TYPE);
+    } else {
+        const Item::Arg::Resolved item = Item::Arg::Resolve(L, 2);
+        itemID = item.itemID;
+        if (!enchantGiven)
+            enchants[0] = static_cast<uint32_t>(item.enchant);
+    }
+    if (itemID <= 0) {
+        reinterpret_cast<void(__cdecl *)(int, ...)>(Offsets::FUN_DISPLAY_ERROR)(Offsets::ERR_NOT_EQUIPPABLE);
+        Game::Lua::PushNumber(L, Actor::TRYON_NOT_EQUIPPABLE);
+        return 1;
+    }
+    Game::Lua::PushNumber(L, actor->TryOn(itemID, enchants, hand));
+    return 1;
+}
+
+// Undress([includeWeapons]): the weapons too unless false.
+int __cdecl Script_Undress(void *L) {
+    if (Actor *actor = Self(L))
+        actor->Undress(OptBool(L, 2, true));
+    return 0;
+}
+
+int __cdecl Script_UndressSlot(void *L) {
+    Actor *actor = Self(L);
+    if (actor != nullptr && NumberArgs(L, 2, 1, actor->DisplayName(), "UndressSlot(inventorySlot)"))
+        actor->UndressSlot(static_cast<int>(Game::Lua::ToNumber(L, 2)));
+    return 0;
+}
+
+int __cdecl Script_DressPlayerSlot(void *L) {
+    Actor *actor = Self(L);
+    if (actor != nullptr && NumberArgs(L, 2, 1, actor->DisplayName(), "DressPlayerSlot(inventorySlot)"))
+        actor->DressPlayerSlot(static_cast<int>(Game::Lua::ToNumber(L, 2)));
+    return 0;
+}
+
+int __cdecl Script_Dress(void *L) {
+    if (Actor *actor = Self(L))
+        actor->Dress();
+    return 0;
+}
+
+// SetSheathed(sheathed [, hidden])
+int __cdecl Script_SetSheathed(void *L) {
+    if (Actor *actor = Self(L))
+        actor->SetSheathed(Game::Lua::ToBoolean(L, 2) != 0, OptBool(L, 3, false));
+    return 0;
+}
+
+int __cdecl Script_GetSheathed(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    Game::Lua::PushBool(L, actor->sheathed);
+    return 1;
+}
+
+int __cdecl Script_SetAutoDress(void *L) {
+    if (Actor *actor = Self(L))
+        actor->autoDress = Game::Lua::ToBoolean(L, 2) != 0;
+    return 0;
+}
+
+int __cdecl Script_GetAutoDress(void *L) {
+    Actor *actor = Self(L);
+    if (actor == nullptr)
+        return 0;
+    Game::Lua::PushBool(L, actor->autoDress);
+    return 1;
+}
+
 // SetSpellVisualKit([spellVisualKitID [, oneShot]]): 0 or none removes the kit.
 int __cdecl Script_SetSpellVisualKit(void *L) {
     Actor *actor = Self(L);
@@ -931,6 +1087,18 @@ const Method kMethods[] = {
     {"HookScript", &Script_HookScript},
     {"SetModelByCreatureDisplayID", &Script_SetModelByCreatureDisplayID},
     {"SetModelByPath", &Script_SetModelByPath},
+    {"SetModelByUnit", &Script_SetModelByUnit},
+    {"GetModelUnitGUID", &Script_GetModelUnitGUID},
+    {"IsGeoReady", &Script_IsGeoReady},
+    {"TryOn", &Script_TryOn},
+    {"Undress", &Script_Undress},
+    {"UndressSlot", &Script_UndressSlot},
+    {"DressPlayerSlot", &Script_DressPlayerSlot},
+    {"Dress", &Script_Dress},
+    {"SetSheathed", &Script_SetSheathed},
+    {"GetSheathed", &Script_GetSheathed},
+    {"SetAutoDress", &Script_SetAutoDress},
+    {"GetAutoDress", &Script_GetAutoDress},
     {"ClearModel", &Script_ClearModel},
     {"IsLoaded", &Script_IsLoaded},
     {"GetModelPath", &Script_GetModelPath},
@@ -982,6 +1150,14 @@ const Game::Lua::EnumIntegerEntry kModelBlendOperation[] = {
     {"Anim", 1},
 };
 
+// Retail's Enum.ItemTryOnReason (UIModelInfoSharedDocumentation.lua).
+const Game::Lua::EnumIntegerEntry kItemTryOnReason[] = {
+    {"Success", Actor::TRYON_SUCCESS},
+    {"WrongRace", Actor::TRYON_WRONG_RACE},
+    {"NotEquippable", Actor::TRYON_NOT_EQUIPPABLE},
+    {"DataPending", Actor::TRYON_DATA_PENDING},
+};
+
 } // namespace
 
 void CreateActorMetaTable() {
@@ -990,6 +1166,8 @@ void CreateActorMetaTable() {
         Game::Lua::State(), &RegisterScriptMethods);
     Game::Lua::RegisterIntegerEnum("Enum", "ModelBlendOperation", kModelBlendOperation,
                                    static_cast<int>(sizeof(kModelBlendOperation) / sizeof(kModelBlendOperation[0])));
+    Game::Lua::RegisterIntegerEnum("Enum", "ItemTryOnReason", kItemTryOnReason,
+                                   static_cast<int>(sizeof(kItemTryOnReason) / sizeof(kItemTryOnReason[0])));
 }
 
 void ReleaseActorMetaTable() { g_metaTable = 0; }

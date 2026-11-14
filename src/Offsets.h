@@ -3132,6 +3132,107 @@ enum Offsets {
     M2MODEL_FFLAGS_STOP_SET_ATTACHED = 0x20000,
     M2MODEL_FFLAGS_LIVE_PARTICLES = 0x400,
     OFF_M2MODEL_DIFFUSE_TINT = 0x180, // float r, g, b; 1 by default
+
+    // A unit on an actor (src/model/SceneOutfit.cpp), as the engine's own
+    // PlayerModel and DressUpModel show one (WoW/Source/Ui/CharacterModelBase,
+    // DressUpModelFrame). CGCharacterModelBase::SetUpModel (0x005975E0):
+    // ReadyModelForUI, the frame's model for the unit (vtable +0xFC: a copy
+    // of the unit's world model, or DressUpModel's model of the native
+    // display), WaitForLoad, RemoveVisuals, SetModel, then the hand grips.
+    // DressUpModel's SetModel (0x005989E0) gives a player's model a component
+    // of its own, tries on each visible item (TryOnWithVisual 0x005980D0) and
+    // takes the hand lanes from the unit's virtual items.
+    //
+    // ReadyModelForUI — `int __cdecl(CGUnit_C *, uint flags)`: 1 when the
+    // unit is drawable now; else 0, and the unit fires UNIT_PORTRAIT_UPDATE /
+    // UNIT_MODEL_CHANGED (flags 3) once it is.
+    FUN_READY_MODEL_FOR_UI = 0x00617A60,
+    FUN_M2SCENE_DUPLICATE_MODEL = 0x0081F970, // CM2Model *__thiscall(scene, CM2Model *src, uint flags), ret 8
+    FUN_M2MODEL_WAIT_FOR_LOAD = 0x00823ED0,   // __thiscall(model, int), ret 4
+    // CM2Model attachments: the first child +0x58, a child's next +0x60, its
+    // attachment ID +0x50. IDs 1 / 2 are the right / left hand.
+    OFF_M2MODEL_ATTACH_LIST = 0x58,
+    OFF_M2MODEL_ATTACH_NEXT = 0x60,
+    OFF_M2MODEL_ATTACHMENT_ID = 0x50,
+    M2_ATTACH_HAND_RIGHT = 1,
+    M2_ATTACH_HAND_LEFT = 2,
+    // CCharacterComponent statics, __cdecl. CloseFingers' hand: 0 right, 1 left.
+    // AddHandItem (model, const ItemDisplayInfoRec *, invSlot 15 / 16 / 17,
+    // sheatheType, bool sheathed, bool shield, bool rangedInRightHand, int
+    // itemVisual): the item's model in the hand, or at its sheath point.
+    // RemoveHandItem (model, invSlot, sheatheType, bool shield).
+    // ValidateComponentData (ComponentData *, int context): DressUpModel's
+    // context is 2.
+    FUN_COMPONENT_REMOVE_VISUALS = 0x004EAF70,
+    FUN_COMPONENT_CLOSE_FINGERS = 0x004E7700,
+    FUN_COMPONENT_ADD_HAND_ITEM = 0x004EACD0,
+    FUN_COMPONENT_REMOVE_HAND_ITEM = 0x004EB070,
+    FUN_COMPONENT_VALIDATE_DATA = 0x004E9D50,
+    COMPONENT_CONTEXT_DRESS_UP = 2,
+    COMPONENT_DATA_ACTIVE_PLAYER = 0x2, // ComponentData flags
+    FUN_COMPONENT_REMOVE_ITEM = 0x004EE460,      // __thiscall(component, ITEM_SLOT), ret 4
+    FUN_COMPONENT_APPLY_GUILD_COLOR = 0x004EC1C0, // __thiscall(component, emblem, emblemColor, border, borderColor, background), ret 0x14
+    // ITEM_SLOT (the component's armor slots): head 0, shoulder 1, shirt 2,
+    // chest 3, waist 4, legs 5, feet 6, wrist 7, hands 8, tabard 9, back 10;
+    // RemoveItem runs over 0..11.
+    COMPONENT_ITEM_SLOT_TABARD = 9,
+    COMPONENT_ITEM_SLOT_COUNT = 12,
+    // ItemDisplayInfo: g_itemDisplayInfoDB.GetRecord — `int __thiscall(store,
+    // int id, ItemDisplayInfoRec *out)`, ret 8: copies the 0x64-byte record.
+    FUN_ITEMDISPLAYINFO_GET_RECORD = 0x004CFD90,
+    VAR_ITEMDISPLAYINFO_DB = 0x00AD3DDC,
+    ITEMDISPLAYINFO_RECORD_SIZE = 0x64,
+    OFF_ITEMDISPLAYINFO_FLAGS = 0x28, // bit 0: a tabard that takes the guild's colours
+    OFF_ITEMDISPLAYINFO_ITEM_VISUAL = 0x5C,
+    VAR_ITEMVISUALS_DBC_MAX_INDEX = 0x00AD3F98,
+    VAR_ITEMVISUALS_DBC_MIN_INDEX = 0x00AD3F9C,
+    VAR_ITEMVISUALS_DBC_INDEX_TABLE = 0x00AD3FAC,
+    VAR_SPELLITEMENCHANTMENT_DBC_MAX_INDEX = 0x00AD48BC,
+    VAR_SPELLITEMENCHANTMENT_DBC_MIN_INDEX = 0x00AD48C0,
+    VAR_SPELLITEMENCHANTMENT_DBC_INDEX_TABLE = 0x00AD48D0,
+    OFF_SPELLITEMENCHANTMENT_ITEM_VISUAL = 0x3C,
+    // ItemStats_C fields TryOnWithVisual reads (with OFF_ITEMSTATS_*).
+    OFF_ITEMSTATS_SPELL_ID = 0x100,      // int[5]
+    OFF_ITEMSTATS_SPELL_TRIGGER = 0x114, // int[5]; 6 = learn
+    OFF_ITEMSTATS_SHEATHE_TYPE = 0x198,
+    // Spell.dbc record copy (FUN_DBC_COPY_RECORD) fields for a recipe's item.
+    OFF_SPELL_EFFECT_TRIGGER_SPELL = 0x1D0,
+    OFF_SPELL_EFFECT_ITEM_TYPE = 0x1AC,
+    SPELL_EFFECT_CREATE_ITEM = 24,
+    SPELL_EFFECT_LEARN_SPELL = 36,
+    FUN_ITEM_CAN_GO_IN_SLOT = 0x007082B0, // bool __cdecl(int itemId, uint invSlot, int)
+    // CGGameUI::DisplayError — `void __cdecl(int code, ...)`.
+    FUN_DISPLAY_ERROR = 0x005216F0,
+    ERR_NOT_EQUIPPABLE = 21,
+    // GuildGetGuildTabard — `bool __cdecl(uint guidLo, uint guidHi, int
+    // guildId, callback, param, int *emblem, int *emblemColor, int *border,
+    // int *borderColor, int *background)`.
+    FUN_GUILD_GET_TABARD = 0x007EADA0,
+    // CGPlayer_C::GetVisibleItem — `VisibleItem_C *__thiscall(player, slot)`,
+    // ret 4: {int itemId, uint16 enchants[2]}, for slots 0..18.
+    // VisibleItem_C::GetItemEnchantmentVisualID — `int __thiscall(item)`.
+    FUN_PLAYER_GET_VISIBLE_ITEM = 0x006DE330,
+    FUN_VISIBLE_ITEM_ENCHANT_VISUAL = 0x00759050,
+    // CGUnit_C::GetVirtualItem — vtable +0x12C, `CGUnitVirtualItem
+    // *__thiscall(unit, slot 0 main / 1 off, bool ignoreDisarm)`, ret 8. The
+    // 8-byte lane: class +0, subclass +1, inventoryType +4, sheatheType +5.
+    VTBL_UNIT_GET_VIRTUAL_ITEM = 0x12C,
+    OFF_UNIT_WORLD_MODEL = 0xB4,
+    // Unit and player descriptor fields (OFF_UNIT_DESCRIPTOR, OFF_CGPLAYER_INFO).
+    OFF_UNIT_FIELD_RACE = 0x44,
+    OFF_UNIT_FIELD_CLASS = 0x45,
+    OFF_UNIT_FIELD_DISPLAYID = 0xF4,
+    OFF_UNIT_FIELD_NATIVEDISPLAYID = 0xF8,
+    OFF_PLAYER_FIELD_FLAGS = 0x08, // 0x400 helm hidden, 0x800 cloak hidden
+    OFF_PLAYER_FIELD_GUILD_ID = 0x0C,
+    OFF_PLAYER_FIELD_SKIN = 0x14,
+    OFF_PLAYER_FIELD_FACE = 0x15,
+    OFF_PLAYER_FIELD_HAIR_STYLE = 0x16,
+    OFF_PLAYER_FIELD_HAIR_COLOR = 0x17,
+    OFF_PLAYER_FIELD_FACIAL_HAIR = 0x18,
+    OFF_PLAYER_FIELD_SEX = 0x1C,
+    PLAYER_FLAG_HIDE_HELM = 0x400,
+    PLAYER_FLAG_HIDE_CLOAK = 0x800,
     OFF_M2BONE_SEQUENCE_CURRENT_TIME = 0x40, // M2ModelBoneSeq::m_currentTime
     OFF_M2BONE_SEQUENCE_INDEX = 0x48,        // M2ModelBoneSeq::m_sequenceIndex (uint16)
     OFF_M2SHARED_DATA = 0x150,               // M2Data *

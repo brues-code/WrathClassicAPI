@@ -93,10 +93,19 @@ class Actor {
     // The model's alpha: the actor's times the scene frame's.
     void ApplyAlpha();
 
+    // The unit a model shows (SetModelByUnit), and how.
+    struct UnitSource {
+        void *unit;
+        bool dressable; // the player's native model, dressed by the actor
+        bool autoDress, sheatheWeapons, hideWeapons;
+    };
     // Shows `model` (one reference, which the actor takes over); null clears.
     // `dressRecord` is a creature display's CreatureDisplayInfoExtra row with
     // a baked NPC texture, dressed once the model loads; null for none.
-    void SetModel(void *model, const char *path, const uint8_t *dressRecord);
+    // `unit` is the unit the model shows, set up before OnModelLoading runs.
+    void SetModel(void *model, const char *path, const uint8_t *dressRecord, const UnitSource *unit = nullptr);
+    // SetModel's unit step (model/SceneOutfit.cpp).
+    void ShowUnit(const UnitSource &unit);
     void ClearModel();
     void PlayAnimation();
     // Loads an <Actor> template (its inherits chain first), then runs OnLoad.
@@ -151,12 +160,56 @@ class Actor {
     };
     std::vector<KitEffect> kitEffects;
 
+    // A unit's model (model/SceneOutfit.cpp). Shows the unit `token` names; a
+    // player in its native form gets a dressable model, as DressUpModel shows
+    // one, and any other unit a copy of its world model, as PlayerModel does.
+    bool SetModelByUnit(const char *token, bool sheatheWeapons, bool autoDress, bool hideWeapons,
+                        bool usePlayerNativeForm);
+    // SetModelByUnit for the unit object `unit`.
+    bool ShowUnitObject(void *unit, bool sheatheWeapons, bool autoDress, bool hideWeapons, bool usePlayerNativeForm);
+    // Retail's Enum.ItemTryOnReason.
+    enum TryOnReason { TRYON_SUCCESS = 0, TRYON_WRONG_RACE = 1, TRYON_NOT_EQUIPPABLE = 2, TRYON_DATA_PENDING = 3 };
+    // Shows an item on a dressable model (DressUpModel's TryOn); a TryOnReason.
+    // `enchants` is an item link's 12 enchant IDs, or null; `hand` is 15, 16
+    // or -1 for the engine's choice.
+    int TryOn(int itemID, const uint32_t *enchants, int hand);
+    // The dressable model's outfit, by inventory slot (1 head .. 19 tabard).
+    void Undress(bool includeWeapons);
+    void UndressSlot(int inventorySlot);
+    // The slot as the unit shows it.
+    void DressPlayerSlot(int inventorySlot);
+    // The unit's model again, dressed in what the unit shows.
+    void Dress();
+    // The weapons at their sheath points, or left off.
+    void SetSheathed(bool sheathe, bool hidden);
+    bool autoDress = true;           // dress a unit's model when it is built
+    bool usePlayerNativeForm = true; // as SetModelByUnit last asked
+    bool weaponsHidden = false;
+    int mainHandVisual = 0, offHandVisual = 0; // the hand items' enchant glows
+    // An 8-byte CGUnitVirtualItem: what a hand holds.
+    struct HandLane {
+        uint8_t classID, subclassID, soundOverride, material, inventoryType, sheatheType, pad[2];
+    };
+    uint32_t unitGuid[2] = {0, 0}; // the unit shown; two dwords for the header's alignment
+    bool dressable = false;        // a component and hand lanes of our own
+    HandLane mainHand = {}, offHand = {};
+    int nextHand = 15; // DressUpModel's s_nextHand, s_mainHandItemId, s_offHandItemId
+    int mainHandItemID = 0, offHandItemID = 0;
+    bool sheathed = false;
+    uint32_t serial; // names the actor to the item cache's callback
+
   private:
     void *frame_;
     std::string name_;
     void ReleaseModel();
 };
 static_assert(alignof(Actor) == 4, "the engine finds the script-object header at +0x04");
+
+// The live actors by serial (model/SceneOutfit.cpp), for engine callbacks
+// that can outlive an actor: a serial names no actor once its actor is gone.
+uint32_t AddLiveActor(Actor *actor);
+void RemoveLiveActor(uint32_t serial);
+Actor *LiveActor(uint32_t serial);
 
 // The scene frame's M2 scene (CSimpleModel::GetScene).
 void *M2SceneOf(void *sceneFrame);

@@ -68,10 +68,10 @@ Resolved Resolve(void *L, int idx) {
     }
 
     // Item link / bare "item:N..." — parse the itemID after "item:", plus the
-    // random-enchant fields. 3.3.5 item string is
+    // enchant and random-enchant fields. 3.3.5 item string is
     //   item:id:enchant:gem1:gem2:gem3:gem4:suffix:seed[:level]
-    // so `suffix` is the 6th colon-separated field after the id and `seed` the
-    // 7th; a bare "item:N" leaves both 0.
+    // so `enchant` is the 1st colon-separated field after the id, `suffix` the
+    // 6th and `seed` the 7th; a bare "item:N" leaves all three 0.
     if (const char *m = std::strstr(s, "item:")) {
         m += 5;
         out.itemID = std::atoi(m);
@@ -80,7 +80,9 @@ Resolved Resolve(void *L, int idx) {
             if (*p != ':')
                 continue;
             ++colons;
-            if (colons == 6) {
+            if (colons == 1) {
+                out.enchant = std::atoi(p + 1);
+            } else if (colons == 6) {
                 out.suffix = std::atoi(p + 1);
             } else if (colons == 7) {
                 out.seed = std::atoi(p + 1);

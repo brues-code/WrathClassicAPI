@@ -1937,6 +1937,16 @@ scene. An actor is not a `Frame` or a `Region`.
 |---|---|
 | `SetModelByCreatureDisplayID(displayID)` | Shows a creature display, dressed as the world dresses it. Returns `true` on success. |
 | `SetModelByPath(path)` | Shows a model file, such as `"Creature\\Murloc\\Murloc.m2"`. Returns `true` on success. |
+| `SetModelByUnit(unit [, sheatheWeapons [, autoDress [, hideWeapons [, usePlayerNativeForm]]]])` | Shows a unit, such as `"player"` or `"target"`. Returns `true` on success, `false` when the unit does not exist or its model is not ready yet; try again on `UNIT_MODEL_CHANGED`. A player in its native form is shown dressed in what it wears (`autoDress`, default `true`), with weapons sheathed (`sheatheWeapons`, default `false`) or left off (`hideWeapons`, default `false`). With `usePlayerNativeForm` `false` (default `true`), a player in another form, such as cat form, is shown in that form. Any other unit is shown as it looks in the world. |
+| `GetModelUnitGUID()` | The GUID of the unit shown, or `nil`. |
+| `IsGeoReady()` | `true` once the model and its clothing are ready to show. |
+| `TryOn(item [, handSlotName [, spellEnchantmentID]])` | Puts an item on a player shown by `SetModelByUnit`. `item` is an item ID, an item link, an `item:` string, a profession `enchant:` link (the item its recipe makes) or the name of an item. `handSlotName` is `"MAINHANDSLOT"` or `"SECONDARYHANDSLOT"`; without it a one-hander alternates between the hands. `spellEnchantmentID` sets a weapon's glow; the default is the link's enchant. Returns an `Enum.ItemTryOnReason`: `Success` (0), `NotEquippable` (2), or `DataPending` (3) while the item's data loads, after which the item goes on by itself. |
+| `Undress([includeWeapons])` | Takes everything off, the weapons too unless `includeWeapons` is `false`. |
+| `UndressSlot(inventorySlot)` | Takes off one slot, by inventory slot number (1 head ... 16 main hand, 17 off hand, 19 tabard). |
+| `DressPlayerSlot(inventorySlot)` | Puts the unit's own item back in one slot. |
+| `Dress()` | Shows the unit again, dressed in what it wears. |
+| `SetSheathed(sheathed [, hidden])` / `GetSheathed()` | Weapons at the sheath points or in the hands; `hidden` takes them off until the next call. |
+| `SetAutoDress(autoDress)` / `GetAutoDress()` | Whether a unit is shown dressed. `SetModelByUnit` sets it from its argument. |
 | `ClearModel()` | Removes the model. |
 | `IsLoaded()` | `true` once the model is ready to show. |
 | `GetModelPath()` | The model's file, or `""`. |

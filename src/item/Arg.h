@@ -29,6 +29,9 @@ struct Resolved {
     // (field 7). Both 0 for a bare itemID / name / non-random link.
     int suffix = 0;
     int seed = 0;
+    // The permanent enchant (SpellItemEnchantment ID) from an item link's
+    // field 2, 0 for none.
+    int enchant = 0;
 };
 
 // Resolves a Lua arg at 1-based stack `idx` to an item reference, matching
