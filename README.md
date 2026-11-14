@@ -38,6 +38,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Color     | `C_ColorUtil.ConvertRGBToHSV`, `C_ColorUtil.ConvertHSVToRGB`, `C_ColorUtil.ConvertHSVToHSL`, `C_ColorUtil.ConvertHSLToHSV`, `C_ColorUtil.ConvertHSLToRGB`, `C_ColorUtil.GenerateTextColorCode`, `C_ColorUtil.WrapTextInColor`, `C_ColorUtil.WrapTextInColorCode` |
 | Combat Log | `CombatLogGetCurrentEventInfo` |
 | Container | `C_Container.SwapItems`, `C_Container.MoveItem`, `C_Container.GetContainerItemRepairCost`, `C_Container.CalculateTotalNumberOfFreeBagSlots` |
+| Cooldown  | `Cooldown` frame methods (`SetCooldownDuration`, `SetCooldownFromExpirationTime`, `Clear`, `Pause`/`Resume`, `GetCooldownTimes`, swipe, edge and bling textures and colours, `SetRotation`, countdown numbers and formatters), `OnCooldownDone` script, `CooldownFrame_Set`, `CooldownFrame_Clear`, `CooldownFrame_SetDisplayAsPercentage` |
 | CVar      | `C_CVar.GetCVar`, `C_CVar.SetCVar`, `C_CVar.GetCVarDefault`, `C_CVar.RegisterCVar`, `C_CVar.GetCVarBool`, `C_CVar.GetCVarInfo`, `C_CVar.DoesCVarExist`, `C_CVar.AreCVarsLoaded`, `C_CVar.GetCVarBitfield`, `C_CVar.SetCVarBitfield`, `C_CVar.SetTempCVar`, `C_CVar.RemoveTempCVar` |
 | Encoding  | `C_EncodingUtil.EncodeHex`, `C_EncodingUtil.DecodeHex`, `C_EncodingUtil.EncodeBase64`, `C_EncodingUtil.DecodeBase64`, `C_EncodingUtil.CompressString`, `C_EncodingUtil.DecompressString`, `C_EncodingUtil.SerializeJSON`, `C_EncodingUtil.DeserializeJSON`, `C_EncodingUtil.SerializeCBOR`, `C_EncodingUtil.DeserializeCBOR` |
 | Events    | `C_EventUtils.IsEventValid`, `Frame:RegisterUnitEvent`, `Frame:IsEventRegistered` |
@@ -54,6 +55,7 @@ Per-function reference with shape, semantics, and edge cases is in
 | Reputation | `GetFactionIDByIndex`, `C_Reputation.GetFactionDataByIndex`, `C_Reputation.GetWatchedFactionData`, `C_Reputation.SetWatchedFactionByID`, `C_Reputation.GetFactionStandings`, `C_Reputation.GetLastStandingChange` |
 | Sound     | `PlaySound`, `C_Sound.PlaySound`, `C_Sound.PlaySoundWithOptions`, `C_Sound.IsPlaying`, `C_Sound.GetSoundScaledVolume`, `C_Sound.PlayItemSound`, `C_Sound.PlayVocalErrorSound`, `C_Sound.GetRecentSoundFiles`, `MuteSoundFile`, `UnmuteSoundFile`, `Enum.ItemSoundType`, `Enum.Vocalerrorsounds` |
 | Spell     | `IsPlayerSpell`, `CanDualWield`, `C_Spell.DoesSpellExist`, `C_Spell.CancelSpellByID`, `C_Spell.GetSpellInfo`, `C_Spell.GetSpellName`, `C_Spell.GetSpellSubtext`, `C_Spell.GetSpellDescription`, `C_Spell.GetSpellLink`, `C_Spell.GetSpellTexture`, `C_Spell.GetSpellPowerCost`, `C_Spell.IsSpellHarmful`, `C_Spell.IsSpellHelpful`, `C_Spell.IsSelfBuff` |
+| String Util | `C_StringUtil.CreateNumericRuleFormatter`, `Enum.NumericRuleFormatRounding` |
 | Swing Timer | `C_SwingTimer.EnableRangeCheck`, `C_SwingTimer.IsTargetWithinSwingRange`, `Enum.PlayerSwingType` |
 | Talent    | `GetTalentSpellID`, `GetTalentIDByIndex` |
 | Textures  | `Frame:CreateMaskTexture`, `Texture:AddMaskTexture`, `Texture:RemoveMaskTexture`, `Texture:GetNumMaskTextures`, `Texture:GetMaskTexture`, `Texture:SetMask` |

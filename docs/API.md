@@ -43,6 +43,11 @@ Conventions:
   - [`C_Container.MoveItem(srcBag, srcSlot, dstBag, dstSlot, count)`](#c_containermoveitemsrcbag-srcslot-dstbag-dstslot-count)
   - [`C_Container.GetContainerItemRepairCost(bagID, slot)`](#c_containergetcontaineritemrepaircostbagid-slot)
   - [`C_Container.CalculateTotalNumberOfFreeBagSlots()`](#c_containercalculatetotalnumberoffreebagslots)
+- [Cooldown](#cooldown)
+  - [`Cooldown` frame methods](#cooldown-frame-methods)
+  - [Countdown numbers](#countdown-numbers)
+  - [`<Cooldown>` XML](#cooldown-xml)
+  - [Cooldown helpers](#cooldown-helpers)
 - [CVar](#cvar)
   - [`C_CVar.GetCVar(name)` / `C_CVar.SetCVar(name, value [, scriptCVar])` / `C_CVar.GetCVarDefault(name)` / `C_CVar.RegisterCVar(name [, value])`](#c_cvargetcvarname--c_cvarsetcvarname-value--scriptcvar--c_cvargetcvardefaultname--c_cvarregistercvarname--value)
   - [`C_CVar.GetCVarBool(name)`](#c_cvargetcvarboolname)
@@ -174,6 +179,8 @@ Conventions:
   - [`C_Spell.IsSpellHarmful` / `IsSpellHelpful`](#c_spellisspellharmfulspellidentifier--isspellhelpfulspellidentifier)
   - [`C_Spell.IsSelfBuff(spellIdentifier)`](#c_spellisselfbuffspellidentifier)
   - [`CanDualWield()`](#candualwield)
+- [String Util](#string-util)
+  - [`C_StringUtil.CreateNumericRuleFormatter()`](#c_stringutilcreatenumericruleformatter)
 - [Swing Timer](#swing-timer)
   - [`C_SwingTimer.EnableRangeCheck(swingType, enable)`](#c_swingtimerenablerangecheckswingtype-enable)
   - [`C_SwingTimer.IsTargetWithinSwingRange(swingType)`](#c_swingtimeristargetwithinswingrangeswingtype)
@@ -612,6 +619,122 @@ end
 Only general-purpose bags count. Profession bags (herb, mining, soul
 shard, quiver, ammo pouch and so on) are left out, since most items can't
 go in them. The bank isn't included.
+
+---
+
+## Cooldown
+
+A `Cooldown` frame draws a dark sweep over its frame while a cooldown
+runs, a flash when it ends, and, if you turn them on, countdown numbers.
+Create one with `CreateFrame("Cooldown")` or a `<Cooldown>` XML element.
+
+```lua
+local cd = CreateFrame("Cooldown", nil, button)
+cd:SetAllPoints()
+cd:SetScript("OnCooldownDone", function(self) print("ready") end)
+cd:SetCooldown(GetTime(), 8)
+```
+
+Times you pass in are in seconds, on the `GetTime()` clock. Times the
+getters return are in milliseconds.
+
+### `Cooldown` frame methods
+
+A `Cooldown` has every `Frame` method. The flag setters read `true`,
+`false`, numbers, and the strings XML uses (`"true"`, `"1"`). Called with
+no argument, they turn the flag on.
+
+| Method | Description |
+|---|---|
+| `SetCooldown(start, duration [, modRate])` | Starts a cooldown of `duration` seconds at `start`, and shows the frame. `modRate` (default `1`) scales the end flash and `GetCooldownDisplayDuration`. The sweep still ends at `start + duration`. |
+| `SetCooldownDuration(duration [, modRate])` | Starts a cooldown now. |
+| `SetCooldownFromExpirationTime(expirationTime, duration [, modRate])` | Starts a cooldown that ends at `expirationTime`. |
+| `Clear()` | Ends the cooldown and hides the frame, without the flash or `OnCooldownDone`. |
+| `GetCooldownTimes()` | Returns `start, duration` in milliseconds. While the end flash plays, they are the flash's. After `Clear`, both are `0`. |
+| `GetCooldownDuration()` | Returns the duration from `GetCooldownTimes`. |
+| `GetCooldownDisplayDuration()` | Returns that duration divided by `modRate`. |
+| `Pause()` / `Resume()` / `SetPaused(paused)` / `IsPaused()` | Stops the sweep and the flash where they are. Resuming continues from there. |
+| `SetReverse(reverse)` / `GetReverse()` | A reverse sweep covers the part that has passed, so the frame darkens as the cooldown runs. At the end it stays fully covered, with no flash, until you hide it. |
+| `SetDrawSwipe(draw)` / `GetDrawSwipe()` | Draws the dark sweep. Default on. |
+| `SetDrawEdge(draw)` / `GetDrawEdge()` | Draws a bright line along the sweep's edge. Default off. |
+| `SetDrawBling(draw)` / `GetDrawBling()` | Plays the flash when the cooldown ends. Default on. With it off, the frame hides at the end. |
+| `SetSwipeColor(r, g, b [, a])` | The sweep's colour. Default black at alpha `0.63`. |
+| `SetEdgeColor(r, g, b [, a])` | The edge line's colour. Default white. |
+| `SetSwipeTexture(file [, r, g, b [, a]])` | The sweep's texture, stretched over the frame. |
+| `SetEdgeTexture(file [, r, g, b [, a]])` | The edge line's texture. It turns with the sweep. |
+| `SetBlingTexture(file [, r, g, b [, a]])` | The end flash's texture. Default colour `(0.31, 0.63, 1)`. |
+| `SetRotation(radians)` / `GetRotation()` | Where the sweep starts, clockwise from 12 o'clock. Default `0`. |
+| `GetCountdownFontString()` | Returns the `FontString` that shows the countdown numbers. |
+| `SetHideCountdownNumbers(hide)` / `GetHideCountdownNumbers()` | Hides this frame's countdown numbers. Default off. |
+| `SetCountdownAbbrevThreshold(seconds)` / `GetCountdownAbbrevThreshold()` | Between one minute and one hour, time left under this shows as `m:ss`, and above it as whole minutes. Default `120`. |
+| `SetCountdownMillisecondsThreshold(seconds)` / `GetCountdownMillisecondsThreshold()` | Time left under this shows tenths, such as `4.3`. Default `0`. |
+| `SetMinimumCountdownDuration(milliseconds)` / `GetMinimumCountdownDuration()` | Only a cooldown longer than this shows numbers. It is compared with the whole duration, not the time left. Default `2000`. |
+| `SetCountdownFormatter([formatter])` / `GetCountdownFormatter()` | Lets a [`NumericRuleFormatter`](#c_stringutilcreatenumericruleformatter) write the numbers from the seconds left. `nil` goes back to the built-in numbers. |
+
+The three texture setters take a file path, or `""` for a solid colour.
+Without `r, g, b` the colour stays as it was. A file that does not load
+draws nothing.
+
+`OnCooldownDone(self)` runs once when a cooldown ends, as the flash
+starts. It does not run after `Clear`, or for a cooldown of zero length.
+A frame shown again after its cooldown ended hides itself, except a
+reverse one, which stays covered.
+
+### Countdown numbers
+
+Countdown numbers show on every `Cooldown` while the `countdownForCooldowns`
+CVar is `1`. It is `0` by default:
+
+```lua
+SetCVar("countdownForCooldowns", "1")
+```
+
+A frame shows numbers while its sweep runs, unless it hides them or its
+cooldown is not longer than its minimum duration. The time left is
+rounded up: `57`, `1:56`, `3m`, `2h`, `2d`, and `4.3` under the
+milliseconds threshold. The font string is `Fonts\FRIZQT__.TTF` at size
+16 with an outline, centred on the frame. Change it with the font string's
+own methods.
+
+A countdown formatter gets the seconds left without rounding, and writes
+the whole text. The frame shares the formatter, so later changes to its
+breakpoints show. A format error shows no numbers.
+`GetCountdownFormatter()` returns a new object for the same formatter
+each time.
+
+```lua
+local tenths = C_StringUtil.CreateNumericRuleFormatter()
+tenths:AddBreakpoint({ threshold = 0, format = "|cffff8000%.1f|r" })
+cd:SetCountdownFormatter(tenths)
+```
+
+### `<Cooldown>` XML
+
+Attributes: `reverse`, `drawEdge`, `drawSwipe`, `drawBling`,
+`hideCountdownNumbers`, `minimumCountdownDuration` (milliseconds) and
+`rotation` (degrees). Child elements: `<SwipeTexture>`, `<EdgeTexture>` and
+`<BlingTexture>`, each with a `file` attribute and an optional `<Color>`.
+
+```xml
+<Cooldown name="$parentCooldown" drawEdge="true" rotation="90">
+    <Anchors><Anchor point="TOPLEFT"/><Anchor point="BOTTOMRIGHT"/></Anchors>
+    <SwipeTexture file="Interface\Buttons\WHITE8X8">
+        <Color r="0" g="0" b="0" a="0.7"/>
+    </SwipeTexture>
+    <Scripts>
+        <OnCooldownDone>print("ready")</OnCooldownDone>
+    </Scripts>
+</Cooldown>
+```
+
+### Cooldown helpers
+
+| Function | Description |
+|---|---|
+| `CooldownFrame_Set(self, start, duration, enable [, forceShowDrawEdge [, modRate]])` | Starts the cooldown when `enable` is true or non-zero and `start` and `duration` are above `0`, with the edge line set from `forceShowDrawEdge`. Otherwise clears it. |
+| `CooldownFrame_Clear(self)` | Clears the cooldown. |
+| `CooldownFrame_SetDisplayAsPercentage(self, percentage)` | Shows a paused sweep with `percentage` (`0` to `1`) of the cooldown done. |
+
 ---
 
 ## CVar
@@ -2836,6 +2959,66 @@ spec switch — turns it off.
 ```lua
 CanDualWield()   -- true on a rogue; false on a mage
 ```
+
+---
+
+## String Util
+
+### `C_StringUtil.CreateNumericRuleFormatter()`
+
+Returns a `NumericRuleFormatter`, which turns numbers into text by rules
+for ranges of values. Each rule is a breakpoint, and
+`formatter:FormatNumber(value)` uses the breakpoint with the largest
+`threshold` that `value` reaches.
+
+```lua
+local f = C_StringUtil.CreateNumericRuleFormatter()
+local Up, Down = Enum.NumericRuleFormatRounding.Up, Enum.NumericRuleFormatRounding.Down
+f:SetBreakpoints({
+    { threshold = 0, format = "%d", step = 1, rounding = Up },
+    { threshold = 60, format = "%d:%02d", components = {
+        { div = 60, step = 1, rounding = Down },  -- minutes
+        { mod = 60, step = 1, rounding = Down },  -- seconds
+    } },
+})
+f:FormatNumber(4.2)  -- "5"
+f:FormatNumber(125)  -- "2:05"
+f:FormatNumber(-3)   -- "-3": below every threshold
+```
+
+A breakpoint is a table:
+
+| Field | Description |
+|---|---|
+| `threshold` | Required. The smallest value the breakpoint applies to. |
+| `format` | Required. A `string.format` format, with one specifier, or one for each component. |
+| `step` | Rounds the value to a multiple of this first. `0` or less rounds nothing. |
+| `rounding` | How `step` rounds: an `Enum.NumericRuleFormatRounding`. Default `Nearest`. |
+| `min` / `max` | Then raise a smaller value to `min`, and lower a larger one to `max`. |
+| `components` | A list of components. Each one makes one format argument from the value. Without components, the value is the one argument. |
+
+A component is a table of `div` (divide by this), then `mod` (take the
+remainder of a division by this), then `step` and `rounding`, as above.
+Each field is optional. A `div` or `mod` of `0` does nothing.
+
+`Enum.NumericRuleFormatRounding`: `Nearest` (0, a half rounds up), `Up`
+(1), `Down` (2).
+
+| Method | Description |
+|---|---|
+| `AddBreakpoint(breakpoint)` | Adds a breakpoint. Breakpoints with equal thresholds keep the order you add them in. |
+| `SetBreakpoints(breakpoints)` | Replaces every breakpoint with the list. If any entry is wrong, none change. |
+| `GetBreakpoints()` | Returns new tables for the breakpoints, largest threshold first, with every field filled in. `min` and `max` are there only when set. |
+| `ClearBreakpoints()` | Removes every breakpoint. |
+| `Copy()` | Returns a new formatter with the same breakpoints. |
+| `FormatNumber(value)` | Returns the text for `value`, which must be a finite number. Below every threshold, `value` is written as `tostring` writes it. |
+
+A wrong breakpoint field raises an error that names the field. A format
+that asks for more arguments than there are raises an error that starts
+`NumericFormatter:FormatNumber(): `. `tostring(formatter)` gives
+`"NumericRuleFormatter: <address>"`, and `getmetatable(formatter)` is
+`false`. `Cooldown:SetCountdownFormatter` takes a formatter; see
+[Countdown numbers](#countdown-numbers).
 
 ---
 
