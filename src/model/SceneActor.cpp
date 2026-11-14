@@ -48,6 +48,15 @@
 // the global pause flag too unless affectsGlobalPause is false (ClassicAPI's
 // retail probe).
 //
+// A mount actor seats a rider as CGUnit_C::CreateUnitMount (0x0073D5D0) does:
+// the rider's model on the mount's attachment 0, playing the seat animation.
+// The mount then animates the rider and holds a reference on it, and draws it
+// while the rider is shown; the rider's placement is relative to the seat.
+// CalculateMountScale is the world's mount scale, the mount display's
+// CreatureModelScale; the world gives the rider 1 over it, as the retail
+// AttachPlayerToMount requests. DetachFromMount only detaches: the rider keeps
+// the seat animation (ClassicAPI's retail probe).
+//
 // XML: an <Actor virtual="true"> element is a template CreateActor names (the
 // engine's file loader stores every virtual top-level node whatever its tag).
 // Its inherits chain loads first, then the node's `alpha`, `scale`, `file` and
@@ -304,6 +313,11 @@ void Actor::ReleaseModel() {
     if (model == nullptr)
         return;
     DropKit(); // the kit stays, for the next model
+    // A rider leaves its seat, which drops the mount's reference on it. A
+    // mount's riders leave when its model is freed (~CM2Model detaches every
+    // child).
+    if (Seated())
+        reinterpret_cast<void(__fastcall *)(void *, void *)>(Offsets::FUN_M2MODEL_DETACH_FROM_PARENT)(model, nullptr);
     SetSequenceCallback(model, nullptr);
     FreeDress(component); // drops the dress's reference on the model
     At<const void *>(model, Offsets::OFF_M2MODEL_LIGHTING_CALLBACK) = nullptr;
@@ -322,6 +336,7 @@ void Actor::ReleaseModel() {
     mainHand = offHand = HandLane{};
     nextHand = 15;
     mainHandItemID = offHandItemID = 0;
+    displayScale = 1.0f;
 }
 
 void Actor::ClearModel() {
@@ -368,14 +383,48 @@ void Actor::ApplyAlpha() {
         At<float>(model, Offsets::OFF_M2MODEL_FADE_ALPHA) = alpha * kitAlpha * FrameAlpha(frame_);
 }
 
+// A seated rider is animated by its mount and drawn while the mount is
+// (AttachToParent takes it off the animate list); its own flag says whether.
 void Actor::Link() {
-    if (model == nullptr || !shown)
+    if (model == nullptr)
         return;
-    if (component != nullptr)
+    if (shown && component != nullptr)
         componentReady = DressReady(component);
+    const bool drawn = shown && (component == nullptr || componentReady);
+    uint32_t &flags = At<uint32_t>(model, Offsets::OFF_M2MODEL_FFLAGS);
+    if (Seated()) {
+        flags = drawn ? flags | Offsets::M2MODEL_FFLAGS_DRAWN_WITH_PARENT
+                      : flags & ~static_cast<uint32_t>(Offsets::M2MODEL_FFLAGS_DRAWN_WITH_PARENT);
+        return;
+    }
+    if (!shown)
+        return;
     reinterpret_cast<void(__fastcall *)(void *, void *, int)>(Offsets::FUN_M2MODEL_SET_ANIMATING)(model, nullptr, 1);
-    if (component == nullptr || componentReady)
-        At<uint32_t>(model, Offsets::OFF_M2MODEL_FFLAGS) |= Offsets::M2MODEL_FFLAGS_DRAWN;
+    if (drawn)
+        flags |= Offsets::M2MODEL_FFLAGS_DRAWN;
+}
+
+bool Actor::Seated() const {
+    return model != nullptr && At<const void *>(model, Offsets::OFF_M2MODEL_ATTACH_PARENT) != nullptr;
+}
+
+// CreateUnitMount's seating: the rider on the seat, playing the seat
+// animation. A rider already seated moves here. The mount may not hang, at
+// any depth, from the rider: the engine animates a model's parents first.
+bool Actor::Seat(Actor &rider, uint32_t seatAnimation) {
+    if (model == nullptr || rider.model == nullptr || rider.frame_ != frame_)
+        return false;
+    for (const void *m = model; m != nullptr; m = At<const void *>(m, Offsets::OFF_M2MODEL_ATTACH_PARENT))
+        if (m == rider.model)
+            return false;
+    // A loaded mount without a seat leaves the rider unattached.
+    reinterpret_cast<void(__fastcall *)(void *, void *, void *, uint32_t, const float *, int)>(
+        Offsets::FUN_M2MODEL_ATTACH_TO_PARENT)(rider.model, nullptr, model, Offsets::M2_ATTACH_MOUNT, nullptr, 0);
+    if (At<const void *>(rider.model, Offsets::OFF_M2MODEL_ATTACH_PARENT) != model)
+        return false;
+    rider.animation = seatAnimation;
+    rider.PlayAnimation();
+    return true;
 }
 
 void Actor::Update(float elapsedSec) {
@@ -653,6 +702,7 @@ bool ShowCreatureDisplay(Actor &actor, uint32_t displayID) {
                     Offsets::VAR_CREATUREDISPLAYINFOEXTRA_DBC_INDEX_TABLE,
                     At<int32_t>(display, Offsets::OFF_CREATUREDISPLAYINFO_EXTRA_ID));
     const char *bake = extra != nullptr ? At<const char *>(extra, Offsets::OFF_CREATUREDISPLAYINFOEXTRA_BAKE_NAME) : nullptr;
+    actor.displayScale = At<float>(display, Offsets::OFF_CREATUREDISPLAYINFO_SCALE);
     actor.SetModel(model, path, bake != nullptr && *bake != '\0' ? extra : nullptr);
     return true;
 }
@@ -1075,6 +1125,65 @@ int __cdecl Script_GetPaused(void *L) {
     return 2;
 }
 
+// ---- mounts ----------------------------------------------------------------------------
+
+// The rider argument (stack index 2), an actor; else the usage error and null.
+Actor *RiderArg(void *L, const Actor *mount, const char *usage) {
+    void *object = nullptr;
+    if (Game::Lua::Type(L, 2) == Game::Lua::TYPE_TABLE) {
+        Game::Lua::RawGetI(L, 2, 0);
+        object = Game::Lua::ToUserdata(L, -1);
+        Game::Lua::SetTop(L, -2);
+    }
+    using IsA_t = bool(__fastcall *)(void *, void *, int);
+    if (object != nullptr &&
+        reinterpret_cast<IsA_t>(At<const void *const *>(object, 0)[Offsets::VTBL_OFF_SCRIPTOBJECT_IS_A / 4])(
+            object, nullptr, ActorTypeId()))
+        return static_cast<Actor *>(object);
+    Game::Lua::Error(L, "Usage: %s:%s", mount->DisplayName(), usage);
+    return nullptr;
+}
+
+int __cdecl Script_AttachToMount(void *L) {
+    constexpr char kUsage[] = "AttachToMount(rider, animation [, spellKitVisualID])";
+    Actor *mount = Self(L);
+    if (mount == nullptr)
+        return 0;
+    Actor *rider = RiderArg(L, mount, kUsage);
+    if (rider == nullptr || !NumberArgs(L, 3, 1, mount->DisplayName(), kUsage))
+        return 0;
+    const bool seated = mount->Seat(*rider, static_cast<uint32_t>(Game::Lua::ToNumber(L, 3)));
+    if (seated && Game::Lua::IsNumber(L, 4) && Game::Lua::ToNumber(L, 4) != 0.0)
+        rider->SetSpellVisualKit(static_cast<uint32_t>(Game::Lua::ToNumber(L, 4)), false);
+    Game::Lua::PushBool(L, seated);
+    return 1;
+}
+
+// Only takes the rider off: it keeps the seat animation.
+int __cdecl Script_DetachFromMount(void *L) {
+    Actor *mount = Self(L);
+    Actor *rider = mount != nullptr ? RiderArg(L, mount, "DetachFromMount(rider)") : nullptr;
+    if (rider == nullptr)
+        return 0;
+    const bool seated = mount->model != nullptr && rider->model != nullptr &&
+                        At<const void *>(rider->model, Offsets::OFF_M2MODEL_ATTACH_PARENT) == mount->model;
+    if (seated)
+        reinterpret_cast<void(__fastcall *)(void *, void *)>(Offsets::FUN_M2MODEL_DETACH_FROM_PARENT)(rider->model,
+                                                                                                    nullptr);
+    Game::Lua::PushBool(L, seated);
+    return 1;
+}
+
+// The world's mount scale (CreateUnitMount): the mount display's
+// CreatureModelScale. The rider fits the mount at 1 over it.
+int __cdecl Script_CalculateMountScale(void *L) {
+    Actor *mount = Self(L);
+    if (mount == nullptr || RiderArg(L, mount, "CalculateMountScale(rider)") == nullptr)
+        return 0;
+    Game::Lua::PushNumber(L, mount->displayScale);
+    return 1;
+}
+
 struct Method {
     const char *name;
     Game::Lua::CFunction func;
@@ -1099,6 +1208,9 @@ const Method kMethods[] = {
     {"GetSheathed", &Script_GetSheathed},
     {"SetAutoDress", &Script_SetAutoDress},
     {"GetAutoDress", &Script_GetAutoDress},
+    {"AttachToMount", &Script_AttachToMount},
+    {"DetachFromMount", &Script_DetachFromMount},
+    {"CalculateMountScale", &Script_CalculateMountScale},
     {"ClearModel", &Script_ClearModel},
     {"IsLoaded", &Script_IsLoaded},
     {"GetModelPath", &Script_GetModelPath},

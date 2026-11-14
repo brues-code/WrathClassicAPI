@@ -1947,6 +1947,9 @@ scene. An actor is not a `Frame` or a `Region`.
 | `Dress()` | Shows the unit again, dressed in what it wears. |
 | `SetSheathed(sheathed [, hidden])` / `GetSheathed()` | Weapons at the sheath points or in the hands; `hidden` takes them off until the next call. |
 | `SetAutoDress(autoDress)` / `GetAutoDress()` | Whether a unit is shown dressed. `SetModelByUnit` sets it from its argument. |
+| `AttachToMount(rider, animation [, spellKitVisualID])` | Seats `rider`, another actor of the same scene, on this actor's saddle, playing `animation` (such as `91`, mounted). `spellKitVisualID` shows a spell visual kit on the rider. The rider then moves with the mount, and its position, rotation and scale are relative to the saddle. Returns `false` when either actor has no model or the mount has no saddle. A new model on either actor takes the rider off. |
+| `DetachFromMount(rider)` | Takes the rider off this actor. The rider keeps its animation. Returns `false` when the rider is not on this actor. |
+| `CalculateMountScale(rider)` | The size of this mount, the scale of its creature display (`1` for a model not set by `SetModelByCreatureDisplayID`). The rider fits the mount at `1 / scale`. |
 | `ClearModel()` | Removes the model. |
 | `IsLoaded()` | `true` once the model is ready to show. |
 | `GetModelPath()` | The model's file, or `""`. |
@@ -2037,7 +2040,18 @@ uses. `scene:GetActiveCamera()` gives the orbit camera.
 ```lua
 MyMountPreview:TransitionToModelSceneID(4, CAMERA_TRANSITION_TYPE_IMMEDIATE,
     CAMERA_MODIFICATION_TYPE_DISCARD, true)
-MyMountPreview:GetActorByTag("unwrapped"):SetModelByCreatureDisplayID(2404)
+local mount = MyMountPreview:GetActorByTag("unwrapped")
+mount:SetModelByCreatureDisplayID(2404)
+```
+
+`scene:AttachPlayerToMount(mountActor, animation, isSelfMount,
+disablePlayerMountPreview [, spellVisualKitID [, usePlayerNativeForm]])`
+shows your character on the mount, on the scene's `player-rider` actor,
+with weapons sheathed and left off. With `isSelfMount` or
+`disablePlayerMountPreview` it clears the rider instead.
+
+```lua
+MyMountPreview:AttachPlayerToMount(mount, 91, false, false)
 ```
 
 The scene data covers these scenes:

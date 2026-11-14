@@ -111,8 +111,8 @@ void __cdecl OnOneShotEnd(void *model, uint32_t boneId, uint32_t /*sequenceId*/,
         effect.stopped = true;
         SetSequenceCallback(model, nullptr, nullptr);
         uint32_t &flags = At<uint32_t>(model, Offsets::OFF_M2MODEL_FFLAGS);
-        flags = (flags & ~static_cast<uint32_t>(Offsets::M2MODEL_FFLAGS_STOP_CLEAR_ATTACHED)) |
-                Offsets::M2MODEL_FFLAGS_STOP_SET_ATTACHED;
+        flags = (flags & ~static_cast<uint32_t>(Offsets::M2MODEL_FFLAGS_DRAWN_WITH_PARENT)) |
+                Offsets::M2MODEL_FFLAGS_PARTICLES_WITH_PARENT;
         reinterpret_cast<void(__fastcall *)(void *, void *, int)>(Offsets::FUN_M2MODEL_SET_EMITTERS_ENABLED)(
             model, nullptr, 0);
         return;

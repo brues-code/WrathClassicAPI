@@ -3115,6 +3115,10 @@ enum Offsets {
     M2_ATTACH_RIGHT_HAND = 22,
     M2_ATTACH_BREATH = 17,
     M2_ATTACH_SPECIAL_1 = 23,
+    // A mount's seat: CGUnit_C::CreateUnitMount (0x0073D5D0) hangs the rider
+    // on the mount's attachment 0, local transform 1 / the mount display's
+    // CreatureModelScale.
+    M2_ATTACH_MOUNT = 0,
     // CM2Model, __thiscall: HasAttachment (uint id) ret 4; AttachToParent
     // (CM2Model *parent, uint id, const C3Vector *pos, int toRoot) ret 0x10;
     // SetEmittersEnabled (int) ret 4.
@@ -3125,11 +3129,14 @@ enum Offsets {
     // model's is applied under the attachment (the ghost: its effect scale).
     OFF_M2MODEL_LOCAL_TRANSFORM = 0xB4,
     M2MODEL_FFLAGS_LOCAL_TRANSFORM = 0x8000,
-    // An effect's stop (CEffect::MoveToDestroyList 0x006F87C0, attached
-    // model): clear 0x80, set 0x20000, emitters off. The effect is freed once
-    // 0x400 clears; each particle pass sets it again while particles live.
-    M2MODEL_FFLAGS_STOP_CLEAR_ATTACHED = 0x80,
-    M2MODEL_FFLAGS_STOP_SET_ATTACHED = 0x20000,
+    // An attached model is drawn while its parent is and it has 0x80, and its
+    // particles run while its parent's do and it has 0x20000
+    // (AnimateMTSimple 0x0082E140); AttachToParent sets both. An effect's
+    // stop (CEffect::MoveToDestroyList 0x006F87C0): clear 0x80, set 0x20000,
+    // emitters off. The effect is freed once 0x400 clears; each particle pass
+    // sets it again while particles live.
+    M2MODEL_FFLAGS_DRAWN_WITH_PARENT = 0x80,
+    M2MODEL_FFLAGS_PARTICLES_WITH_PARENT = 0x20000,
     M2MODEL_FFLAGS_LIVE_PARTICLES = 0x400,
     OFF_M2MODEL_DIFFUSE_TINT = 0x180, // float r, g, b; 1 by default
 
@@ -3256,6 +3263,7 @@ enum Offsets {
     VAR_CREATUREMODELDATA_DBC_INDEX_TABLE = 0x00AD3520,
     OFF_CREATUREDISPLAYINFO_MODEL_ID = 0x04,
     OFF_CREATUREDISPLAYINFO_EXTRA_ID = 0x0C,
+    OFF_CREATUREDISPLAYINFO_SCALE = 0x10, // float CreatureModelScale
     OFF_CREATUREDISPLAYINFOEXTRA_RACE = 0x04,
     OFF_CREATUREDISPLAYINFOEXTRA_SEX = 0x08,
     OFF_CREATUREDISPLAYINFOEXTRA_SKIN = 0x0C,

@@ -198,6 +198,14 @@ class Actor {
     bool sheathed = false;
     uint32_t serial; // names the actor to the item cache's callback
 
+    // A mount (AttachToMount): the rider's model on this one's seat, as
+    // CGUnit_C::CreateUnitMount seats one. The mount animates and draws a
+    // seated rider, whose placement is then relative to the seat.
+    bool Seat(Actor &rider, uint32_t seatAnimation);
+    // Whether this actor's model sits on another's.
+    bool Seated() const;
+    float displayScale = 1.0f; // a creature display's CreatureModelScale, else 1
+
   private:
     void *frame_;
     std::string name_;
