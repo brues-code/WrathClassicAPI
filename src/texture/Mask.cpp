@@ -51,6 +51,7 @@
 #include "Game.h"
 #include "Offsets.h"
 #include "frame/Methods.h"
+#include "texture/Load.h"
 
 #include <windows.h>
 
@@ -104,13 +105,6 @@ using LayoutResolve_t = void(__fastcall *)(void *layout, void *edx, int now);
 using LayoutGetRect_t = int(__fastcall *)(void *layout, void *edx, float *outBLTR);
 using HideUpdate_t = void(__fastcall *)(void *region);
 
-using FlagsInit_t = uint32_t *(__fastcall *)(uint32_t *flags, void *edx, uint32_t, uint32_t,
-                                             uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                                             uint32_t, uint32_t, uint32_t);
-using LoadByPath_t = void *(__cdecl *)(const char *path, uint32_t flags, void *desc,
-                                       uint32_t mode);
-using DescDtor_t = void(__fastcall *)(void *desc);
-using Release_t = void(__cdecl *)(void *handle);
 using GetFilename_t = const char *(__cdecl *)(void *handle);
 using GetRenderable_t = void *(__cdecl *)(void *handle, int force, int *);
 
@@ -125,41 +119,11 @@ Dtor_t g_dtorOriginal = nullptr;
 
 // --- textures and rects ------------------------------------------------------
 
-void ReleaseHandle(void *handle) {
-    if (handle != nullptr)
-        reinterpret_cast<Release_t>(Offsets::FUN_TEXTURE_RELEASE)(handle);
-}
+using Texture::ReleaseHandle;
 
-// Loads `path` the way Minimap:SetMaskTexture does (clamped, no mips), as a
-// texture of its own, never on the UI atlas (see TEXFLAGS_MASK_CACHE_KEY).
-// Returns null when the file can't be loaded.
-void *LoadByPath(const char *path) {
-    struct TexLoadDesc {
-        void *vtbl;
-        int32_t field4;
-        void *self8;
-        uintptr_t fieldC;
-        int32_t errorLevel;
-    } desc;
-    desc.vtbl = reinterpret_cast<void *>(Offsets::PTR_TEXLOAD_DESC_VTBL);
-    desc.field4 = 8;
-    desc.self8 = &desc.self8;
-    desc.fieldC = reinterpret_cast<uintptr_t>(&desc.self8) | 1u;
-    desc.errorLevel = 0;
-    uint32_t flagsOut = 0;
-    const uint32_t flags = *reinterpret_cast<FlagsInit_t>(Offsets::FUN_TEXTURE_FLAGS_INIT)(
-                               &flagsOut, nullptr, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0) |
-                           Offsets::TEXFLAGS_MASK_CACHE_KEY;
-    void *handle = reinterpret_cast<LoadByPath_t>(Offsets::FUN_TEXTURE_LOAD_BY_PATH)(
-        path, flags, &desc, 3);
-    const bool failed = desc.errorLevel > 1;
-    reinterpret_cast<DescDtor_t>(Offsets::FUN_TEXLOAD_DESC_DTOR)(&desc);
-    if (failed) {
-        ReleaseHandle(handle);
-        return nullptr;
-    }
-    return handle;
-}
+// Mask files load as textures of their own, never on the UI atlas (see
+// TEXFLAGS_MASK_CACHE_KEY). Null when the file can't be loaded.
+void *LoadByPath(const char *path) { return Texture::LoadFile(path, Offsets::TEXFLAGS_MASK_CACHE_KEY); }
 
 // The HTEXTURE to sample for mask region `mask`. Its own HTEXTURE (set by its
 // SetTexture, present even while hidden) may be on the UI atlas, so a mask
