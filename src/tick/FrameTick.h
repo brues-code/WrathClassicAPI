@@ -33,4 +33,12 @@ struct AutoSubscribe {
     AutoSubscribe *next;
 };
 
+// The same, run before the frame's OnUpdate handlers.
+struct AutoSubscribeBefore {
+    using Callback = void (*)();
+    explicit AutoSubscribeBefore(Callback cb);
+    Callback cb;
+    AutoSubscribeBefore *next;
+};
+
 } // namespace Tick::FrameTick

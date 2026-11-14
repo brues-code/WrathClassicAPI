@@ -5,6 +5,7 @@
 ## Author: Brues
 ## DefaultState: enabled
 
+Util\EnvironmentUtil.lua
 Util\Constants.lua
 Util\Mixin.lua
 Util\TableUtil.lua
@@ -26,3 +27,14 @@ Util\EnumUtil.lua
 Util\LinkUtil.lua
 Util\TextureUtil.lua
 Util\IconDataProvider.lua
+Util\InputUtil.lua
+Util\FrameUtil.lua
+Util\Vector3D.lua
+Util\Spline.lua
+FrameXML\ModelScene\CameraRegistry.lua
+FrameXML\ModelScene\CameraBaseMixin.lua
+FrameXML\ModelScene\OrbitCameraMixin.lua
+FrameXML\ModelScene\ModelSceneMixin.lua
+FrameXML\ModelScene\ModelSceneMixin.xml
+FrameXML\ModelScene\ModelSceneActorMixin.lua
+FrameXML\ModelScene\ModelSceneActorMixin.xml

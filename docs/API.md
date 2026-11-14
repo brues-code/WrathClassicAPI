@@ -127,8 +127,13 @@ Conventions:
 - [Model Scene](#model-scene)
   - [`ModelScene` frame methods](#modelscene-frame-methods)
   - [`ModelSceneActor` methods](#modelsceneactor-methods)
+  - [Scene templates](#scene-templates)
+  - [`C_ModelInfo`](#c_modelinfo)
+  - [Vectors, splines and cursor helpers](#vectors-splines-and-cursor-helpers)
 - [Player Info](#player-info)
   - [`C_PlayerInfo.CanUseItem(item)`](#c_playerinfocanuseitemitem)
+  - [`C_PlayerInfo.GetAlternateFormInfo()`](#c_playerinfogetalternateforminfo)
+  - [`C_Glue.IsOnGlueScreen()`](#c_glueisongluescreen)
   - [`GetSheathState()`](#getsheathstate)
   - [`GetShapeshiftFormID()`](#getshapeshiftformid)
 - [Quest Log](#quest-log)
@@ -1985,6 +1990,88 @@ An actor template is a top-level `<Actor>` element. It takes `name`,
 local actor = scene:CreateActor(nil, "MyActorTemplate")
 ```
 
+### Scene templates
+
+These templates give a scene the standard behaviour: an orbit camera and
+actors laid out from scene data.
+
+| Template | Behaviour |
+|---|---|
+| `NonInteractableModelSceneMixinTemplate` | Lays the scene out from scene data. The mouse does nothing. |
+| `ModelSceneMixinTemplate` | The same, plus mouse control: drag with the left button to turn the camera, use the wheel to zoom. |
+| `NoZoomModelSceneMixinTemplate` | Mouse control without zoom. |
+| `PanningModelSceneMixinTemplate` | Mouse control, and the right button moves the camera target. |
+| `NoCameraControlModelSceneMixinTemplate` | The mouse does not move the camera. |
+| `StoreModelSceneMixinTemplate` | `ModelSceneMixinTemplate` with `allowOverlappedModels` set. |
+| `ModelSceneActorTemplate` | The actor template the scene templates use. It scales a model to its scene data. |
+
+`scene:TransitionToModelSceneID(modelSceneID, cameraTransitionType,
+cameraModificationType [, forceEvenIfSame])` sets up the scene's camera
+and actors from the scene data:
+
+- `cameraTransitionType` is `CAMERA_TRANSITION_TYPE_IMMEDIATE` or
+  `CAMERA_TRANSITION_TYPE_INTERPOLATION`.
+- `cameraModificationType` is `CAMERA_MODIFICATION_TYPE_DISCARD` or
+  `CAMERA_MODIFICATION_TYPE_MAINTAIN`.
+
+`scene:GetActorByTag(tag)` then gives an actor by the tag the scene data
+uses. `scene:GetActiveCamera()` gives the orbit camera.
+
+```xml
+<ModelScene name="MyMountPreview" inherits="ModelSceneMixinTemplate" parent="UIParent">
+    <Size x="300" y="300"/>
+    <Anchors><Anchor point="CENTER"/></Anchors>
+</ModelScene>
+```
+
+```lua
+MyMountPreview:TransitionToModelSceneID(4, CAMERA_TRANSITION_TYPE_IMMEDIATE,
+    CAMERA_MODIFICATION_TYPE_DISCARD, true)
+MyMountPreview:GetActorByTag("unwrapped"):SetModelByCreatureDisplayID(2404)
+```
+
+The scene data covers these scenes:
+
+| Scene | Use | Actor tags |
+|---|---|---|
+| 4 | A mount | `unwrapped` (the mount), `wrapped`, `player-rider` |
+| 44 | A large mount, such as a Qiraji battle tank | `unwrapped`, `wrapped`, `player-rider` |
+| 596 | A character | `player` and one tag for each race and gender, such as `orc` or `tauren-male` |
+
+Each scene has one camera, tagged `primary`.
+
+### `C_ModelInfo`
+
+The scene data that the scene templates read.
+
+| Function | Returns |
+|---|---|
+| `C_ModelInfo.GetModelSceneInfoByID(modelSceneID)` | `modelSceneType, modelCameraIDs, modelActorsIDs, flags`. The two ID lists are arrays. |
+| `C_ModelInfo.GetModelSceneCameraInfoByID(modelSceneCameraID)` | `{ modelSceneCameraID, scriptTag, cameraType, target, yaw, pitch, roll, zoomDistance, minZoomDistance, maxZoomDistance, zoomedTargetOffset, zoomedYawOffset, zoomedPitchOffset, zoomedRollOffset, flags }`. `cameraType` is `"OrbitCamera"`; `flags` is `Enum.ModelSceneSetting`. |
+| `C_ModelInfo.GetModelSceneActorInfoByID(modelActorID)` | `{ modelActorID, scriptTag, position, yaw, pitch, roll, normalizeScaleAggressiveness, useCenterForOriginX, useCenterForOriginY, useCenterForOriginZ, modelActorDisplayID }`. `normalizeScaleAggressiveness` and `modelActorDisplayID` can be `nil`. |
+| `C_ModelInfo.GetModelSceneActorDisplayInfoByID(modelActorDisplayID)` | `{ animation, animationVariation, animSpeed, animationKitID, spellVisualKitID, alpha, scale }`. The two kit IDs can be `nil`. |
+| `C_ModelInfo.AddActiveModelScene` / `AddActiveModelSceneActor` / `ClearActiveModelScene` / `ClearActiveModelSceneActor` | Nothing. They have no effect. |
+
+An unknown ID returns nothing. `target`, `zoomedTargetOffset` and
+`position` are `Vector3D` objects.
+
+`Enum.ModelSceneSetting`: `AlignLightToOrbitDelta` (1).
+`Enum.UIModelSceneActorFlag`: `Deprecated1` (1), `UseCenterForOriginX`
+(2), `UseCenterForOriginY` (4), `UseCenterForOriginZ` (8).
+
+### Vectors, splines and cursor helpers
+
+The Lua library that the scene templates use. Addons can use it too.
+
+| Function | Description |
+|---|---|
+| `CreateVector3D(x, y, z)` | A `Vector3DMixin` object, with `GetXYZ`, `SetXYZ`, `ScaleBy`, `DivideBy`, `Add`, `Subtract`, `Cross`, `Dot`, `GetLength`, `GetLengthSquared`, `Normalize`, `IsEqualTo` and `Clone`. |
+| `Vector3D_Add`, `Vector3D_Subtract`, `Vector3D_Cross`, `Vector3D_Dot`, `Vector3D_Normalize` and the other `Vector3D_*` functions | The same operations on plain numbers. |
+| `CreateCatmullRomSpline(numDimensions)` | A Catmull-Rom spline of 1 to 4 dimensions: `AddPoint`, `GetPoint`, `GetNumPoints`, `ClearPoints`, `CalculatePointOnGlobalCurve(t)`. |
+| `GetCursorDelta()` | How far the cursor moved since the last frame, in `GetCursorPosition` units. Every handler in a frame gets the same value. |
+| `InputUtil.GetCursorPosition(parent)` / `InputUtil.GetCursorDelta(parent)` | The same, divided by `parent`'s effective scale. |
+| `GetAppropriateTopLevelParent()` | `UIParent`, or the frame set with `SetAlternateTopLevelParent(frame)` while it is shown. `ClearAlternateTopLevelParent()` removes that frame. |
+
 ---
 
 ## Player Info
@@ -2019,6 +2106,16 @@ All of these must pass:
 Reads the item-stats cache; on a cache miss it returns `false` synchronously
 without firing a load (query the item first with `GetItemInfo` if needed). WotLK
 dropped the old PvP-rank item gates, so those aren't checked.
+
+### `C_PlayerInfo.GetAlternateFormInfo()`
+
+Returns `hasAlternateForm, inAlternateForm`: whether the player's race has
+a second form, and whether the player is in it. No race has one, so both
+are `false`.
+
+### `C_Glue.IsOnGlueScreen()`
+
+`true` at the login and character screens, `false` in the world.
 
 ### `GetSheathState()`
 

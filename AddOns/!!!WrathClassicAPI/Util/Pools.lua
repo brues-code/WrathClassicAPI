@@ -9,14 +9,8 @@
 --     bottom of the file.
 --   - FrameUtil.SpecializeFrameWithMixins isn't a thing in 3.3.5; the
 --     "table specialization" branch is inlined as a plain Mixin().
---   - CreateMaskTexture and CreateActor aren't in 3.3.5 — the
---     corresponding pool creators are kept as stubs so chunk-load of
---     consumer addons doesn't fail; they'll error at Acquire() time
---     if anything actually invokes them.
---   - assertsafe / nop aren't globals in stock 3.3.5; defined as local
---     fallbacks (same pattern as FunctionUtil.lua).
-
-local function nop() end
+--   - assertsafe isn't a global in stock 3.3.5; defined as a local
+--     fallback (same pattern as FunctionUtil.lua).
 
 local function assertsafe(condition, msg)
 	if not condition then
@@ -473,9 +467,7 @@ function CreateUnsecuredFontStringPool(parent, layer, subLayer, template, resetF
 	return CreateUnsecuredRegionPoolInstance(template, Create, resetFunc, capacity);
 end
 
--- Stub: 3.3.5 has no CreateActor (model actors are Cataclysm+). Acquire()
--- will raise once it actually tries to call parent:CreateActor — kept so
--- that addon code merely referencing the symbol doesn't fail to load.
+-- Actors of a ModelScene (parent:CreateActor).
 function CreateUnsecuredActorPool(parent, template, resetFunc, capacity)
 	local function Create()
 		local name = nil;
@@ -484,8 +476,7 @@ function CreateUnsecuredActorPool(parent, template, resetFunc, capacity)
 	return CreateUnsecuredRegionPoolInstance(template, Create, resetFunc or ActorPool_HideAndClearModel, capacity);
 end
 
--- Stub: 3.3.5 has no CreateMaskTexture (mask textures are post-Wrath).
--- Same caveat as CreateUnsecuredActorPool.
+-- Mask textures of a frame (parent:CreateMaskTexture).
 function CreateUnsecuredMaskTexturePool(parent, layer, subLayer, template, resetFunc, capacity)
 	local function Create()
 		local name = nil;

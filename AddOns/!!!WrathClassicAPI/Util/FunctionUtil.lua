@@ -6,10 +6,8 @@
 --     and arg pack.
 --   - CallErrorHandler isn't in 3.3.5; route through geterrorhandler()
 --     (same pattern as ItemUtil.lua).
---   - `nop` and `assertsafe` aren't globals in stock 3.3.5; defined as
---     local fallbacks so this file stays self-contained.
-
-local function nop() end
+--   - `assertsafe` isn't a global in stock 3.3.5; defined as a local
+--     fallback so this file stays self-contained.
 
 local function CallErrorHandler(err)
 	local h = geterrorhandler and geterrorhandler()

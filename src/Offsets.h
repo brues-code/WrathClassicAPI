@@ -450,6 +450,13 @@ enum Offsets {
     // `CSimpleTop *CSimpleTop::s_instance`; `int m_allowProtectedActions` at
     // +0x124C is what Script_SetCVar checks for a protected cvar.
     VAR_SIMPLE_TOP = 0x00B499A8,
+    // CSimpleTop::m_mousePosition, NDC (float x, y). The in-game
+    // GetCursorPosition (0x00510A10) pushes it through NDCToDDC (x * the DDC
+    // width scale, y * the height scale) and DDCToNDCWidth (/ the width
+    // scale) times aspect compensation * 1024 (VAR_DDC_WIDTH_SCALE,
+    // VAR_DDC_HEIGHT_SCALE, VAR_ASPECT_COMPENSATION).
+    OFF_SIMPLE_TOP_MOUSE_POSITION = 0x1224,
+    VAR_DDC_HEIGHT_SCALE = 0x00AC0CB8,
     OFF_SIMPLE_TOP_ALLOW_PROTECTED = 0x124C,
     // The engine's own Lua cvar functions, registered again under C_CVar.
     // In-game and glue each have their own (glue's GetCVar raises for an
